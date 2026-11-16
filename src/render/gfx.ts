@@ -18,7 +18,7 @@ export function hex(col: string): [number, number, number] {
   return [n >> 16, (n >> 8) & 255, n & 255];
 }
 
-export interface TileSet { floor: HTMLCanvasElement[]; wall: HTMLCanvasElement; top: HTMLCanvasElement; grass: HTMLCanvasElement[]; burnt: HTMLCanvasElement; }
+export interface TileSet { floor: HTMLCanvasElement[]; wall: HTMLCanvasElement; top: HTMLCanvasElement; grass: HTMLCanvasElement[]; burnt: HTMLCanvasElement; decals: HTMLCanvasElement[]; }
 export const tilesets: TileSet[] = [];
 
 const BIOMES = [
@@ -51,6 +51,16 @@ export function bake(): void {
       g.fillStyle = '#fff'; g.fillRect(0, 0, m.width, m.height);
       masks[n] = m;
     }
+  }
+  // Fackel (zwei Flackerbilder)
+  for (const f of [0, 1]) {
+    const [c, g] = mk(TS, TS);
+    g.fillStyle = '#5a3a28'; g.fillRect(7, 8, 2, 5);
+    g.fillStyle = '#333c57'; g.fillRect(6, 12, 4, 1);
+    g.fillStyle = '#ef7d57'; g.fillRect(6, 4 + f, 4, 4 - f); g.fillRect(7, 2 + f, 2, 2);
+    g.fillStyle = '#ffcd75'; g.fillRect(7, 5, 2, 3); g.fillRect(7 + f, 4, 1, 1);
+    g.fillStyle = '#f4f4f4'; g.fillRect(7, 7, 1, 1);
+    sprites[`torch${f}`] = c;
   }
   // Eis
   {
@@ -99,7 +109,15 @@ export function bake(): void {
     bg.fillStyle = 'rgba(0,0,0,0.45)'; bg.fillRect(0, 0, TS, TS);
     bg.fillStyle = '#566c86';
     for (let i = 0; i < 5; i++) bg.fillRect((rnd() * 15) | 0, (rnd() * 15) | 0, 1, 1);
-    tilesets.push({ floor, wall, top, grass, burnt });
+    // Bodendekor: Knochen, Kiesel, Riss, Pfütze, biomtypischer Fleck
+    const decals: HTMLCanvasElement[] = [];
+    const decal = (f: (g: CanvasRenderingContext2D) => void) => { const [c, g] = mk(TS, TS); f(g); decals.push(c); };
+    decal(g => { g.fillStyle = '#c9d4dc'; g.fillRect(4, 9, 7, 1); g.fillRect(3, 8, 2, 3); g.fillRect(10, 8, 2, 3); g.fillStyle = '#94b0c2'; g.fillRect(5, 10, 5, 1); });
+    decal(g => { g.fillStyle = b.brick; g.fillRect(3, 5, 2, 2); g.fillRect(10, 9, 3, 2); g.fillRect(6, 12, 2, 1); g.fillStyle = b.hi; g.fillRect(3, 5, 2, 1); g.fillRect(10, 9, 3, 1); });
+    decal(g => { g.fillStyle = b.top; g.fillRect(4, 4, 1, 3); g.fillRect(5, 6, 3, 1); g.fillRect(7, 7, 1, 3); g.fillRect(8, 9, 3, 1); g.fillRect(10, 10, 1, 2); });
+    decal(g => { g.fillStyle = b.mortar; g.fillRect(4, 7, 8, 4); g.fillRect(5, 6, 6, 6); g.fillStyle = b.hi; g.fillRect(6, 7, 3, 1); });
+    decal(g => { g.fillStyle = b.g1; g.fillRect(2, 11, 4, 2); g.fillRect(10, 3, 3, 2); g.fillStyle = b.g2; g.fillRect(3, 11, 2, 1); g.fillRect(11, 3, 1, 1); });
+    tilesets.push({ floor, wall, top, grass, burnt, decals });
   }
 }
 

@@ -1,5 +1,6 @@
 import { VW, VH, bake, sprites, text, panel, wrap } from './render/gfx';
-import { drawRun, resetView } from './render/draw';
+import { drawRun, resetView, setMouse, toggleMap, setTutorial } from './render/draw';
+import { sfx, soundOn, toggleSound, wakeAudio } from './core/audio';
 import { loadMeta, saveMeta } from './core/save';
 import { newRun, act, Run, Action } from './game/run';
 import { CLASSES, CLASS_ORDER, UPGRADES, RANGER_COST, upgCost, LAST_FLOOR } from './game/content';
@@ -35,6 +36,7 @@ const locked = () => CLASS_ORDER[clsIdx] === 'waldlaeufer' && !meta.ranger;
 function startRun() {
   if (locked()) { flash('Diese Klasse ist noch gesperrt.'); return; }
   resetView();
+  setTutorial(meta.best === 0);
   run = newRun((Math.random() * 2 ** 31) | 0, CLASS_ORDER[clsIdx], meta);
   scene = 'run';
 }
@@ -50,6 +52,9 @@ function endRun() {
 }
 
 function onKey(k: string): boolean {
+  wakeAudio();
+  if (k === 'm') { flash(toggleSound() ? 'Ton an' : 'Ton aus'); return true; }
+  if (k === 'n' && scene === 'run') { toggleMap(); return true; }
   if (k === 'v') {
     if (document.fullscreenElement) document.exitFullscreen();
     else document.documentElement.requestFullscreen().catch(() => { /* nicht erlaubt */ });
@@ -99,9 +104,22 @@ function onKey(k: string): boolean {
   else if (k === 'e' || k === 'enter') a = { t: 'descend' };
   else if (k >= '1' && k <= '3') a = { t: 'skill', i: +k - 1 };
   if (!a) return false;
+  const before: string = run.mode, solved = !!run.puzzle?.solved, items = run.p.potions + run.p.bombs;
   act(run, a);
+  const mode: string = run.mode;
+  if (mode !== before) {
+    if (mode === 'dead') sfx('death');
+    else if (mode === 'win' || (mode === 'perk' && !solved && run.puzzle?.solved)) sfx('solve');
+    else if (mode === 'perk') sfx('level');
+  } else if (run.p.potions + run.p.bombs > items) sfx('pick');
   return true;
 }
+
+cv.addEventListener('mousemove', e => {
+  const r = cv.getBoundingClientRect();
+  setMouse(((e.clientX - r.left) * VW) / r.width, ((e.clientY - r.top) * VH) / r.height);
+});
+cv.addEventListener('mouseleave', () => setMouse(-1, -1));
 
 addEventListener('keydown', e => {
   if (e.ctrlKey || e.metaKey || e.altKey) return;
@@ -137,7 +155,7 @@ function drawTitle(time: number, dt: number) {
   });
   if (Math.floor(time * 2) % 2) text(ctx, '[LEERTASTE] Start', VW / 2, 270, '#f4f4f4', 10, 'center');
   text(ctx, 'Pfeile/WASD bewegen · Leertaste warten · 1-3 Fähigkeiten · F schießen · Q Trank · B Bombe · E Treppe', VW / 2, 322, '#566c86', 8, 'center');
-  text(ctx, 'V: Vollbild', VW / 2, 336, '#566c86', 8, 'center');
+  text(ctx, `V: Vollbild · M: Ton ${soundOn() ? 'an' : 'aus'} · N: Karte`, VW / 2, 336, '#566c86', 8, 'center');
 }
 
 function drawLager(time: number, dt: number) {
@@ -187,7 +205,7 @@ function drawLager(time: number, dt: number) {
   text(ctx, 'ABSTIEG BEGINNEN', ux + uw / 2, sy + 11, sel ? '#ffcd75' : '#f4f4f4', 16, 'center');
 
   if (noteT > 0) { noteT -= dt; text(ctx, note, ux + uw / 2, sy + 46, '#ffcd75', 8, 'center'); }
-  text(ctx, 'Pfeile: wählen · ENTER: kaufen/bestätigen · LEERTASTE: Abstieg · V: Vollbild', VW / 2, 336, '#566c86', 8, 'center');
+  text(ctx, 'Pfeile: wählen · ENTER: kaufen/bestätigen · LEERTASTE: Abstieg · V: Vollbild · M: Ton', VW / 2, 336, '#566c86', 8, 'center');
 }
 
 let last = performance.now();

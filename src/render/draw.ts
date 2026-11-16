@@ -1,7 +1,8 @@
 import { VW, VH, TS, sprites, masks, tilesets, text, panel, bar } from './gfx';
-import { W, H, T, wallLike } from '../game/dungeon';
-import { Run, Actor, xpNeed, skillCost } from '../game/run';
-import { CLASSES, PERKS, RELICS, BIOME_NAMES, biomeOf } from '../game/content';
+import { W, H, T, wallLike, walkable, los } from '../game/dungeon';
+import { sfx } from '../core/audio';
+import { Run, Actor, xpNeed, skillCost, RUNE_NAMES } from '../game/run';
+import { CLASSES, MOBS, PERKS, RELICS, BIOME_NAMES, biomeOf } from '../game/content';
 
 const pos = new Map<number, { x: number; y: number }>();
 const lunges = new Map<number, { dx: number; dy: number; t: number }>();
@@ -14,6 +15,38 @@ let shake = 0;
 const cam = { x: 0, y: 0 };
 
 const LUNGE_T = 0.16, FLASH_T = 0.12;
+
+// ---- Anzeigeoptionen ----
+const mouse = { x: -1, y: -1 };
+let showMap = true, tutorial = false;
+export const setMouse = (x: number, y: number) => { mouse.x = x; mouse.y = y; };
+export const toggleMap = () => { showMap = !showMap; };
+export const setTutorial = (on: boolean) => { tutorial = on; };
+
+// ---- Fackellicht: wird einmal pro Ebene berechnet ----
+const light = new Float32Array(W * H);
+const torches = new Set<number>();
+let lightKey = '';
+const hash = (x: number, y: number, s: number) => (Math.imul(x, 73856093) ^ Math.imul(y, 19349663) ^ Math.imul(s, 83492791)) >>> 0;
+
+function buildLight(run: Run) {
+  const key = `${run.seed}:${run.floor}`;
+  if (key === lightKey) return;
+  lightKey = key;
+  light.fill(0); torches.clear();
+  for (let y = 1; y < H - 1; y++) for (let x = 1; x < W - 1; x++) {
+    const i = y * W + x;
+    if (run.tiles[i] !== T.WALL || !walkable(run.tiles[i + W]) || hash(x, y, run.seed + run.floor) % 6) continue;
+    torches.add(i);
+    const sx = x, sy = y + 1, R = 5.5;
+    for (let ty = sy - 6; ty <= sy + 6; ty++) for (let tx = sx - 6; tx <= sx + 6; tx++) {
+      if (tx < 0 || ty < 0 || tx >= W || ty >= H) continue;
+      const d = Math.hypot(tx - sx, ty - sy);
+      if (d > R || !los(run.tiles, sx, sy, tx, ty)) continue;
+      light[ty * W + tx] = Math.max(light[ty * W + tx], 1 - d / R);
+    }
+  }
+}
 
 export function resetView() {
   pos.clear(); lunges.clear(); flashes.clear();
@@ -54,12 +87,13 @@ export function drawRun(ctx: CanvasRenderingContext2D, run: Run, dt: number, tim
     switch (f.k) {
       case 'num': nums.push({ x: f.x * TS + 8, y: f.y * TS - nums.filter(n => n.t < 0.1).length * 8, s: f.s, col: f.col, t: 0 }); break;
       case 'shake': shake = Math.max(shake, f.n); break;
-      case 'bolt': bolts.push({ ...f, t: 0 }); break;
-      case 'lunge': lunges.set(f.id, { dx: f.dx, dy: f.dy, t: 0 }); break;
-      case 'flash': flashes.set(f.id, FLASH_T); break;
-      case 'die': shatter(f.kind, f.x, f.y); break;
-      case 'boom': booms.push({ x: f.x, y: f.y, r: f.r, t: 0 }); break;
+      case 'bolt': bolts.push({ ...f, t: 0 }); sfx('zap'); break;
+      case 'lunge': lunges.set(f.id, { dx: f.dx, dy: f.dy, t: 0 }); sfx('hit'); break;
+      case 'flash': flashes.set(f.id, FLASH_T); if (f.id === 0) sfx('hurt'); break;
+      case 'die': shatter(f.kind, f.x, f.y); sfx('kill'); break;
+      case 'boom': booms.push({ x: f.x, y: f.y, r: f.r, t: 0 }); sfx('boom'); break;
       case 'debris':
+        sfx('crack');
         for (let k = 0; k < 14; k++) {
           const ang = Math.random() * Math.PI * 2, v = 20 + Math.random() * 60;
           bits.push({ x: f.x * TS + 8, y: f.y * TS + 8, vx: Math.cos(ang) * v, vy: Math.sin(ang) * v - 40, col: Math.random() < 0.5 ? '#94b0c2' : '#566c86', t: 0 });
@@ -81,6 +115,7 @@ export function drawRun(ctx: CanvasRenderingContext2D, run: Run, dt: number, tim
 
   ctx.fillStyle = '#08090f'; ctx.fillRect(0, 0, VW, VH);
   const ts = tilesets[biomeOf(run.floor)];
+  buildLight(run);
   const x0 = Math.max(0, Math.floor(cam.x / TS) - 1), x1 = Math.min(W - 1, x0 + VW / TS + 2);
   const y0 = Math.max(0, Math.floor(cam.y / TS) - 1), y1 = Math.min(H - 1, y0 + Math.ceil(VH / TS) + 2);
   for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
@@ -91,9 +126,11 @@ export function drawRun(ctx: CanvasRenderingContext2D, run: Run, dt: number, tim
       const front = y + 1 < H && !wallLike(run.tiles[i + W]);
       ctx.drawImage(front ? ts.wall : ts.top, dx, dy);
       if (t === T.CRACKED) ctx.drawImage(sprites[(run.cracks.get(i) ?? 0) >= 2 ? 'crack2' : 'crack'], dx, dy);
+      if (front && torches.has(i)) ctx.drawImage(sprites[`torch${Math.floor(time * 7 + x) % 2}`], dx, dy);
     } else {
       ctx.drawImage(t === T.ICE ? sprites.ice : ts.floor[(x * 7 + y * 13 + ((x * y) % 5)) % 4], dx, dy);
       if (y > 0 && wallLike(run.tiles[i - W])) { ctx.fillStyle = 'rgba(0,0,0,0.3)'; ctx.fillRect(dx, dy, TS, 3); }
+      if (t === T.FLOOR) { const h = hash(x, y, run.seed + run.floor * 7); if (h % 9 === 0) ctx.drawImage(ts.decals[(h >>> 8) % ts.decals.length], dx, dy); }
       if (t === T.GRASS) ctx.drawImage(ts.grass[(x * 5 + y * 3) % 3], dx, dy);
       else if (t === T.BURNT) ctx.drawImage(ts.burnt, dx, dy);
       const s = TILE_SPR[t];
@@ -120,11 +157,15 @@ export function drawRun(ctx: CanvasRenderingContext2D, run: Run, dt: number, tim
         ctx.fillRect(dx - 2, dy - 2, TS + 4, TS + 4);
       }
     }
-    if (!run.vis[i]) { ctx.fillStyle = 'rgba(8,9,15,0.5)'; ctx.fillRect(dx, dy, TS, TS); }
+    // Licht: Spieler trägt eine Laterne, Fackeln erhellen ihre Umgebung warm
+    const tl = light[i] * (0.88 + 0.12 * Math.sin(time * 9 + i));
+    if (!run.vis[i]) { ctx.fillStyle = `rgba(8,9,15,${0.62 - 0.18 * light[i]})`; ctx.fillRect(dx, dy, TS, TS); }
     else {
       const d = Math.hypot(x - pp.x, y - pp.y);
-      const a = Math.max(0, Math.min(0.2, (d - 5) * 0.06));
-      if (a > 0) { ctx.fillStyle = `rgba(8,9,15,${a})`; ctx.fillRect(dx, dy, TS, TS); }
+      const L = Math.min(1, Math.max(tl * 1.2, 1 - Math.max(0, d - 2.5) / 6));
+      const a = (1 - L) * 0.55;
+      if (a > 0.02) { ctx.fillStyle = `rgba(8,9,15,${a})`; ctx.fillRect(dx, dy, TS, TS); }
+      if (tl > 0.05) { ctx.fillStyle = `rgba(239,125,87,${0.14 * tl})`; ctx.fillRect(dx, dy, TS, TS); }
     }
   }
   for (const t of run.traps) ctx.drawImage(sprites.trap, t.x * TS + ox, t.y * TS + oy);
@@ -208,7 +249,9 @@ export function drawRun(ctx: CanvasRenderingContext2D, run: Run, dt: number, tim
     ctx.fillStyle = `rgba(177,62,83,${0.08 + 0.06 * Math.sin(time * 6)})`; ctx.fillRect(0, 0, VW, VH);
   }
 
+  tooltip(ctx, run, ox - sx, oy - sy);
   hud(ctx, run);
+  if (showMap) minimap(ctx, run, time);
   if (run.mode === 'perk') perkOverlay(ctx, run);
   if (run.mode === 'dead' || run.mode === 'win') endOverlay(ctx, run);
 }
@@ -261,11 +304,80 @@ function hud(ctx: CanvasRenderingContext2D, run: Run) {
   }
   lines.forEach((l, k) => text(ctx, l, 8, VH - 42 - (lines.length - 1 - k) * 10, k === lines.length - 1 ? '#f4f4f4' : '#94b0c2', 8));
 
+  if (tutorial && run.mode === 'play') {
+    const h = hint(run);
+    if (h) { const w = h.length * 6 + 16; panel(ctx, (VW - w) >> 1, 62, w, 16, '#ffcd75'); text(ctx, h, VW / 2, 67, '#ffcd75', 8, 'center'); }
+  }
   const boss = run.mobs.find(m => m.boss && m.awake);
   if (boss) {
     text(ctx, boss.name, VW / 2, 10, '#ffcd75', 10, 'center');
     bar(ctx, VW / 2 - 100, 23, 200, 6, boss.hp / boss.maxHp, '#b13e53');
   }
+}
+
+const TILE_NAMES: Record<number, string> = {
+  [T.STAIRS]: 'Treppe nach unten [E]', [T.CHEST]: 'Truhe', [T.ALTAR]: 'Altar: Leben gegen eine Gabe', [T.CRACKED]: 'Rissige Wand – 3 Schläge oder Bombe',
+  [T.BARREL]: 'Fass – anstoßen zündet die Lunte', [T.PILLAR]: 'Säule – stürzt bei Explosion ein', [T.GRASS]: 'Bewuchs – brennbar',
+  [T.FRAGILE]: 'Brüchiger Boden', [T.FRAGILE2]: 'Brüchiger Boden – bricht beim nächsten Tritt', [T.CRATE]: 'Kiste – schiebbar', [T.CRATE_ON]: 'Kiste auf Platte',
+  [T.PLATE]: 'Druckplatte', [T.LEVER]: 'Hebel – setzt die Kisten zurück', [T.ICE]: 'Eis – du rutschst', [T.TABLET]: 'Steintafel', [T.GOAL]: 'Zielplatte',
+};
+
+function tooltip(ctx: CanvasRenderingContext2D, run: Run, ox: number, oy: number) {
+  if (mouse.x < 0 || run.mode !== 'play') return;
+  const tx = Math.floor((mouse.x - ox) / TS), ty = Math.floor((mouse.y - oy) / TS), i = ty * W + tx;
+  if (tx < 0 || ty < 0 || tx >= W || ty >= H || !run.seen[i]) return;
+  const m = run.vis[i] ? run.mobs.find(o => o.x === tx && o.y === ty) : undefined;
+  const lines: string[] = [];
+  if (m) {
+    const d = MOBS[m.kind];
+    lines.push(m.name, `Leben ${m.hp}/${m.maxHp}   Angriff ${m.atk}   Vert. ${m.def}`);
+    const tags = [d.range ? `Fernkampf ${d.range}` : '', d.poison ? 'giftig' : '', d.burn ? 'entzündet' : '', d.ai === 'slow' ? 'langsam' : '', d.ai === 'erratic' ? 'unberechenbar' : '',
+      m.st.stun ? 'betäubt' : '', m.st.brand ? 'brennt' : '', m.st.gift ? 'vergiftet' : '', !m.awake ? 'schläft' : ''].filter(Boolean);
+    if (tags.length) lines.push(tags.join(' · '));
+  } else {
+    const t = run.tiles[i];
+    if (t === T.RUNE && run.puzzle) lines.push(`Rune: ${RUNE_NAMES[run.puzzle.runes[i]]}`);
+    else if (TILE_NAMES[t]) lines.push(TILE_NAMES[t]);
+    if (run.fire.has(i)) lines.push('Feuer');
+  }
+  if (!lines.length) return;
+  ctx.strokeStyle = '#ffcd75'; ctx.lineWidth = 1; ctx.strokeRect(tx * TS + ox + 0.5, ty * TS + oy + 0.5, TS - 1, TS - 1);
+  const w = Math.max(...lines.map(l => l.length)) * 6 + 12, h = lines.length * 10 + 8;
+  const x = Math.min(VW - w - 4, mouse.x + 10), y = Math.max(4, Math.min(VH - h - 34, mouse.y + 10));
+  panel(ctx, x, y, w, h, '#ffcd75');
+  lines.forEach((l, k) => text(ctx, l, x + 6, y + 5 + k * 10, k ? '#94b0c2' : '#f4f4f4', 8));
+}
+
+function minimap(ctx: CanvasRenderingContext2D, run: Run, time: number) {
+  const x0 = VW - 110, y0 = 60;
+  panel(ctx, x0 - 2, y0 - 2, W * 2 + 4, H * 2 + 4, '#333c57', 'rgba(13,14,23,0.7)');
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    const i = y * W + x, t = run.tiles[i];
+    if (!run.seen[i] || t === T.WALL) continue;
+    ctx.fillStyle = t === T.STAIRS ? '#ffcd75' : t === T.CHEST ? '#c98a3a' : t === T.CRACKED ? '#b13e53'
+      : (t >= T.CRATE && t <= T.GOAL) ? '#41a6f6' : run.fire.has(i) ? '#ef7d57' : run.vis[i] ? '#94b0c2' : '#566c86';
+    ctx.fillRect(x0 + x * 2, y0 + y * 2, 2, 2);
+  }
+  ctx.fillStyle = '#b13e53';
+  for (const m of run.mobs) if (run.vis[m.y * W + m.x]) ctx.fillRect(x0 + m.x * 2, y0 + m.y * 2, 2, 2);
+  if (Math.floor(time * 4) % 2) { ctx.fillStyle = '#f4f4f4'; ctx.fillRect(x0 + run.p.x * 2 - 1, y0 + run.p.y * 2 - 1, 4, 4); }
+}
+
+// Einsteigerhinweise im ersten Lauf
+function hint(run: Run): string | null {
+  const p = run.p, c = CLASSES[p.cls];
+  if (run.turn < 4) return 'Pfeiltasten oder WASD: bewegen';
+  if (run.tiles[p.y * W + p.x] === T.STAIRS) return '[E] steigt die Treppe hinab';
+  if (p.hp < p.maxHp * 0.5 && p.potions > 0) return '[Q] trinkt einen Heiltrank';
+  if (run.mobs.some(m => run.vis[m.y * W + m.x])) return c.range ? '[F] schießt auf den nächsten Gegner · [1]–[3] Fähigkeiten' : 'In einen Gegner laufen greift an · [1]–[3] Fähigkeiten';
+  for (let y = p.y - 4; y <= p.y + 4; y++) for (let x = p.x - 4; x <= p.x + 4; x++) {
+    const i = y * W + x;
+    if (!run.vis[i]) continue;
+    if (run.tiles[i] === T.CRACKED) return 'Rissige Wand: dreimal dagegenlaufen oder [B] Bombe';
+    if (run.tiles[i] === T.BARREL) return 'Fass: anstoßen zündet die Lunte – dann Abstand halten';
+    if (run.tiles[i] === T.CHEST) return 'Truhe: hineinlaufen öffnet sie';
+  }
+  return run.floor === 1 ? 'Finde die Treppe · Maus über etwas halten zeigt Details' : null;
 }
 
 function wrapText(s: string, n: number): string[] {
