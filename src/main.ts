@@ -1,11 +1,11 @@
 import { VW, VH, bake, sprites, tilesets, text, panel, wrap, figure } from './render/gfx';
 import { getLang, setLang } from './core/i18n';
-import { drawRun, resetView, setMouse, toggleMap, setTutorial, tileAt, getOverlay, setOverlay, invMove, invAction, lootIndex, lootDone } from './render/draw';
+import { drawRun, resetView, setMouse, toggleMap, setTutorial, tileAt, getOverlay, setOverlay, invMove, invAction, invDrop, lootIndex, lootDone } from './render/draw';
 import { sfx, soundOn, toggleSound, wakeAudio } from './core/audio';
 import { loadMeta, saveMeta } from './core/save';
 import { W } from './game/dungeon';
 import { newRun, act, serialize, deserialize, Run, Action } from './game/run';
-import { CLASSES, CLASS_ORDER, UPGRADES, RANGER_COST, upgCost, LAST_FLOOR } from './game/content';
+import { CLASSES, CLASS_ORDER, UPGRADES, RANGER_COST, upgCost, LAST_FLOOR, USE_ORDER } from './game/content';
 
 const cv = document.getElementById('c') as HTMLCanvasElement;
 const ctx = cv.getContext('2d')!;
@@ -82,6 +82,8 @@ function onKey(k: string): boolean {
       if (k === 'escape' || k === 'i') { setOverlay('none'); for (const it of run.p.bag) delete it.neu; }
       else if (MOVES[k]) invMove(run, MOVES[k][0], MOVES[k][1]);
       else if (k === 'enter' || k === 'x') { const a = invAction(run, k === 'x'); if (a) { act(run, a); sfx('pick'); storeRun(); } }
+      else if (k === 'delete' || k === 'backspace') { const a = invDrop(run); if (a) { act(run, a); storeRun(); } }
+      else if (k === 'o') act(run, { t: 'sort' });
       return true;
     }
     if (getOverlay() !== 'none') { if (k === 'escape' || k === 'c' || k === 'h') setOverlay('none'); return true; }
@@ -156,6 +158,7 @@ function onKey(k: string): boolean {
   else if (k === 'e' || k === 'enter') a = { t: 'descend' };
   else if (k >= '1' && k <= '3') a = { t: 'skill', i: +k - 1 };
   else if (k === '4') a = { t: 'ult' };
+  else if (k >= '5' && k <= '8') a = { t: 'use', id: USE_ORDER[+k - 5] };
   if (!a) return false;
   const before: string = run.mode, solved = !!run.puzzle?.solved, items = run.p.potions + run.p.bombs;
   act(run, a);

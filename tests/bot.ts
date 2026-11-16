@@ -6,7 +6,7 @@ import { CLASSES, MOBS } from '../src/game/content';
 const DIRS = [[1, 0], [-1, 0], [0, 1], [0, -1]];
 
 // Breitensuche vom Spieler; liefert den ersten Schritt zum nächsten Feld, das `goal` erfüllt.
-function stepTo(run: Run, goal: (x: number, y: number, i: number) => boolean, avoidFire = true): [number, number] | null {
+function stepTo(run: Run, goal: (x: number, y: number, i: number) => boolean, avoidFire = true, brittle = false): [number, number] | null {
   const p = run.p, start = p.y * W + p.x;
   const from = new Int32Array(W * H).fill(-1);
   const q = [start];
@@ -22,7 +22,7 @@ function stepTo(run: Run, goal: (x: number, y: number, i: number) => boolean, av
       const nx = cx + ox, ny = cy + oy, n = ny * W + nx;
       if (nx < 0 || ny < 0 || nx >= W || ny >= H || from[n] !== -1) continue;
       const t = run.tiles[n];
-      const passable = walkable(t) && t !== T.FRAGILE2 && !(avoidFire && run.fire.has(n));
+      const passable = walkable(t) && (brittle || t !== T.FRAGILE2) && !(avoidFire && run.fire.has(n));
       // Ziele dürfen auch nicht begehbar sein (Gegner, Truhen)
       if (!passable || run.mobs.some(m => m.x === nx && m.y === ny && run.vis[n])) { if (goal(nx, ny, n) && from[n] === -1) { from[n] = c; q.push(n); } continue; }
       from[n] = c;
@@ -55,7 +55,9 @@ function decide(run: Run): Action {
   if (run.mode === 'play' && run.p.bag.length) {
     // Rucksack: Besseres anlegen, den Rest verkaufen
     const i = run.p.bag.findIndex(it => it.slot < 4 && itemScore(it) > itemScore(run.p.gear[it.slot]!));
-    return i >= 0 ? { t: 'equip', i } : { t: 'sell', i: 0 };
+    if (i >= 0) return { t: 'equip', i };
+    const j = run.p.bag.findIndex(it => !it.use);
+    if (j >= 0) return { t: 'sell', i: j };
   }
   const p = run.p, c = CLASSES[p.cls];
   if (run.mode === 'perk') return { t: 'perk', i: 0 };
@@ -71,6 +73,10 @@ function decide(run: Run): Action {
     const near = vis.reduce((a, b) => (dist(a) <= dist(b) ? a : b));
     const d = dist(near), adj = Math.abs(near.x - p.x) + Math.abs(near.y - p.y) === 1;
     const can = (i: number) => p.res >= c.skills[i].cost;
+    const carries = (id: string) => p.bag.some(it => it.use === id);
+    if (near.boss && carries('kraft') && !p.st.stark) return { t: 'use', id: 'kraft' };
+    if (p.res < 2 && carries('quell')) return { t: 'use', id: 'quell' };
+    if (p.lvl >= 5 && !p.ultCd && (near.boss || vis.length >= 3) && d <= (p.cls === 'krieger' ? 2 : 7)) return { t: 'ult' };
     if (p.cls === 'krieger') {
       if (d <= 1 && vis.filter(m => dist(m) <= 1).length >= 2 && can(1)) return { t: 'skill', i: 1 };
       if (d <= 1 && can(0) && !near.st.stun && near.hp > playerAtk(p)) return { t: 'skill', i: 0 };
@@ -95,7 +101,9 @@ function decide(run: Run): Action {
     stepTo(run, (_x, _y, i) => run.seen[i] === 1 && (run.tiles[i] === T.CHEST || (run.tiles[i] === T.TRADER && p.gold >= 25 && !shopped.has(run.floor)))) ??
     stepTo(run, (_x, _y, i) => run.seen[i] === 1 && run.tiles[i] === T.STAIRS) ??
     stepTo(run, (_x, _y, i) => walkable(run.tiles[i]) && !run.seen[i]) ??
-    stepTo(run, (_x, _y, i) => run.mobs.some(m => m.y * W + m.x === i), false);
+    stepTo(run, (_x, _y, i) => run.mobs.some(m => m.y * W + m.x === i), false) ??
+    // eingesperrt: dann eben durch den brüchigen Boden
+    stepTo(run, (_x, _y, i) => run.tiles[i] === T.FRAGILE2, false, true);
   return s ? { t: 'move', dx: s[0], dy: s[1] } : { t: 'wait' };
 }
 

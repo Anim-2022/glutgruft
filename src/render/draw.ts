@@ -3,8 +3,8 @@ import { GLOW } from './sprites';
 import { W, H, T, wallLike, walkable } from '../game/dungeon';
 import { sfx } from '../core/audio';
 import { tr } from '../core/i18n';
-import { Run, Actor, xpNeed, skillCost, itemText, itemValue, itemScore, perkInfo, shotRange, RANKS, BAG_MAX, RUNE_NAMES } from '../game/run';
-import { CLASSES, MOBS, PERKS, RELICS, RARITY, RARITY_COL, BIOME_NAMES, biomeOf, Item, AFFIX, CONSUMABLES, SLOT_NAMES, ULT, ULT_LEVEL } from '../game/content';
+import { Run, Actor, xpNeed, skillCost, itemText, itemValue, itemScore, perkInfo, skillModName, shotRange, RANKS, SORT_NAMES, BAG_MAX, RUNE_NAMES } from '../game/run';
+import { CLASSES, MOBS, PERKS, RELICS, RARITY, RARITY_COL, BIOME_NAMES, biomeOf, Item, AFFIX, CONSUMABLES, SLOT_NAMES, ULT, ULT_LEVEL, USE_ORDER, SYNERGIES } from '../game/content';
 
 const pos = new Map<number, { x: number; y: number }>();
 const lunges = new Map<number, { dx: number; dy: number; t: number }>();
@@ -367,14 +367,16 @@ interface Slot { key: string; icon: string; name: string; desc: string; cost: st
 function slots(run: Run): Slot[] {
   const p = run.p, c = CLASSES[p.cls], out: Slot[] = [];
   if (c.range) out.push({ key: 'F', icon: `i_${p.cls}_shot`, name: c.shot, desc: `Fernangriff, ${shotRange(p)} Felder. Kostet nichts.`, cost: '', count: '', ok: true });
-  c.skills.forEach((s, k) => out.push({ key: `${k + 1}`, icon: `i_${p.cls}${k}`, name: p.skillLvl[k] ? `${s.name} ${RANKS[p.skillLvl[k]]}` : s.name, desc: `${s.desc}. Kostet ${skillCost(p, k)} ${c.resName}.`, cost: `${skillCost(p, k)}`, count: '', ok: p.res >= skillCost(p, k) }));
+  c.skills.forEach((s, k) => out.push({ key: `${k + 1}`, icon: `i_${p.cls}${k}`, name: p.skillLvl[k] ? `${s.name} ${RANKS[p.skillLvl[k]]}` : s.name, desc: `${s.desc}.${skillModName(p, k) ? ` ${tr(skillModName(p, k))}.` : ''} Kostet ${skillCost(p, k)} ${c.resName}.`, cost: `${skillCost(p, k)}`, count: '', ok: p.res >= skillCost(p, k) }));
   if (p.lvl >= ULT_LEVEL) out.push({ key: '4', icon: 'ult', name: ULT[p.cls].name, desc: `${ULT[p.cls].desc}. Danach ${ULT[p.cls].cost} Züge Pause.`, cost: '', count: p.ultCd ? `${p.ultCd}` : '', ok: !p.ultCd });
   out.push({ key: 'Q', icon: 'potion', name: 'Heiltrank', desc: 'Heilt einen großen Teil deines Lebens, löscht Gift und Brand.', cost: '', count: `${p.potions}`, ok: p.potions > 0 });
   out.push({ key: 'B', icon: 'bomb', name: 'Bombe', desc: 'Sprengt Gegner, rissige Wände und Säulen. Halte Abstand.', cost: '', count: `${p.bombs}`, ok: p.bombs > 0 });
+  // Verbrauchsgegenstände erscheinen nur, solange man welche trägt
+  USE_ORDER.forEach((id, k) => { const n = p.bag.filter(it => it.use === id).length; if (n) out.push({ key: `${k + 5}`, icon: `i_${id}`, name: CONSUMABLES[id].name, desc: `${CONSUMABLES[id].desc}.`, cost: '', count: `${n}`, ok: true }); });
   return out;
 }
 
-const STATUS: [string, string, string][] = [['brand', 'Brand', '#ef7d57'], ['gift', 'Gift', '#38b764'], ['stark', 'Kriegsschrei', '#b13e53'], ['dodge', 'Ausweichen', '#94b0c2']];
+const STATUS: [string, string, string][] = [['brand', 'Brand', '#ef7d57'], ['gift', 'Gift', '#38b764'], ['stark', 'Kriegsschrei', '#b13e53'], ['wall', 'Bollwerk', '#41a6f6'], ['dodge', 'Ausweichen', '#94b0c2'], ['konter', 'Konter', '#ffcd75']];
 
 let logSeen = '', logAt = 0;
 
@@ -424,7 +426,7 @@ function hud(ctx: CanvasRenderingContext2D, run: Run, time: number) {
   const sl = slots(run), S = 22, gap = 3, x0 = (VW - sl.length * S - (sl.length - 1) * gap) >> 1, y0 = VH - S - 4;
   let hover: Slot | null = null;
   sl.forEach((s, i) => {
-    const x = x0 + i * (S + gap) + (s.key === 'Q' ? 5 : s.key === 'B' ? 5 : 0);
+    const x = x0 + i * (S + gap) + (s.key === 'Q' || s.key === 'B' ? 5 : s.key >= '5' && s.key <= '8' ? 10 : 0);
     const over = mouse.x >= x && mouse.x < x + S && mouse.y >= y0 && mouse.y < y0 + S;
     if (over) hover = s;
     panel(ctx, x, y0, S, S, over ? '#ffcd75' : s.ok ? '#566c86' : '#333c57', s.ok ? 'rgba(28,32,51,0.92)' : 'rgba(13,14,23,0.92)');
@@ -567,7 +569,8 @@ export function invAction(run: Run, sell: boolean): import('../game/run').Action
   if (!p.bag[inv.row]) return null;
   return sell ? { t: 'sell', i: inv.row } : { t: 'equip', i: inv.row };
 }
-const lookOf = (p: Run['p']) => heroLook(p.cls, p.gear[0]?.rar ?? 0, p.gear[1]?.rar ?? -1);
+export const invDrop = (run: Run): import('../game/run').Action | null => inv.col === 1 && run.p.bag[inv.row] ? { t: 'drop', i: inv.row } : null;
+const lookOf = (p: Run['p']) => heroLook(p.cls, p.gear[0]?.rar ?? 0, p.gear[1]?.rar ?? -1, p.gear[0]?.wk ?? -1);
 const cut = (s: string, n: number) => { s = tr(s); return s.length > n ? s.slice(0, n - 2) + '..' : s; };
 
 function invSheet(ctx: CanvasRenderingContext2D, run: Run, time: number) {
@@ -594,11 +597,12 @@ function invSheet(ctx: CanvasRenderingContext2D, run: Run, time: number) {
   // Rucksack
   const bx = x + 226, bw = 172;
   text(ctx, `Im Rucksack: ${p.bag.length} / ${BAG_MAX}`, bx, y + 34, '#94b0c2', 8);
+  text(ctx, `[O] ${tr(SORT_NAMES[p.sort])}`, bx + bw, y + 34, '#566c86', 8, 'right');
   if (!p.bag.length) wrapText('Leer. Truhen und Händler füllen ihn.', 26).forEach((l, k) => text(ctx, l, bx, y + 50 + k * 10, '#566c86', 8));
   p.bag.forEach((it, i) => {
     const gy = y + 46 + i * 19, sel = inv.col === 1 && inv.row === i, v = verdict(run, it);
     panel(ctx, bx, gy, bw, 16, sel ? '#ffcd75' : '#333c57', sel ? 'rgba(60,50,40,0.9)' : 'rgba(13,14,23,0.9)');
-    slotIcon(ctx, it.slot, bx + 5, gy + 4, RARITY_COL[it.rar]);
+    if (it.use) ctx.drawImage(sprites[`i_${it.use}`], bx + 3, gy + 2); else slotIcon(ctx, it.slot, bx + 5, gy + 4, RARITY_COL[it.rar]);
     text(ctx, cut(it.name, it.neu ? 19 : 23), bx + 19, gy + 4, RARITY_COL[it.rar], 8);
     if (v) arrow(ctx, bx + bw - 10, gy + 5, v > 0);
     if (it.neu) text(ctx, 'NEU', bx + bw - (v ? 14 : 5), gy + 4, '#ffcd75', 8, 'right');
@@ -619,7 +623,7 @@ function invSheet(ctx: CanvasRenderingContext2D, run: Run, time: number) {
       yy += 2;
     }
   } else text(ctx, inv.col ? '' : 'leer', dx + 7, y + 42, '#566c86', 8);
-  const keys = !cur ? '' : inv.col === 0 ? '[ENTER] ablegen' : `[ENTER] ${cur.use ? 'benutzen' : 'anlegen'} · [X] verkaufen (${itemValue(cur)} Gold)`;
+  const keys = !cur ? '' : inv.col === 0 ? '[ENTER] ablegen' : `[ENTER] ${cur.use ? 'benutzen' : 'anlegen'} · [X] verkaufen (${itemValue(cur)} Gold) · [ENTF] wegwerfen`;
   text(ctx, keys, x + 14, y + h - 28, '#ffcd75', 8);
   { arrow(ctx, x + 14, y + h - 14, true); text(ctx, 'besser als angelegt', x + 22, y + h - 15, '#566c86', 8); arrow(ctx, x + 150, y + h - 14, false); text(ctx, 'schlechter', x + 158, y + h - 15, '#566c86', 8); }
   text(ctx, 'Pfeile: wählen · [I] oder [ESC] schließen', x + w - 14, y + h - 15, '#566c86', 8, 'right');
@@ -668,11 +672,15 @@ function charSheet(ctx: CanvasRenderingContext2D, run: Run) {
     text(ctx, `${PERKS[id].name}${n > 1 ? ` x${n}` : ''}`, px, ly + 12 + i * 11, '#f4f4f4', 8);
     text(ctx, PERKS[id].desc, px + 104, ly + 12 + i * 11, '#94b0c2', 8);
   });
+  if (p.syn.length) {
+    const names = p.syn.map(id => tr(SYNERGIES.find(q => q.id === id)!.name)).join(', ');
+    text(ctx, `Synergien: ${names}`, x + 14, y + h - 26, '#a7f070', 8);
+  }
   text(ctx, '[C] oder [ESC] schließen', VW / 2, y + h - 13, '#566c86', 8, 'center');
 }
 
 const HELP: [string, string][] = [
-  ['Pfeile / WASD', 'bewegen, in Gegner laufen greift an'], ['Leertaste', 'einen Zug warten'], ['1  2  3', 'Fähigkeiten'], ['4', 'Ultimative Fähigkeit ab Stufe 5'], ['R', 'letzten Fund anlegen'], ['F', 'Fernangriff (Magier, Waldläufer)'],
+  ['Pfeile / WASD', 'bewegen, in Gegner laufen greift an'], ['Leertaste', 'einen Zug warten'], ['1  2  3', 'Fähigkeiten'], ['4', 'Ultimative Fähigkeit ab Stufe 5'], ['5 6 7 8', 'Rollen und Tränke benutzen'], ['R', 'letzten Fund anlegen'], ['F', 'Fernangriff (Magier, Waldläufer)'],
   ['Q', 'Heiltrank trinken'], ['B', 'Bombe werfen'], ['E', 'Treppe hinabsteigen'], ['Klick / Tab', 'Ziel wählen'], ['Maus', 'über etwas halten zeigt Details'],
   ['I', 'Rucksack: anlegen, benutzen, verkaufen'], ['C', 'Charakter, Reliquien, Gaben'], ['N', 'Karte: klein, groß, aus'], ['M', 'Ton ein/aus'], ['V', 'Vollbild'], ['H', 'diese Hilfe'],
 ];
@@ -807,9 +815,10 @@ function perkOverlay(ctx: CanvasRenderingContext2D, run: Run) {
     text(ctx, KIND_NAME[pk.kind], x + cw / 2, y + 22, '#566c86', 8, 'center');
     if (pk.kind === 'skill') ctx.drawImage(sprites[`i_${run.p.cls}${id[5]}`], x + 6, y + 6);
     wrapText(pk.name, 22).forEach((l, k) => text(ctx, l, x + cw / 2, y + 38 + k * 11, '#f4f4f4', 8, 'center'));
-    wrapText(pk.desc, 22).forEach((l, k) => text(ctx, l, x + cw / 2, y + 64 + k * 11, '#94b0c2', 8, 'center'));
+    wrapText(pk.desc, 22).forEach((l, k) => text(ctx, l, x + cw / 2, y + 62 + k * 10, '#94b0c2', 8, 'center'));
     const have = run.p.perks.filter(q => q === id).length;
-    if (have) text(ctx, `schon ${have}x`, x + cw / 2, y + 92, '#566c86', 8, 'center');
+    if (pk.syn) text(ctx, `Synergie: ${tr(pk.syn)}`, x + cw / 2, y + 92, '#a7f070', 8, 'center');
+    else if (have) text(ctx, `schon ${have}x`, x + cw / 2, y + 92, '#566c86', 8, 'center');
   });
   text(ctx, `Taste 1 bis ${ids.length}`, VW / 2, 244, '#94b0c2', 8, 'center');
 }

@@ -120,7 +120,7 @@ function randomAction(r: RNG): Action {
   if (n === 17) return { t: 'equip', i: r.int(0, 5) };
   if (n === 18) return { t: 'unequip', slot: r.int(0, 3) };
   if (n === 19) return { t: 'sell', i: r.int(0, 3) };
-  if (n === 15) return { t: 'leave' };
+  if (n === 15) return [{ t: 'leave' } as Action, { t: 'use', id: ['karte', 'sprung', 'kraft', 'quell'][r.int(0, 3)] } as Action, { t: 'drop', i: r.int(0, 3) } as Action, { t: 'sort' } as Action][r.int(0, 3)];
   if (n === 16) return { t: 'target', x: r.int(0, W - 1), y: r.int(0, H - 1) };
   return { t: 'perk', i: r.int(0, 2) };
 }
@@ -154,7 +154,8 @@ describe('Blickrichtungen', () => {
   });
 });
 
-import { PERKS, RELICS, UPGRADES, CONSUMABLES, UNIQUES, ULT, SKILL_UP, AFFIX } from '../src/game/content';
+import { PERKS, RELICS, UPGRADES, CONSUMABLES, UNIQUES, ULT, SKILL_UP, SYNERGIES, AFFIX } from '../src/game/content';
+import { WEAPON_ART } from '../src/render/sprites';
 import { genItem, itemLines } from '../src/game/run';
 import { tr, setLang } from '../src/core/i18n';
 
@@ -186,10 +187,46 @@ describe('Gegenstände und Ausbau', () => {
     for (const t of [PERKS, RELICS, CONSUMABLES, ULT]) for (const d of Object.values(t)) all.push(d.name, d.desc);
     for (const u of UPGRADES) all.push(u.name, u.desc);
     for (const u of UNIQUES) all.push(u.name);
-    for (const v of Object.values(SKILL_UP)) all.push(...v);
+    for (const v of Object.values(SKILL_UP)) all.push(v.r2, ...v.a, ...v.b);
+    for (const v of SYNERGIES) all.push(v.name, v.desc);
     for (const f of Object.values(AFFIX)) all.push(f(7));
-    const same = all.filter(s => tr(s) === s && !['Berserker', 'Meteor', 'Echo'].includes(s));
+    const same = all.filter(s => tr(s) === s && !['Berserker', 'Meteor', 'Echo', 'Inferno', 'Midas'].includes(s));
     setLang('de');
     expect(same).toEqual([]);
+  });
+});
+
+describe('Ausprägungen und Synergien', () => {
+  it('eine Synergie wirkt genau einmal und übersteht das Speichern', () => {
+    const run = newRun(5, 'krieger', defaultMeta());
+    const take = (id: string) => { run.perkChoices = [id]; run.mode = 'perk'; act(run, { t: 'perk', i: 0 }); };
+    const vamp = run.p.vamp;
+    take('vampir'); take('henker'); take('henker');
+    expect(run.p.syn).toEqual(['rausch']);
+    expect(run.p.vamp).toBe(vamp + 2 + 3);
+    const back = deserialize(serialize(run))!;
+    expect(back.p.syn).toEqual(['rausch']);
+    expect(back.p.vamp).toBe(run.p.vamp);
+  });
+
+  it('Rang III verlangt die Wahl einer Ausprägung', () => {
+    const run = newRun(5, 'magier', defaultMeta());
+    const take = (id: string) => { run.perkChoices = [id]; run.mode = 'perk'; act(run, { t: 'perk', i: 0 }); };
+    take('skill0');
+    expect(run.p.skillLvl[0]).toBe(1);
+    expect(run.p.skillMod[0]).toBe(0);
+    take('skill0b');
+    expect(run.p.skillLvl[0]).toBe(2);
+    expect(run.p.skillMod[0]).toBe(2);
+  });
+
+  it('Waffenbilder bleiben im Raster und in der Palette', () => {
+    for (const [cls, art] of Object.entries(WEAPON_ART)) {
+      const views: Record<string, string[]> = { f: SPR[cls], b: VIEWS[cls].b, s: VIEWS[cls].s };
+      for (const kind of art.kinds) for (const [v, patches] of Object.entries(kind ?? {})) for (const [y, x, str] of patches) {
+        expect(y >= 0 && y < views[v].length && x >= 0 && x + str.length <= views[v][0].length, `${cls} ${v} ${y},${x}`).toBe(true);
+        for (const ch of str) expect(ch in PAL, `${cls} ${ch}`).toBe(true);
+      }
+    }
   });
 });

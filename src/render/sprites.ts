@@ -771,3 +771,57 @@ VIEWS.waldlaeufer = {
     '.....GFGGFG.....', '......TTT.......', '......TT.T......', '......nn.n......', '.....NNN.NN.....',
   ],
 };
+
+// ---------- Verbrauchsgegenstände ----------
+SPR.i_karte = ['............', '..nnnnnnnn..', '.nyyyyyyyyn.', '..yYyyyyYy..', '..yyyYYyyy..', '..yyYyyYyy..', '..yYyyyyyy..', '..yyyyYYyy..', '.nyyyyyyyyn.', '..nnnnnnnn..', '............', '............'];
+SPR.i_sprung = ['............', '..nnnnnnnn..', '.nyyyyyyyyn.', '..yyvvvvyy..', '..yvyyyyvy..', '..yvyvvyvy..', '..yvyyvyvy..', '..yyvvvyyy..', '.nyyyyyyyyn.', '..nnnnnnnn..', '............', '............'];
+SPR.i_kraft = ['............', '.....nn.....', '....gggg....', '.....gg.....', '....g..g....', '...goooog...', '..gooyooog..', '..goooooog..', '..goooooog..', '...goooog...', '....gggg....', '............'];
+SPR.i_quell = SPR.i_kraft.map(r => r.replace(/o/g, 'c').replace(/y/g, 's'));
+
+// ---------- Waffenarten der Helden ----------
+// Je Klasse: welche Zeichen im Kasten [x0, x1, y0, y1] zur Waffe gehören und was die Arten 0..2
+// stattdessen zeichnen ([y, x, Zeichen]). null heißt: die Grundfigur zeigt diese Art bereits.
+type Patch = [number, number, string];
+export interface WeaponArt { clear: string; box: Record<string, [number, number, number, number]>; kinds: (Record<string, Patch[]> | null)[]; }
+const col = (x: number, y0: number, y1: number, ch: string): Patch[] => Array.from({ length: y1 - y0 + 1 }, (_, k) => [y0 + k, x, ch] as Patch);
+const orb = (x: number, kind: number): Patch[] => kind === 0
+  ? [[1, x + 1, 'o'], [2, x, 'oo'], [3, x, 'oyo'], [4, x, 'oyo'], [5, x + 1, 'o']]
+  : [[1, x + 2, 'y'], [2, x + 1, 'y'], [3, x, 'ywy'], [4, x + 1, 'y'], [5, x + 1, 'y']];
+export const WEAPON_ART: Record<string, WeaponArt> = {
+  krieger: {
+    clear: 'wn', box: { f: [13, 15, 0, 15], b: [0, 2, 0, 15], s: [11, 15, 5, 12] },
+    kinds: [
+      null,
+      { // Axt
+        f: [[4, 13, 'wnw'], [5, 13, 'wnw'], [6, 13, 'wnw'], ...col(14, 7, 10, 'n'), [11, 13, 'nnn'], [12, 14, 'n']],
+        b: [[4, 0, 'wnw'], [5, 0, 'wnw'], [6, 0, 'wnw'], ...col(1, 7, 10, 'n'), [11, 0, 'nnn'], [12, 1, 'n']],
+        s: [[6, 14, 'ww'], [7, 14, 'nw'], [8, 13, 'n'], [8, 15, 'w'], [9, 12, 'n'], [10, 11, 'n'], [11, 11, 'n'], [12, 11, 'n']],
+      },
+      { // Speer
+        f: [[0, 14, 'w'], [1, 13, 'www'], [2, 14, 'w'], ...col(14, 3, 10, 'n'), [11, 13, 'nnn'], ...col(14, 12, 14, 'n')],
+        b: [[0, 1, 'w'], [1, 0, 'www'], [2, 1, 'w'], ...col(1, 3, 10, 'n'), [11, 0, 'nnn'], ...col(1, 12, 14, 'n')],
+        s: [[5, 15, 'w'], [6, 14, 'ww'], [7, 14, 'n'], [8, 13, 'n'], [9, 12, 'n'], [10, 11, 'n'], [11, 11, 'n'], [12, 11, 'n']],
+      },
+    ],
+  },
+  magier: {
+    clear: 'sc', box: { f: [13, 15, 1, 5], b: [0, 2, 1, 5], s: [13, 15, 1, 5] },
+    kinds: [{ f: orb(13, 0), b: orb(0, 0), s: orb(13, 0) }, null, { f: orb(13, 2), b: orb(0, 2), s: orb(13, 2) }],
+  },
+  waldlaeufer: {
+    clear: 'wn', box: { f: [12, 15, 3, 14], b: [0, 3, 3, 14], s: [12, 15, 3, 14] },
+    kinds: [
+      null,
+      { // Armbrust
+        f: [[4, 14, 'w'], [5, 12, 'nnnn'], [6, 13, 'wnw'], ...col(14, 7, 11, 'n')],
+        b: [[4, 1, 'w'], [5, 0, 'nnnn'], [6, 0, 'wnw'], ...col(1, 7, 11, 'n')],
+        s: [[8, 15, 'w'], [9, 15, 'n'], [10, 13, 'nnn'], [11, 15, 'n'], [12, 15, 'w']],
+      },
+      { // Wurfmesser
+        f: [...col(14, 7, 9, 'w'), [10, 14, 'n']],
+        b: [...col(1, 7, 9, 'w'), [10, 1, 'n']],
+        s: [[10, 13, 'nww']],
+      },
+    ],
+  },
+};

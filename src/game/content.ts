@@ -15,7 +15,7 @@ export const CLASS_ORDER: ClassId[] = ['krieger', 'magier', 'waldlaeufer'];
 export const CLASSES: Record<ClassId, ClassDef> = {
   krieger: {
     id: 'krieger', name: 'Krieger', desc: 'Zäher Nahkämpfer. Wut entsteht durch Treffer und Schmerz.',
-    hp: 32, atk: 5, def: 2, resName: 'Wut', resMax: 10, resStart: 0, resCol: '#ef7d57', range: 0, shot: '',
+    hp: 36, atk: 5, def: 2, resName: 'Wut', resMax: 10, resStart: 0, resCol: '#ef7d57', range: 0, shot: '',
     skills: [
       { name: 'Schildstoß', cost: 3, desc: 'Schaden + betäubt 2 Züge' },
       { name: 'Wirbelschlag', cost: 5, desc: 'Trifft alle Gegner ringsum' },
@@ -111,21 +111,31 @@ export const ULT_LEVEL = 5;
 export const ULT: Record<ClassId, SkillDef> = {
   krieger: { name: 'Wirbelsturm', cost: 25, desc: 'Trifft und betäubt alle Gegner im Umkreis von 2' },
   magier: { name: 'Meteor', cost: 25, desc: 'Gewaltige Explosion beim Ziel, Umkreis 2' },
-  waldlaeufer: { name: 'Pfeilhagel', cost: 25, desc: 'Trifft jeden sichtbaren Gegner' },
+  waldlaeufer: { name: 'Pfeilhagel', cost: 32, desc: 'Trifft jeden sichtbaren Gegner' },
 };
-// Was Rang II und Rang III einer Fähigkeit zusätzlich bringen
-export const SKILL_UP: Record<string, [string, string]> = {
-  krieger0: ['+30 % Schaden, betäubt länger', '+60 % Schaden, kostet 1 weniger'],
-  krieger1: ['+30 % Schaden', '+60 % Schaden, Umkreis 2'],
-  krieger2: ['hält 3 Züge länger', 'hält 6 Züge länger, betäubt Nachbarn'],
-  magier0: ['+30 % Schaden', '+60 % Schaden, Umkreis 2'],
-  magier1: ['+30 % Schaden, betäubt länger', '+60 % Schaden, Umkreis 3'],
-  magier2: ['danach 1 Zug Ausweichen', 'Schockwelle am Startpunkt'],
-  waldlaeufer0: ['+30 % Schaden', '+60 % Schaden, durchstößt'],
-  waldlaeufer1: ['Falle: +30 % Schaden', 'Falle: +60 % Schaden, betäubt länger'],
-  waldlaeufer2: ['rollt 3 Felder', 'rollt 4 Felder, 2 Züge Ausweichen'],
+// Rang II verstärkt eine Fähigkeit; bei Rang III wählt man eine von zwei Ausprägungen
+export interface SkillUp { r2: string; a: [string, string]; b: [string, string]; }
+export const SKILL_UP: Record<string, SkillUp> = {
+  krieger0: { r2: '+30 % Schaden, betäubt länger', a: ['Wucht', '+60 % Schaden, kostet 1 weniger'], b: ['Rammstoß', 'Schleudert das Ziel 2 Felder weg, Aufprall schadet'] },
+  krieger1: { r2: '+30 % Schaden', a: ['Weiter Bogen', '+60 % Schaden, Umkreis 2'], b: ['Blutwirbel', '+60 % Schaden, heilt 2 je Treffer'] },
+  krieger2: { r2: 'hält 3 Züge länger', a: ['Donnerruf', 'Hält 6 Züge länger, betäubt Nachbarn'], b: ['Bollwerk', 'Hält 6 Züge länger, dabei +3 Verteidigung'] },
+  magier0: { r2: '+30 % Schaden', a: ['Inferno', '+60 % Schaden, Umkreis 2'], b: ['Zwillingsflamme', '+60 % Schaden, zweiter Ball auf ein anderes Ziel'] },
+  magier1: { r2: '+30 % Schaden, betäubt länger', a: ['Eissturm', '+60 % Schaden, Umkreis 3'], b: ['Sprödfrost', 'Getroffene erleiden 3 Züge lang +50 % Schaden'] },
+  magier2: { r2: 'danach 1 Zug Ausweichen', a: ['Schockwelle', 'Explosion am Startpunkt'], b: ['Phasenschritt', 'Gibt 3 Mana zurück, 2 Züge Ausweichen'] },
+  waldlaeufer0: { r2: '+30 % Schaden', a: ['Durchschlag', '+60 % Schaden, durchstößt'], b: ['Eröffnung', 'Sicherer Volltreffer gegen unverletzte Ziele'] },
+  waldlaeufer1: { r2: 'Falle: +30 % Schaden', a: ['Bärenfalle', '+60 % Schaden, betäubt länger'], b: ['Fallenreihe', 'Legt drei Fallen in Blickrichtung'] },
+  waldlaeufer2: { r2: 'rollt 3 Felder', a: ['Hechtrolle', 'Rollt 4 Felder, 2 Züge Ausweichen'], b: ['Rollschuss', 'Schießt nach der Rolle auf den nächsten Gegner'] },
 };
-
+// Zwei bestimmte Gaben zusammen ergeben eine zusätzliche Wirkung
+export interface Synergy { id: string; need: [string, string]; name: string; desc: string; }
+export const SYNERGIES: Synergy[] = [
+  { id: 'hexen', need: ['brandklinge', 'giftklinge'], name: 'Hexenkessel', desc: '+30 % Schaden gegen Brennende und Vergiftete' },
+  { id: 'stachel', need: ['dornen', 'panzer'], name: 'Stachelpanzer', desc: 'Dornen wirken doppelt' },
+  { id: 'rausch', need: ['vampir', 'henker'], name: 'Blutrausch', desc: 'Jeder Sieg heilt 3 mehr' },
+  { id: 'konter', need: ['flink', 'krit'], name: 'Konter', desc: 'Nach dem Ausweichen trifft der nächste Schlag kritisch' },
+  { id: 'midas', need: ['gier', 'pilz'], name: 'Midas', desc: 'Jede Truhe enthält zusätzlich Gold' },
+  { id: 'erz', need: ['meister', 'quelle'], name: 'Erzmagie', desc: 'Fähigkeiten kosten 1 weniger' },
+];
 export interface UpgDef { id: string; name: string; desc: string; max: number; cost: number; }
 
 export const UPGRADES: UpgDef[] = [
@@ -166,6 +176,7 @@ export const SLOT_NAMES = ['Waffe', 'Rüstung', 'Amulett', 'Ring', 'Verbrauch'];
 export interface Item {
   slot: number; name: string; rar: number; atk: number; def: number; hp: number; crit: number; cursed?: boolean;
   aff?: [string, number][]; // besondere Eigenschaften
+  wk?: number;              // Waffenart 0..2, bestimmt das Aussehen
   use?: string;             // Verbrauchsgegenstand
   uniq?: boolean; neu?: boolean;
 }
@@ -177,17 +188,18 @@ export const AFFIX: Record<string, (v: number) => string> = {
   spalt: v => `Trifft Nachbarn mit ${v} %`, stoss: v => `Durchstößt mit ${v} %`, kette: v => `Springt weiter mit ${v} %`, weite: v => `+${v} Reichweite`,
   asche: () => 'Besiegte explodieren',
 };
+export const USE_ORDER = ['karte', 'sprung', 'kraft', 'quell'];
 export const CONSUMABLES: Record<string, PerkDef> = {
   karte: { name: 'Kartenrolle', desc: 'Deckt die ganze Ebene auf' },
   sprung: { name: 'Sprungrolle', desc: 'Versetzt dich weit weg von Gegnern' },
-  kraft: { name: 'Krafttrank', desc: '+3 Angriff für 12 Züge' },
-  quell: { name: 'Quelltrank', desc: 'Füllt die Klassenressource' },
+  kraft: { name: 'Krafttrank', desc: '+3 Angriff für 10 Züge' },
+  quell: { name: 'Quelltrank', desc: 'Gibt 6 Klassenressource zurück' },
 };
-type U = { slot: number; name: string; atk?: number; def?: number; hp?: number; crit?: number; aff: [string, number][]; cls?: ClassId };
+type U = { slot: number; name: string; wk?: number; atk?: number; def?: number; hp?: number; crit?: number; aff: [string, number][]; cls?: ClassId };
 export const UNIQUES: U[] = [
-  { slot: 0, cls: 'krieger', name: 'Aschenspalter', atk: 5, aff: [['spalt', 70], ['asche', 1]] },
-  { slot: 0, cls: 'magier', name: 'Weltenbrand', atk: 4, aff: [['brand', 60], ['kette', 60]] },
-  { slot: 0, cls: 'waldlaeufer', name: 'Sternenfall', atk: 4, aff: [['weite', 2], ['stoss', 80]] },
+  { slot: 0, cls: 'krieger', name: 'Aschenspalter', wk: 1, atk: 5, aff: [['spalt', 70], ['asche', 1]] },
+  { slot: 0, cls: 'magier', name: 'Weltenbrand', wk: 0, atk: 4, aff: [['brand', 60], ['kette', 60]] },
+  { slot: 0, cls: 'waldlaeufer', name: 'Sternenfall', wk: 0, atk: 4, aff: [['weite', 2], ['stoss', 80]] },
   { slot: 1, name: 'Drachenhaut', def: 2, hp: 10, aff: [['dorn', 4], ['flink', 6]] },
   { slot: 1, name: 'Schattenmantel', def: 1, hp: 4, aff: [['flink', 15], ['sicht', 2]] },
   { slot: 2, name: 'Herz des Vulkans', hp: 6, crit: 0.08, aff: [['brand', 40], ['asche', 1]] },

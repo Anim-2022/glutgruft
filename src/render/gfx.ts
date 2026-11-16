@@ -1,7 +1,7 @@
 // Palette, Sprite-Atlas und Pixeltext. Alles wird beim Start im Code erzeugt.
 export const VW = 640, VH = 360, TS = 16;
 
-import { PAL, SPR, ACTORS, NO_OUTLINE, VIEWS, FLOATERS } from './sprites';
+import { PAL, SPR, ACTORS, NO_OUTLINE, VIEWS, FLOATERS, WEAPON_ART, WeaponArt } from './sprites';
 import { tr } from '../core/i18n';
 export { PAL };
 
@@ -48,8 +48,10 @@ function makeMask(n: string) {
 }
 
 // Figur backen: je Blickrichtung (f vorn, b hinten, s Seite) vier Bilder – 0 Stand, 1 Atmen, 2/3 Schritt
-function bakeActor(name: string, prefix: string, pal: Record<string, string> = PAL) {
+function bakeActor(name: string, prefix: string, pal: Record<string, string> = PAL, wk = -1) {
   const views: Record<string, string[]> = { f: SPR[name], b: VIEWS[name].b, s: VIEWS[name].s };
+  const art = WEAPON_ART[name]?.kinds[wk];
+  if (art) for (const v of Object.keys(views)) views[v] = weaponRows(views[v], WEAPON_ART[name], v, art[v]);
   for (const [v, rows] of Object.entries(views)) {
     const h = rows.length, w = rows[0].length, half = w >> 1;
     const breath = ['.'.repeat(w), ...rows.slice(0, h - 4), ...rows.slice(h - 3)];
@@ -62,24 +64,33 @@ function bakeActor(name: string, prefix: string, pal: Record<string, string> = P
   sprites[prefix + '_b'] = sprites[`${prefix}:f1`];
 }
 
+// Tauscht die Waffe einer Heldenansicht gegen eine andere Art aus
+export function weaponRows(rows: string[], art: WeaponArt, view: string, patches: [number, number, string][]): string[] {
+  const [x0, x1, y0, y1] = art.box[view];
+  const out = rows.map((r, y) => y < y0 || y > y1 ? r.split('') : r.split('').map((ch, x) => x >= x0 && x <= x1 && art.clear.includes(ch) ? '.' : ch));
+  for (const [y, x, str] of patches) for (let k = 0; k < str.length; k++) out[y][x + k] = str[k];
+  return out.map(r => r.join(''));
+}
+
 // Ausrüstung färbt die Figur um: Waffe und Rüstung je nach Seltenheit.
 const WEAPON_COL = ['', '#73eff7', '#c08cff', '#ffcd75'], WEAPON_SHADE = ['', '#41a6f6', '#9a4fc0', '#ef7d57'];
 const ARMOR_COL: [string, string][] = [['#8a5a3a', '#5a3a28'], ['#94b0c2', '#566c86'], ['#9a4fc0', '#5d275d'], ['#ffcd75', '#c98a3a']];
 const PARTS: Record<string, { w: string[]; a: string[] }> = {
   krieger: { w: ['w'], a: ['r', 'e'] },
-  magier: { w: ['s', 'c'], a: ['b', 'B'] },
+  magier: { w: ['n'], a: ['b', 'B'] }, // der Stab trägt die Seltenheit, die Kugel das Element
   waldlaeufer: { w: ['w', 'n'], a: ['G', 'F', 'l'] },
 };
 
 // Liefert den Spritenamen der Heldenfigur passend zur Ausrüstung (wird bei Bedarf gebacken).
-export function heroLook(cls: string, weapon: number, armor: number): string {
-  if (weapon <= 0 && armor < 0) return cls;
-  const key = `${cls}@${weapon}${armor}`;
+export function heroLook(cls: string, weapon: number, armor: number, wk = -1): string {
+  if (!WEAPON_ART[cls]?.kinds[wk]) wk = -1;
+  if (weapon <= 0 && armor < 0 && wk < 0) return cls;
+  const key = `${cls}@${weapon}${armor}${wk}`;
   if (sprites[key]) return key;
   const pal = { ...PAL }, parts = PARTS[cls];
   if (weapon > 0) { pal[parts.w[0]] = WEAPON_COL[weapon]; if (parts.w[1]) pal[parts.w[1]] = WEAPON_SHADE[weapon]; }
   if (armor >= 0) { pal[parts.a[0]] = ARMOR_COL[armor][0]; pal[parts.a[1]] = ARMOR_COL[armor][1]; if (parts.a[2]) pal[parts.a[2]] = ARMOR_COL[armor][0]; }
-  bakeActor(cls, key, pal);
+  bakeActor(cls, key, pal, wk);
   return key;
 }
 

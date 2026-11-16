@@ -2,7 +2,7 @@ import { RNG } from '../core/rng';
 import type { Meta } from '../core/save';
 import { W, H, T, Room, genDungeon, center, walkable, opaque, los, computeFov, distMap } from './dungeon';
 import { VS, CRATE_TEMPLATES, mirror, genIce, slide } from './puzzles';
-import { CLASSES, ClassId, MOBS, PERKS, RELICS, Item, Offer, AFFIX, CONSUMABLES, UNIQUES, ULT, ULT_LEVEL, SKILL_UP, BOSS_BY_BIOME, BIOME_NAMES, FLOORS_PER_BIOME, LAST_FLOOR, biomeOf, spawnTable } from './content';
+import { CLASSES, ClassId, MOBS, PERKS, RELICS, Item, Offer, AFFIX, CONSUMABLES, UNIQUES, ULT, ULT_LEVEL, SKILL_UP, SYNERGIES, BOSS_BY_BIOME, BIOME_NAMES, FLOORS_PER_BIOME, LAST_FLOOR, biomeOf, spawnTable } from './content';
 
 export interface Actor {
   id: number; kind: string; name: string;
@@ -21,6 +21,9 @@ export interface Player extends Actor {
   aff: Record<string, number>; // Summe aller Eigenschaften aus Ausrüstung und Gaben
   skillLvl: number[];          // Rang 0..2 je Fähigkeit
   ultCd: number; picks: number;
+  skillMod: number[];          // Ausprägung bei Rang III: 0 keine, 1 = A, 2 = B
+  syn: string[];               // aktive Synergien
+  sort: number;                // Ordnung im Rucksack
 }
 
 export interface Puzzle {
@@ -60,7 +63,7 @@ export interface Run {
 
 export type Action =
   | { t: 'move'; dx: number; dy: number }
-  | { t: 'wait' } | { t: 'shoot' } | { t: 'potion' } | { t: 'descend' } | { t: 'bomb' } | { t: 'ult' }
+  | { t: 'wait' } | { t: 'shoot' } | { t: 'potion' } | { t: 'descend' } | { t: 'bomb' } | { t: 'ult' } | { t: 'use'; id: string } | { t: 'drop'; i: number } | { t: 'sort' }
   | { t: 'skill'; i: number } | { t: 'perk'; i: number }
   | { t: 'buy'; i: number } | { t: 'leave' } | { t: 'target'; x: number; y: number }
   | { t: 'equip'; i: number } | { t: 'unequip'; slot: number } | { t: 'sell'; i: number };
@@ -84,7 +87,7 @@ export function newRun(seed: number, cls: ClassId, meta: Meta): Run {
     st: {}, xp: 0, cd: 0, awake: true,
     cls, lvl: 1, exp: 0, res: c.resStart, resMax: c.resMax + u('fokus'), potions: 1 + u('trank'), bombs: 1 + u('bombe'),
     crit: 0.05, pow: 1, vamp: 0, thorns: 0, soulMul: 1, dir: [1, 0], perks: [], relics: [], hits: 0, gold: 15 * u('gold'), gear: [null, null, null, null], bag: [], keys: 0,
-    aff: { fund: 5 * u('fund') }, skillLvl: [0, 0, 0], ultCd: 0, picks: 3 + u('wahl'),
+    aff: { fund: 5 * u('fund') }, skillLvl: [0, 0, 0], ultCd: 0, picks: 3 + u('wahl'), skillMod: [0, 0, 0], syn: [], sort: 0,
   };
   const run: Run = {
     seed, rng: new RNG(seed), floor: 0,
@@ -145,12 +148,13 @@ export function genItem(run: Run, cursed = false): Item {
   const kind = rng.int(0, 2);
   if (rar === 3 && rng.chance(0.35)) {
     const u = rng.pick(UNIQUES.filter(q => q.slot === slot && (!q.cls || q.cls === cls)));
-    return { slot, name: u.name, rar: 3, atk: u.atk ?? 0, def: u.def ?? 0, hp: (u.hp ?? 0) - (cursed ? 6 : 0), crit: u.crit ?? 0, cursed, aff: u.aff.map(a => [a[0], a[1]] as [string, number]), uniq: true };
+    return { slot, name: u.name, rar: 3, atk: u.atk ?? 0, def: u.def ?? 0, hp: (u.hp ?? 0) - (cursed ? 6 : 0), crit: u.crit ?? 0, cursed, wk: u.wk, aff: u.aff.map(a => [a[0], a[1]] as [string, number]), uniq: true };
   }
   const aff: [string, number][] = [];
   const it: Item = { slot, name: slot === 0 ? WEAPONS[cls][kind][rar] : [ARMOR_NAMES, AMULET_NAMES, RING_NAMES][slot - 1][rar], rar, atk: 0, def: 0, hp: 0, crit: 0, cursed };
   if (slot === 0) {
     it.atk = 1 + rar;
+    it.wk = kind;
     // Jede Waffenart hat eine eigene Wirkung
     if (cls === 'krieger') { if (kind === 0) it.crit = 0.05; else aff.push(kind === 1 ? ['spalt', 40 + 10 * rar] : ['stoss', 50 + 10 * rar]); }
     else if (cls === 'magier') aff.push(kind === 0 ? ['brand', 25 + 10 * rar] : kind === 1 ? ['frost', 12 + 4 * rar] : ['kette', 40 + 10 * rar]);
@@ -197,7 +201,14 @@ function wear(p: Player, it: Item, sign: 1 | -1) {
 }
 
 export const itemValue = (it: Item) => it.use ? 6 : 5 * (it.rar + 1) * (it.cursed ? 0 : 1) + (it.cursed ? 2 : 0) + (it.aff?.length ?? 0) * 3;
-const sortBag = (p: Player) => p.bag.sort((a, b) => a.slot - b.slot || itemScore(b) - itemScore(a));
+// Ordnung im Rucksack: nach Platz, nach Seltenheit oder danach, wie viel besser als das Angelegte
+export const SORT_NAMES = ['Platz', 'Seltenheit', 'Verbesserung'];
+function sortBag(p: Player) {
+  const gain = (it: Item) => it.use ? -99 : itemScore(it) - (p.gear[it.slot] ? itemScore(p.gear[it.slot]!) : 0);
+  p.bag.sort((a, b) => p.sort === 1 ? b.rar - a.rar || a.slot - b.slot || itemScore(b) - itemScore(a)
+    : p.sort === 2 ? gain(b) - gain(a) || a.slot - b.slot
+    : a.slot - b.slot || itemScore(b) - itemScore(a));
+}
 
 // Neue Ausrüstung: freier Platz wird sofort belegt, sonst wandert sie in den Rucksack.
 // Ist der Rucksack voll, wird das schwächste Stück verkauft.
@@ -251,8 +262,8 @@ function useItem(run: Run, i: number): boolean {
       say(run, 'Die Rolle trägt dich fort.');
       break;
     }
-    case 'kraft': p.st.stark = 12; say(run, 'Kraft durchströmt dich.'); break;
-    case 'quell': p.res = p.resMax; say(run, 'Deine Kräfte sind erneuert.'); break;
+    case 'kraft': p.st.stark = 10; say(run, 'Kraft durchströmt dich.'); break;
+    case 'quell': gain(p, 6); say(run, 'Deine Kräfte sind erneuert.'); break;
     default: return false;
   }
   p.bag.splice(i, 1);
@@ -293,6 +304,14 @@ function manage(run: Run, a: Action): boolean {
     say(run, `${it.name} für ${itemValue(it)} Gold verkauft.`);
     return true;
   }
+  if (a.t === 'drop') {
+    const it = p.bag[a.i];
+    if (!it) return true;
+    p.bag.splice(a.i, 1);
+    say(run, `${it.name} weggeworfen.`);
+    return true;
+  }
+  if (a.t === 'sort') { p.sort = (p.sort + 1) % 3; sortBag(p); return true; }
   return false;
 }
 
@@ -314,18 +333,23 @@ function stock(run: Run): Offer[] {
 
 export const RUNE_NAMES = ['Sonne', 'Mond', 'Stern', 'Auge'];
 const has = (p: Player, id: string) => p.relics.includes(id);
-export const skillCost = (p: Player, i: number) => Math.max(1, CLASSES[p.cls].skills[i].cost - (has(p, 'echo') ? 1 : 0) - (p.cls === 'krieger' && i === 0 && p.skillLvl[0] >= 2 ? 1 : 0));
+export const skillCost = (p: Player, i: number) => Math.max(1, CLASSES[p.cls].skills[i].cost - (has(p, 'echo') ? 1 : 0) - (p.cls === 'krieger' && i === 0 && p.skillMod[0] === 1 ? 1 : 0) - (p.aff.erz ? 1 : 0));
 export const shotRange = (p: Player) => CLASSES[p.cls].range + (p.aff.weite ?? 0);
 export const RANKS = ['I', 'II', 'III'];
 // Name und Beschreibung einer Wahl beim Stufenaufstieg: Gabe, Reliquie oder Fähigkeitsrang
-export function perkInfo(p: Player, id: string): { name: string; desc: string; kind: 'perk' | 'relic' | 'skill' } {
+export function perkInfo(p: Player, id: string): { name: string; desc: string; kind: 'perk' | 'relic' | 'skill'; syn?: string } {
   if (RELICS[id]) return { ...RELICS[id], kind: 'relic' };
   if (id.startsWith('skill')) {
-    const i = +id[5], l = Math.min(1, p.skillLvl[i]);
-    return { name: `${CLASSES[p.cls].skills[i].name} ${RANKS[l + 1]}`, desc: SKILL_UP[`${p.cls}${i}`][l], kind: 'skill' };
+    const i = +id[5], sk = CLASSES[p.cls].skills[i], up = SKILL_UP[`${p.cls}${i}`], m = id[6];
+    if (!m) return { name: `${sk.name} II`, desc: up.r2, kind: 'skill' };
+    const [n, d] = m === 'a' ? up.a : up.b;
+    return { name: `${sk.name} III: ${n}`, desc: d, kind: 'skill' };
   }
-  return { ...PERKS[id], kind: 'perk' };
+  const s = SYNERGIES.find(q => !p.syn.includes(q.id) && q.need.includes(id) && p.perks.includes(q.need[0] === id ? q.need[1] : q.need[0]));
+  return { ...PERKS[id], kind: 'perk', syn: s?.name };
 }
+// Name der gewählten Ausprägung einer Fähigkeit, sonst leer
+export const skillModName = (p: Player, i: number) => { const m = p.skillMod[i], up = SKILL_UP[`${p.cls}${i}`]; return m === 1 ? up.a[0] : m === 2 ? up.b[0] : ''; };
 const fovR = (run: Run) => FOV_R + (has(run.p, 'geisterlicht') ? 3 : 0) + (run.p.aff.sicht ?? 0);
 
 // Sucht 9x9 massiven Fels, höhlt 7x7 aus und gräbt von der Tür (unten Mitte) einen Gang zum Rest der Ebene.
@@ -691,6 +715,7 @@ function stun(run: Run, a: Actor, turns: number) {
 
 
 function damage(run: Run, dst: Actor, amt: number, col = '#f4f4f4', crit = false) {
+  if (dst.st.sproede) amt *= 1.5;
   amt = Math.max(1, Math.round(amt));
   dst.hp -= amt;
   run.fx.push({ k: 'flash', id: dst.id });
@@ -698,11 +723,13 @@ function damage(run: Run, dst: Actor, amt: number, col = '#f4f4f4', crit = false
   if (dst !== run.p && dst.hp <= 0) kill(run, dst);
 }
 
-function playerHit(run: Run, dst: Actor, base: number) {
+function playerHit(run: Run, dst: Actor, base: number, sure = false) {
   const p = run.p, a = p.aff;
+  if (a.hexen && (dst.st.brand || dst.st.gift)) base *= 1.3;
+  if (p.st.konter) { sure = true; delete p.st.konter; }
   if (dst.boss) base *= (has(p, 'jaeger') ? 1.5 : 1) * (1 + (a.boss ?? 0) / 100);
   if (a.henker && dst.hp * 2 < dst.maxHp) base *= 1 + a.henker / 100;
-  const crit = run.rng.chance(p.crit);
+  const crit = sure || run.rng.chance(p.crit);
   if (has(p, 'giftzahn')) dst.st.gift = 3;
   if (a.gift && run.rng.chance(a.gift / 100)) dst.st.gift = 3;
   if (a.brand && run.rng.chance(a.brand / 100)) dst.st.brand = 3;
@@ -792,7 +819,12 @@ function offerPerks(run: Run) {
   const ch = run.rng.shuffle(Object.keys(PERKS).filter(id => (!PERKS[id].cls || PERKS[id].cls === p.cls) && p.perks.filter(q => q === id).length < 3)).slice(0, n);
   // oft ist eine der Karten ein höherer Rang für eine Fähigkeit
   const ups = [0, 1, 2].filter(i => p.skillLvl[i] < 2);
-  if (ups.length && run.rng.chance(0.6)) ch[n - 1] = `skill${run.rng.pick(ups)}`;
+  if (ups.length && run.rng.chance(0.6)) {
+    const i = run.rng.pick(ups);
+    // Rang III: beide Ausprägungen stehen zur Wahl
+    if (p.skillLvl[i] === 0) ch[n - 1] = `skill${i}`;
+    else { ch[n - 2] = `skill${i}a`; ch[n - 1] = `skill${i}b`; }
+  }
   run.perkChoices = ch;
   run.mode = 'perk';
 }
@@ -807,8 +839,9 @@ function applyPerk(run: Run, id: string) {
   }
   if (id.startsWith('skill')) {
     const i = +id[5];
-    p.skillLvl[i] = Math.min(2, p.skillLvl[i] + 1);
-    say(run, `${CLASSES[p.cls].skills[i].name}: Rang ${RANKS[p.skillLvl[i]]}`);
+    if (id[6]) { p.skillLvl[i] = 2; p.skillMod[i] = id[6] === 'a' ? 1 : 2; }
+    else p.skillLvl[i] = Math.max(1, p.skillLvl[i]);
+    say(run, `${CLASSES[p.cls].skills[i].name}: Rang ${RANKS[p.skillLvl[i]]}${id[6] ? ` – ${skillModName(p, i)}` : ''}`);
     return;
   }
   p.perks.push(id);
@@ -841,6 +874,12 @@ function applyPerk(run: Run, id: string) {
     case 'seelen': p.soulMul += 0.5; break;
   }
   say(run, `Neue Gabe: ${PERKS[id].name}`);
+  for (const s of SYNERGIES) {
+    if (p.syn.includes(s.id) || !s.need.every(q => p.perks.includes(q))) continue;
+    p.syn.push(s.id);
+    if (s.id === 'rausch') addAff(p, 'vamp', 3); else addAff(p, s.id, 1);
+    say(run, `Synergie: ${s.name} – ${s.desc}`);
+  }
 }
 
 // ---------- Spieleraktionen ----------
@@ -872,6 +911,7 @@ function openChest(run: Run, i: number) {
     else if (r < 0.92) { const g = Math.round((12 + run.floor * 3) * (1 + (p.aff.gold ?? 0) / 100)); p.gold += g; say(run, `Truhe: ${g} Gold.`); }
     else { const n = Math.round(10 * p.soulMul); run.souls += n; say(run, `Truhe: ${n} Seelensplitter.`); }
   }
+  if (p.aff.midas) p.gold += 10 + run.floor * 2;
 }
 
 function useSkill(run: Run, i: number): boolean {
@@ -879,7 +919,7 @@ function useSkill(run: Run, i: number): boolean {
   if (!sk) return false;
   const cost = skillCost(p, i);
   if (p.res < cost) { say(run, `Nicht genug ${CLASSES[p.cls].resName}.`); return false; }
-  const atk = playerAtk(p), L = p.skillLvl[i], sp = p.pow * (1 + 0.3 * L);
+  const atk = playerAtk(p), L = p.skillLvl[i], mod = p.skillMod[i], sp = p.pow * (1 + 0.3 * L);
   const around = (r: number) => run.mobs.filter(m => cheb(m, p) <= r && run.vis[m.y * W + m.x]);
   const noTarget = () => { say(run, 'Kein Ziel in Reichweite.'); return false; };
   switch (`${p.cls}${i}`) {
@@ -888,19 +928,28 @@ function useSkill(run: Run, i: number): boolean {
       if (!t) return noTarget();
       stun(run, t, L ? 3 : 2);
       run.fx.push({ k: 'lunge', id: 0, dx: Math.sign(t.x - p.x), dy: Math.sign(t.y - p.y) });
-      playerHit(run, t, atk * sp + 1);
+      playerHit(run, t, atk * 1.3 * sp + 1);
+      if (mod === 2 && t.hp > 0) {
+        // Rammstoß: bis zu zwei Felder zurück, ein Hindernis tut weh
+        const dx = Math.sign(t.x - p.x), dy = Math.sign(t.y - p.y);
+        let k = 0;
+        while (k < 2 && isFree(run, t.x + dx, t.y + dy)) { moveMob(run, t, t.x + dx, t.y + dy); k++; if (t.hp <= 0) break; }
+        if (k < 2 && t.hp > 0) damage(run, t, 4 + p.lvl, '#ffcd75');
+      }
       break;
     }
     case 'krieger1': {
-      const ts = around(L >= 2 ? 2 : 1);
+      const ts = around(mod === 1 ? 2 : 1);
       if (!ts.length) return noTarget();
-      for (const t of ts) playerHit(run, t, atk * 1.5 * sp);
+      for (const t of ts) playerHit(run, t, atk * 1.7 * sp);
+      if (mod === 2) { const n = Math.min(p.maxHp - p.hp, 2 * ts.length); if (n > 0) { p.hp += n; run.fx.push({ k: 'num', x: p.x, y: p.y, s: `+${n}`, col: '#a7f070' }); } }
       run.fx.push({ k: 'shake', n: 3 });
       break;
     }
     case 'krieger2':
       p.st.stark = 7 + 3 * L;
-      if (L >= 2) for (const t of around(1)) stun(run, t, 1);
+      if (mod === 1) for (const t of around(1)) stun(run, t, 1);
+      if (mod === 2) p.st.wall = p.st.stark;
       say(run, 'Kriegsschrei!');
       break;
     case 'magier0': {
@@ -908,17 +957,25 @@ function useSkill(run: Run, i: number): boolean {
       if (!t) return noTarget();
       run.fx.push({ k: 'bolt', x0: p.x, y0: p.y, x1: t.x, y1: t.y, col: '#ef7d57' }, { k: 'shake', n: 3 });
       for (let y = t.y - 1; y <= t.y + 1; y++) for (let x = t.x - 1; x <= t.x + 1; x++) ignite(run, x, y, 2);
-      for (const m of run.mobs.filter(m => cheb(m, t) <= (L >= 2 ? 2 : 1))) {
+      for (const m of run.mobs.filter(m => cheb(m, t) <= (mod === 1 ? 2 : 1))) {
         m.st.brand = 2;
         damage(run, m, (m === t ? 6 + p.lvl * 0.5 : 3) * sp - m.def, '#ef7d57');
+      }
+      if (mod === 2) {
+        const o = run.mobs.filter(m => m !== t && run.vis[m.y * W + m.x] && cheb(m, p) <= 7).sort((a, b) => cheb(a, p) - cheb(b, p))[0];
+        if (o) {
+          run.fx.push({ k: 'bolt', x0: p.x, y0: p.y, x1: o.x, y1: o.y, col: '#ef7d57' });
+          o.st.brand = 2;
+          damage(run, o, (6 + p.lvl * 0.5) * sp * 0.6 - o.def, '#ef7d57');
+        }
       }
       break;
     }
     case 'magier1': {
-      const ts = around(L >= 2 ? 3 : 2);
+      const ts = around(mod === 1 ? 3 : 2);
       if (!ts.length) return noTarget();
       for (const i of [...run.fire.keys()]) if (cheb({ x: i % W, y: (i / W) | 0 }, p) <= 2) run.fire.delete(i);
-      for (const t of ts) { stun(run, t, L ? 3 : 2); delete t.st.brand; damage(run, t, 3 * sp, '#73eff7'); }
+      for (const t of ts) { stun(run, t, L ? 3 : 2); delete t.st.brand; damage(run, t, 3 * sp, '#73eff7'); if (mod === 2 && t.hp > 0) t.st.sproede = 4; }
       break;
     }
     case 'magier2': {
@@ -935,7 +992,8 @@ function useSkill(run: Run, i: number): boolean {
       const from = { x: p.x, y: p.y };
       [p.x, p.y] = best;
       if (L >= 1) p.st.dodge = Math.max(p.st.dodge ?? 0, 1);
-      if (L >= 2) {
+      if (mod === 2) { gain(p, 3); p.st.dodge = 2; }
+      if (mod === 1) {
         run.fx.push({ k: 'boom', x: from.x, y: from.y, r: 1 });
         for (const m of run.mobs.filter(m => cheb(m, from) <= 1)) damage(run, m, 5 * p.pow, '#9a4fc0');
       }
@@ -945,8 +1003,8 @@ function useSkill(run: Run, i: number): boolean {
       const t = nearestMob(run, 8);
       if (!t) return noTarget();
       run.fx.push({ k: 'bolt', x0: p.x, y0: p.y, x1: t.x, y1: t.y, col: '#ffcd75' });
-      playerHit(run, t, atk * 2.2 * sp);
-      if (L >= 2) {
+      playerHit(run, t, atk * 1.9 * sp, mod === 2 && t.hp >= t.maxHp);
+      if (mod === 1) {
         const b = mobAt(run, t.x + Math.sign(t.x - p.x), t.y + Math.sign(t.y - p.y));
         if (b && b !== t) damage(run, b, atk * 1.1 * sp - b.def, '#ffcd75');
       }
@@ -955,17 +1013,26 @@ function useSkill(run: Run, i: number): boolean {
     case 'waldlaeufer1': {
       if (run.traps.some(t => t.x === p.x && t.y === p.y)) { say(run, 'Hier liegt schon eine Falle.'); return false; }
       run.traps.push({ x: p.x, y: p.y });
+      if (mod === 2) for (let k = 1; k <= 2; k++) {
+        const x = p.x + p.dir[0] * k, y = p.y + p.dir[1] * k;
+        if (!walkable(run.tiles[y * W + x])) break;
+        if (!run.traps.some(t => t.x === x && t.y === y)) run.traps.push({ x, y });
+      }
       break;
     }
     case 'waldlaeufer2': {
       let moved = 0;
-      for (let k = 0; k < 2 + L; k++) {
+      for (let k = 0; k < 2 + (L ? 1 : 0) + (mod === 1 ? 1 : 0); k++) {
         const nx = p.x + p.dir[0], ny = p.y + p.dir[1];
         if (!isFree(run, nx, ny)) break;
         p.x = nx; p.y = ny; moved++;
       }
       if (!moved) { say(run, 'Kein Platz zum Rollen.'); return false; }
-      p.st.dodge = L >= 2 ? 2 : 1;
+      p.st.dodge = mod === 1 ? 2 : 1;
+      if (mod === 2) {
+        const t = nearestMob(run, shotRange(p));
+        if (t) { run.fx.push({ k: 'bolt', x0: p.x, y0: p.y, x1: t.x, y1: t.y, col: '#ffcd75' }); playerHit(run, t, atk * 0.75); }
+      }
       break;
     }
   }
@@ -982,7 +1049,7 @@ function useUlt(run: Run): boolean {
     const ts = run.mobs.filter(m => cheb(m, p) <= 2 && seen(m));
     if (!ts.length) { say(run, 'Kein Ziel in Reichweite.'); return false; }
     run.fx.push({ k: 'boom', x: p.x, y: p.y, r: 2 }, { k: 'shake', n: 6 });
-    for (const t of ts) { stun(run, t, 2); playerHit(run, t, atk * 2.5 * p.pow); }
+    for (const t of ts) { stun(run, t, 2); playerHit(run, t, atk * 3 * p.pow); }
   } else if (p.cls === 'magier') {
     const t = nearestMob(run, 8);
     if (!t) { say(run, 'Kein Ziel in Reichweite.'); return false; }
@@ -993,7 +1060,7 @@ function useUlt(run: Run): boolean {
   } else {
     const ts = run.mobs.filter(m => cheb(m, p) <= 9 && seen(m));
     if (!ts.length) { say(run, 'Kein Ziel in Reichweite.'); return false; }
-    for (const t of ts) { run.fx.push({ k: 'bolt', x0: p.x, y0: p.y, x1: t.x, y1: t.y, col: '#ffcd75' }); playerHit(run, t, atk * 1.6 * p.pow); }
+    for (const t of ts) { run.fx.push({ k: 'bolt', x0: p.x, y0: p.y, x1: t.x, y1: t.y, col: '#ffcd75' }); playerHit(run, t, atk * 0.9 * p.pow); }
   }
   say(run, `${u.name}!`);
   p.ultCd = u.cost;
@@ -1025,6 +1092,7 @@ export function act(run: Run, a: Action): void {
   }
   if (run.mode !== 'play') return;
   if (a.t === 'equip' && p.bag[a.i]?.use) { if (useItem(run, a.i)) endTurn(run); return; }
+  if (a.t === 'use') { const i = p.bag.findIndex(it => it.use === a.id); if (i >= 0 && useItem(run, i)) endTurn(run); return; }
   if (manage(run, a)) return;
   if (a.t === 'target') {
     const m = mobAt(run, a.x, a.y);
@@ -1124,7 +1192,7 @@ export function act(run: Run, a: Action): void {
       const t = nearestMob(run, shotRange(p));
       if (!t) { say(run, 'Kein Ziel in Reichweite.'); break; }
       run.fx.push({ k: 'bolt', x0: p.x, y0: p.y, x1: t.x, y1: t.y, col: c.resCol });
-      const base = playerAtk(p) * (p.cls === 'waldlaeufer' ? 0.75 : 1);
+      const base = playerAtk(p) * (p.cls === 'waldlaeufer' ? 0.7 : 1);
       playerHit(run, t, base);
       sideHits(run, t, base, c.resCol);
       used = true;
@@ -1179,13 +1247,13 @@ function hitPlayer(run: Run, m: Actor, melee: boolean) {
   const p = run.p, d = MOBS[m.kind];
   m.f = Math.abs(p.x - m.x) >= Math.abs(p.y - m.y) ? [Math.sign(p.x - m.x), 0] : [0, Math.sign(p.y - m.y)];
   if (melee) run.fx.push({ k: 'lunge', id: m.id, dx: Math.sign(p.x - m.x), dy: Math.sign(p.y - m.y) });
-  if (p.st.dodge || (p.aff.flink && run.rng.chance(Math.min(40, p.aff.flink) / 100))) { run.fx.push({ k: 'num', x: p.x, y: p.y, s: 'verfehlt', col: '#94b0c2' }); return; }
-  damage(run, p, Math.max(Math.ceil(m.atk * 0.3), m.atk - p.def) - (has(p, 'steinhaut') ? 1 : 0), '#b13e53');
+  if (p.st.dodge || (p.aff.flink && run.rng.chance(Math.min(40, p.aff.flink) / 100))) { run.fx.push({ k: 'num', x: p.x, y: p.y, s: 'verfehlt', col: '#94b0c2' }); if (p.aff.konter) p.st.konter = 1; return; }
+  damage(run, p, Math.max(Math.ceil(m.atk * 0.3), m.atk - p.def - (p.st.wall ? 3 : 0)) - (has(p, 'steinhaut') ? 1 : 0), '#b13e53');
   run.fx.push({ k: 'shake', n: m.boss ? 5 : 2 });
   if (p.cls === 'krieger') gain(p, 1);
   if (d.poison && run.rng.chance(0.5)) p.st.gift = 4;
   if (d.burn && run.rng.chance(0.5)) p.st.brand = 3;
-  if (melee && p.thorns) damage(run, m, p.thorns, '#a7f070');
+  if (melee && p.thorns) damage(run, m, p.thorns * (p.aff.stachel ? 2 : 1), '#a7f070');
 }
 
 function moveMob(run: Run, m: Actor, x: number, y: number) {
@@ -1195,7 +1263,7 @@ function moveMob(run: Run, m: Actor, x: number, y: number) {
   if (ti >= 0) {
     run.traps.splice(ti, 1);
     const L = run.p.skillLvl[1];
-    stun(run, m, L >= 2 ? 3 : 2);
+    stun(run, m, run.p.skillMod[1] === 1 ? 3 : 2);
     say(run, `${m.name} tritt in die Falle!`);
     damage(run, m, (8 * run.p.pow + run.p.lvl) * (1 + 0.3 * L), '#ffcd75');
   }
@@ -1273,11 +1341,13 @@ function endTurn(run: Run) {
     if (m.hp <= 0) continue;
     if (m.st.stun) { if (--m.st.stun === 0) m.st.immun = 3; continue; }
     if (m.st.immun) m.st.immun--;
+    if (m.st.sproede) m.st.sproede--;
     if (has(p, 'zeitsand') && run.rng.chance(0.12)) continue;
     mobAct(run, m, dist);
     if (p.hp <= 0) break;
   }
   if (p.st.stark) p.st.stark--;
+  if (p.st.wall) p.st.wall--;
   if (p.st.dodge) p.st.dodge--;
   if (p.ultCd) p.ultCd--;
   if (p.aff.regen && run.turn % 6 === 0 && p.hp > 0 && p.hp < p.maxHp) p.hp = Math.min(p.maxHp, p.hp + p.aff.regen);
@@ -1291,7 +1361,7 @@ function endTurn(run: Run) {
 
 // ---------- Speichern eines laufenden Abstiegs ----------
 
-const SAVE_VERSION = 4;
+const SAVE_VERSION = 5;
 
 export function serialize(run: Run): string {
   return JSON.stringify({
