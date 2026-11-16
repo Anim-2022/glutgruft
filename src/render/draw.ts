@@ -1,5 +1,5 @@
 import { VW, VH, TS, sprites, masks, tilesets, text, panel, bar } from './gfx';
-import { W, H, T } from '../game/dungeon';
+import { W, H, T, wallLike } from '../game/dungeon';
 import { Run, Actor, xpNeed } from '../game/run';
 import { CLASSES, PERKS, BIOME_NAMES, biomeOf } from '../game/content';
 
@@ -8,6 +8,7 @@ const lunges = new Map<number, { dx: number; dy: number; t: number }>();
 const flashes = new Map<number, number>();
 const nums: { x: number; y: number; s: string; col: string; t: number }[] = [];
 const bolts: { x0: number; y0: number; x1: number; y1: number; col: string; t: number }[] = [];
+const booms: { x: number; y: number; r: number; t: number }[] = [];
 const bits: { x: number; y: number; vx: number; vy: number; col: string; t: number }[] = [];
 let shake = 0;
 const cam = { x: 0, y: 0 };
@@ -16,7 +17,7 @@ const LUNGE_T = 0.16, FLASH_T = 0.12;
 
 export function resetView() {
   pos.clear(); lunges.clear(); flashes.clear();
-  nums.length = 0; bolts.length = 0; bits.length = 0; shake = 0;
+  nums.length = 0; bolts.length = 0; bits.length = 0; booms.length = 0; shake = 0;
 }
 
 function smooth(a: Actor, dt: number) {
@@ -44,6 +45,7 @@ function shatter(kind: string, tx: number, ty: number) {
 
 const TILE_SPR: Record<number, string> = {
   [T.STAIRS]: 'stairs', [T.CHEST]: 'chest', [T.CHEST_OPEN]: 'chest_open', [T.ALTAR]: 'altar', [T.ALTAR_USED]: 'altar_used',
+  [T.BARREL]: 'barrel', [T.PILLAR]: 'pillar', [T.RUBBLE]: 'rubble', [T.FRAGILE]: 'crack', [T.FRAGILE2]: 'crack2',
 };
 
 export function drawRun(ctx: CanvasRenderingContext2D, run: Run, dt: number, time: number) {
@@ -55,6 +57,13 @@ export function drawRun(ctx: CanvasRenderingContext2D, run: Run, dt: number, tim
       case 'lunge': lunges.set(f.id, { dx: f.dx, dy: f.dy, t: 0 }); break;
       case 'flash': flashes.set(f.id, FLASH_T); break;
       case 'die': shatter(f.kind, f.x, f.y); break;
+      case 'boom': booms.push({ x: f.x, y: f.y, r: f.r, t: 0 }); break;
+      case 'debris':
+        for (let k = 0; k < 14; k++) {
+          const ang = Math.random() * Math.PI * 2, v = 20 + Math.random() * 60;
+          bits.push({ x: f.x * TS + 8, y: f.y * TS + 8, vx: Math.cos(ang) * v, vy: Math.sin(ang) * v - 40, col: Math.random() < 0.5 ? '#94b0c2' : '#566c86', t: 0 });
+        }
+        break;
     }
   }
   for (const [id, l] of lunges) { l.t += dt; if (l.t > LUNGE_T) lunges.delete(id); }
@@ -77,14 +86,25 @@ export function drawRun(ctx: CanvasRenderingContext2D, run: Run, dt: number, tim
     const i = y * W + x;
     if (!run.seen[i]) continue;
     const t = run.tiles[i], dx = x * TS + ox, dy = y * TS + oy;
-    if (t === T.WALL) {
-      const front = y + 1 < H && run.tiles[i + W] !== T.WALL;
+    if (wallLike(t)) {
+      const front = y + 1 < H && !wallLike(run.tiles[i + W]);
       ctx.drawImage(front ? ts.wall : ts.top, dx, dy);
+      if (t === T.CRACKED) ctx.drawImage(sprites[(run.cracks.get(i) ?? 0) >= 2 ? 'crack2' : 'crack'], dx, dy);
     } else {
       ctx.drawImage(ts.floor[(x * 7 + y * 13 + ((x * y) % 5)) % 4], dx, dy);
-      if (y > 0 && run.tiles[i - W] === T.WALL) { ctx.fillStyle = 'rgba(0,0,0,0.3)'; ctx.fillRect(dx, dy, TS, 3); }
+      if (y > 0 && wallLike(run.tiles[i - W])) { ctx.fillStyle = 'rgba(0,0,0,0.3)'; ctx.fillRect(dx, dy, TS, 3); }
+      if (t === T.GRASS) ctx.drawImage(ts.grass[(x * 5 + y * 3) % 3], dx, dy);
+      else if (t === T.BURNT) ctx.drawImage(ts.burnt, dx, dy);
       const s = TILE_SPR[t];
       if (s) ctx.drawImage(sprites[s], dx, dy);
+      if (t === T.BARREL && run.fuses.has(i) && Math.floor(time * 10) % 2) {
+        ctx.fillStyle = '#ffcd75'; ctx.fillRect(dx + 7, dy - 1, 2, 2);
+        ctx.fillStyle = '#ef7d57'; ctx.fillRect(dx + 6, dy, 1, 1); ctx.fillRect(dx + 9, dy - 2, 1, 1);
+      }
+      if (run.fire.has(i) && run.vis[i]) {
+        ctx.fillStyle = 'rgba(239,125,87,0.22)'; ctx.fillRect(dx - 3, dy - 3, TS + 6, TS + 6);
+        ctx.drawImage(sprites[Math.floor(time * 8 + x + y) % 2 ? 'fire_a' : 'fire_b'], dx, dy - 2);
+      }
       if (t === T.ALTAR) {
         ctx.fillStyle = `rgba(115,239,247,${0.12 + 0.08 * Math.sin(time * 3)})`;
         ctx.fillRect(dx - 2, dy - 2, TS + 4, TS + 4);
@@ -139,6 +159,20 @@ export function drawRun(ctx: CanvasRenderingContext2D, run: Run, dt: number, tim
     ctx.fillStyle = b.col; ctx.fillRect(Math.round(b.x) + ox, Math.round(b.y) + oy, 2, 2);
   }
   ctx.globalAlpha = 1;
+  for (let i = booms.length - 1; i >= 0; i--) {
+    const b = booms[i];
+    b.t += dt;
+    if (b.t > 0.32) { booms.splice(i, 1); continue; }
+    const f = b.t / 0.32, cx = b.x * TS + 8 + ox, cy = b.y * TS + 8 + oy, rad = (b.r + 0.5) * TS * (0.4 + 0.6 * f);
+    for (let yy = -rad; yy <= rad; yy += 2) for (let xx = -rad; xx <= rad; xx += 2) {
+      const d = Math.hypot(xx, yy) / rad;
+      if (d > 1 || d < f * 0.9 - 0.25) continue;
+      ctx.fillStyle = d < 0.45 ? '#f4f4f4' : d < 0.75 ? '#ffcd75' : '#ef7d57';
+      ctx.globalAlpha = 1 - f * f;
+      ctx.fillRect(Math.round(cx + xx), Math.round(cy + yy), 2, 2);
+    }
+  }
+  ctx.globalAlpha = 1;
   for (let i = bolts.length - 1; i >= 0; i--) {
     const b = bolts[i];
     b.t += dt;
@@ -180,14 +214,16 @@ function hud(ctx: CanvasRenderingContext2D, run: Run) {
   text(ctx, `${c.resName} ${p.res}/${p.resMax}`, 114, 35, '#f4f4f4', 8, 'center');
   bar(ctx, 50, 47, 128, 2, p.exp / xpNeed(p.lvl), '#ffcd75');
 
-  const rx = VW - 136;
-  panel(ctx, rx, 6, 130, 50);
+  const rx = VW - 176;
+  panel(ctx, rx, 6, 170, 50);
   text(ctx, `Ebene ${run.floor}`, VW - 12, 11, '#f4f4f4', 10, 'right');
   text(ctx, BIOME_NAMES[biomeOf(run.floor)], VW - 12, 23, '#94b0c2', 8, 'right');
   ctx.drawImage(sprites.soul, rx + 5, 9);
   text(ctx, `${run.souls}`, rx + 21, 12, '#73eff7');
   ctx.drawImage(sprites.potion, rx + 5, 38);
-  text(ctx, `x${p.potions} [Q]`, rx + 21, 41, p.potions ? '#f4f4f4' : '#566c86', 8);
+  text(ctx, `${p.potions} [Q]`, rx + 20, 41, p.potions ? '#f4f4f4' : '#566c86', 8);
+  ctx.drawImage(sprites.bomb, rx + 52, 38);
+  text(ctx, `${p.bombs} [B]`, rx + 67, 41, p.bombs ? '#f4f4f4' : '#566c86', 8);
   text(ctx, `A ${p.atk}${p.st.stark ? '+3' : ''}  V ${p.def}`, VW - 12, 41, '#94b0c2', 8, 'right');
 
   // Fähigkeitenleiste

@@ -1,6 +1,6 @@
 import { RNG } from '../core/rng';
 import type { Meta } from '../core/save';
-import { W, H, T, Room, genDungeon, center, walkable, los, computeFov, distMap } from './dungeon';
+import { W, H, T, Room, genDungeon, center, walkable, opaque, los, computeFov, distMap } from './dungeon';
 import { CLASSES, ClassId, MOBS, PERKS, BOSS_BY_BIOME, BIOME_NAMES, FLOORS_PER_BIOME, LAST_FLOOR, biomeOf, spawnTable } from './content';
 
 export interface Actor {
@@ -12,7 +12,7 @@ export interface Actor {
 
 export interface Player extends Actor {
   cls: ClassId; lvl: number; exp: number;
-  res: number; resMax: number; potions: number;
+  res: number; resMax: number; potions: number; bombs: number;
   crit: number; pow: number; vamp: number; thorns: number; soulMul: number;
   dir: [number, number]; perks: string[];
 }
@@ -23,12 +23,17 @@ export type Fx =
   | { k: 'lunge'; id: number; dx: number; dy: number }
   | { k: 'flash'; id: number }
   | { k: 'die'; x: number; y: number; kind: string }
+  | { k: 'boom'; x: number; y: number; r: number }
+  | { k: 'debris'; x: number; y: number }
   | { k: 'bolt'; x0: number; y0: number; x1: number; y1: number; col: string };
 
 export interface Run {
   seed: number; rng: RNG; floor: number;
   tiles: Uint8Array; seen: Uint8Array; vis: Uint8Array;
   p: Player; mobs: Actor[]; traps: { x: number; y: number }[];
+  fire: Map<number, number>;   // Feld -> verbleibende Züge
+  fuses: Map<number, number>;  // Fass -> Züge bis zur Explosion
+  cracks: Map<number, number>; // rissige Wand -> erhaltene Schläge
   log: string[]; fx: Fx[];
   mode: 'play' | 'perk' | 'dead' | 'win';
   perkChoices: string[];
@@ -37,7 +42,7 @@ export interface Run {
 
 export type Action =
   | { t: 'move'; dx: number; dy: number }
-  | { t: 'wait' } | { t: 'shoot' } | { t: 'potion' } | { t: 'descend' }
+  | { t: 'wait' } | { t: 'shoot' } | { t: 'potion' } | { t: 'descend' } | { t: 'bomb' }
   | { t: 'skill'; i: number } | { t: 'perk'; i: number };
 
 const FOV_R = 8;
@@ -56,13 +61,13 @@ export function newRun(seed: number, cls: ClassId, meta: Meta): Run {
   const p: Player = {
     id: 0, kind: cls, name: c.name, x: 0, y: 0, hp, maxHp: hp, atk: c.atk + meta.upg.atk, def: c.def,
     st: {}, xp: 0, cd: 0, awake: true,
-    cls, lvl: 1, exp: 0, res: c.resStart, resMax: c.resMax, potions: 1 + meta.upg.trank,
+    cls, lvl: 1, exp: 0, res: c.resStart, resMax: c.resMax, potions: 1 + meta.upg.trank, bombs: 1,
     crit: 0.05, pow: 1, vamp: 0, thorns: 0, soulMul: 1, dir: [1, 0], perks: [],
   };
   const run: Run = {
     seed, rng: new RNG(seed), floor: 0,
     tiles: new Uint8Array(W * H), seen: new Uint8Array(W * H), vis: new Uint8Array(W * H),
-    p, mobs: [], traps: [], log: [], fx: [], mode: 'play', perkChoices: [],
+    p, mobs: [], traps: [], fire: new Map(), fuses: new Map(), cracks: new Map(), log: [], fx: [], mode: 'play', perkChoices: [],
     souls: 0, kills: 0, turn: 0, nextId: 1,
   };
   nextFloor(run);
@@ -71,11 +76,11 @@ export function newRun(seed: number, cls: ClassId, meta: Meta): Run {
 
 function spawnMob(run: Run, kind: string, x: number, y: number): Actor {
   const d = MOBS[kind];
-  const s = 1 + 0.12 * (run.floor - 1);
+  const s = 1 + 0.22 * (run.floor - 1);
   const hp = d.boss ? d.hp : Math.round(d.hp * s);
   const m: Actor = {
     id: run.nextId++, kind, name: d.name, x, y, hp, maxHp: hp,
-    atk: d.boss ? d.atk : d.atk + Math.floor(run.floor / 3), def: d.def,
+    atk: d.boss ? d.atk : d.atk + Math.round(run.floor * 0.7), def: d.def,
     st: {}, xp: d.xp, cd: 0, awake: false, boss: d.boss,
   };
   run.mobs.push(m);
@@ -90,52 +95,184 @@ function freeInRoom(run: Run, r: Room): [number, number] | null {
   return null;
 }
 
+const DIRS4 = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+
+// Setzt ein blockierendes Objekt nur, wenn danach noch alles erreichbar bleibt.
+function tryBlock(run: Run, x: number, y: number, tile: number): boolean {
+  const i = y * W + x;
+  if (run.tiles[i] !== T.FLOOR || !isFree(run, x, y)) return false;
+  const reach = (d: Int16Array) => d.reduce((n, v) => n + (v >= 0 ? 1 : 0), 0);
+  const before = reach(distMap(run.tiles, run.p.x, run.p.y));
+  run.tiles[i] = tile;
+  if (reach(distMap(run.tiles, run.p.x, run.p.y)) === before - 1) return true;
+  run.tiles[i] = T.FLOOR;
+  return false;
+}
+
+// Versteck hinter einer rissigen Wand: 3x3-Kammer mit Truhe, ringsum massiver Fels.
+function addSecret(run: Run, rooms: Room[]): boolean {
+  const t = run.tiles;
+  for (let n = 0; n < 40; n++) {
+    const r = run.rng.pick(rooms), [ox, oy] = run.rng.pick(DIRS4);
+    const wx = ox ? (ox > 0 ? r.x + r.w : r.x - 1) : run.rng.int(r.x, r.x + r.w - 1);
+    const wy = oy ? (oy > 0 ? r.y + r.h : r.y - 1) : run.rng.int(r.y, r.y + r.h - 1);
+    const cx = wx + ox * 2, cy = wy + oy * 2; // Mitte der Kammer
+    if (cx < 3 || cy < 3 || cx >= W - 3 || cy >= H - 3) continue;
+    let solid = true;
+    for (let y = cy - 2; y <= cy + 2 && solid; y++) for (let x = cx - 2; x <= cx + 2; x++) {
+      const inner = x === wx - ox && y === wy - oy; // das Raumfeld vor der Wand
+      if (!inner && t[y * W + x] !== T.WALL) { solid = false; break; }
+    }
+    if (!solid) continue;
+    for (let y = cy - 1; y <= cy + 1; y++) for (let x = cx - 1; x <= cx + 1; x++) t[y * W + x] = T.FLOOR;
+    t[cy * W + cx] = T.CHEST;
+    t[wy * W + wx] = T.CRACKED;
+    return true;
+  }
+  return false;
+}
+
 function nextFloor(run: Run) {
   run.floor++;
   if (run.floor > 1) run.souls += Math.round(5 * run.p.soulMul);
   const { tiles, rooms } = genDungeon(run.rng);
+  const rng = run.rng, biome = biomeOf(run.floor);
   run.tiles = tiles;
   run.seen = new Uint8Array(W * H);
   run.mobs = [];
   run.traps = [];
+  run.fire = new Map(); run.fuses = new Map(); run.cracks = new Map();
   [run.p.x, run.p.y] = center(rooms[0]);
   const last = rooms[rooms.length - 1];
   const bossFloor = run.floor % FLOORS_PER_BIOME === 0;
   if (bossFloor) {
     const [bx, by] = center(last);
-    spawnMob(run, BOSS_BY_BIOME[biomeOf(run.floor)], bx, by);
+    spawnMob(run, BOSS_BY_BIOME[biome], bx, by);
   } else {
     const [sx, sy] = center(last);
     run.tiles[sy * W + sx] = T.STAIRS;
   }
+  // Bewuchs (brennbar): Moos in der Gruft, Pilzrasen in der Höhle, Kohlenstaub in der Schmiede
+  for (const r of rooms) {
+    if (!rng.chance([0.3, 0.6, 0.35][biome])) continue;
+    let x = rng.int(r.x, r.x + r.w - 1), y = rng.int(r.y, r.y + r.h - 1);
+    for (let k = rng.int(4, 12); k > 0; k--) {
+      if (run.tiles[y * W + x] === T.FLOOR) run.tiles[y * W + x] = T.GRASS;
+      const [ox, oy] = rng.pick(DIRS4);
+      x = Math.max(r.x, Math.min(r.x + r.w - 1, x + ox)); y = Math.max(r.y, Math.min(r.y + r.h - 1, y + oy));
+    }
+  }
   const table = spawnTable(run.floor);
   for (let i = 1; i < rooms.length; i++) {
     const r = rooms[i];
-    const n = (bossFloor && r === last) ? 0 : run.rng.int(1, 2) + (run.floor > 6 && run.rng.chance(0.5) ? 1 : 0);
+    const n = (bossFloor && r === last) ? 0 : rng.int(1, 2) + Math.floor(run.floor / 4);
     for (let k = 0; k < n; k++) {
       const f = freeInRoom(run, r);
-      if (f) spawnMob(run, run.rng.pick(table), f[0], f[1]);
+      if (f) spawnMob(run, rng.pick(table), f[0], f[1]);
     }
-    // Truhen/Altäre nur in Ecken, damit sie keinen Durchgang versperren
-    if (r.w >= 4 && r.h >= 3 && run.rng.chance(0.4)) {
-      const cx = run.rng.chance(0.5) ? r.x : r.x + r.w - 1, cy = run.rng.chance(0.5) ? r.y : r.y + r.h - 1;
-      if (cornerSafe(run, cx, cy)) run.tiles[cy * W + cx] = run.rng.chance(0.25) ? T.ALTAR : T.CHEST;
+    if (rng.chance(0.4)) {
+      const cx = rng.chance(0.5) ? r.x : r.x + r.w - 1, cy = rng.chance(0.5) ? r.y : r.y + r.h - 1;
+      tryBlock(run, cx, cy, rng.chance(0.25) ? T.ALTAR : T.CHEST);
+    }
+    // Säulen in großen Räumen, Fässer verstreut
+    if (r.w >= 6 && r.h >= 5 && rng.chance(0.5)) {
+      for (const [px, py] of [[r.x + 1, r.y + 1], [r.x + r.w - 2, r.y + 1], [r.x + 1, r.y + r.h - 2], [r.x + r.w - 2, r.y + r.h - 2]]) tryBlock(run, px, py, T.PILLAR);
+    }
+    if (rng.chance(0.35)) {
+      for (let k = rng.int(1, 2); k > 0; k--) tryBlock(run, rng.int(r.x, r.x + r.w - 1), rng.int(r.y, r.y + r.h - 1), T.BARREL);
     }
   }
+  // Brüchiger Boden: Abkürzung nach unten, nie an einem Boss vorbei
+  if (!bossFloor && run.floor < LAST_FLOOR && rng.chance(0.4)) {
+    // nur dort, wo man auch außen herum käme
+    const f = freeInRoom(run, rng.pick(rooms.slice(1)));
+    if (f && tryBlock(run, f[0], f[1], T.BARREL)) run.tiles[f[1] * W + f[0]] = T.FRAGILE;
+  }
+  if (rng.chance(0.65)) addSecret(run, rooms);
   computeFov(run.tiles, run.p.x, run.p.y, FOV_R, run.vis, run.seen);
-  say(run, `Ebene ${run.floor} – ${BIOME_NAMES[biomeOf(run.floor)]}`);
+  say(run, `Ebene ${run.floor} – ${BIOME_NAMES[biome]}`);
   if (bossFloor) say(run, 'Etwas Mächtiges lauert hier ...');
 }
 
-// Eine Ecke ist sicher, wenn genau zwei ihrer vier Nachbarn Wände sind (kein Korridor mündet dort).
-function cornerSafe(run: Run, x: number, y: number): boolean {
-  if (run.tiles[y * W + x] !== T.FLOOR || !isFree(run, x, y)) return false;
-  let walls = 0;
-  for (const [ox, oy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) if (run.tiles[(y + oy) * W + x + ox] === T.WALL) walls++;
-  return walls === 2;
+// ---------- Zerstörung und Feuer ----------
+
+function ignite(run: Run, x: number, y: number, turns = 3) {
+  if (x < 0 || y < 0 || x >= W || y >= H) return;
+  const i = y * W + x, t = run.tiles[i];
+  if (t === T.BARREL) { if (!run.fuses.has(i)) run.fuses.set(i, 1); return; }
+  if (!walkable(t) || t === T.STAIRS) return;
+  run.fire.set(i, Math.max(run.fire.get(i) ?? 0, t === T.GRASS ? turns + 1 : turns));
+}
+
+export function explode(run: Run, x: number, y: number, r = 1) {
+  const p = run.p;
+  run.fx.push({ k: 'boom', x, y, r }, { k: 'shake', n: 6 });
+  const chain: number[] = [];
+  for (let yy = y - r; yy <= y + r; yy++) for (let xx = x - r; xx <= x + r; xx++) {
+    if (xx < 1 || yy < 1 || xx >= W - 1 || yy >= H - 1) continue;
+    const i = yy * W + xx, t = run.tiles[i];
+    if (t === T.CRACKED) breakWall(run, i);
+    else if (t === T.PILLAR) collapse(run, xx, yy);
+    else if (t === T.BARREL) chain.push(i);
+    else if (t === T.GRASS) ignite(run, xx, yy);
+  }
+  const dmg = 9 + run.floor;
+  for (const m of run.mobs.filter(m => Math.abs(m.x - x) <= r && Math.abs(m.y - y) <= r)) damage(run, m, dmg, '#ef7d57');
+  if (Math.abs(p.x - x) <= r && Math.abs(p.y - y) <= r) damage(run, p, Math.ceil(dmg / 2), '#b13e53');
+  for (const i of chain) if (run.tiles[i] === T.BARREL) burst(run, i);
+}
+
+function breakWall(run: Run, i: number) {
+  run.tiles[i] = T.RUBBLE;
+  run.cracks.delete(i);
+  run.fx.push({ k: 'debris', x: i % W, y: (i / W) | 0 });
+  say(run, 'Die Wand bricht ein!');
+}
+
+function burst(run: Run, i: number) {
+  run.tiles[i] = T.BURNT;
+  run.fuses.delete(i);
+  explode(run, i % W, (i / W) | 0, 1);
+}
+
+// Eine Säule stürzt ein und begräbt, was direkt daneben steht.
+function collapse(run: Run, x: number, y: number) {
+  run.tiles[y * W + x] = T.RUBBLE;
+  run.fx.push({ k: 'debris', x, y });
+  say(run, 'Eine Säule stürzt ein!');
+  for (const [ox, oy] of DIRS4) {
+    const m = mobAt(run, x + ox, y + oy);
+    if (m) { stun(m, 2); damage(run, m, 8 + run.floor, '#94b0c2'); }
+    else if (run.p.x === x + ox && run.p.y === y + oy) damage(run, run.p, 4 + Math.floor(run.floor / 2), '#b13e53');
+  }
+}
+
+function tickWorld(run: Run) {
+  for (const [i, t] of [...run.fuses]) {
+    if (run.tiles[i] !== T.BARREL) { run.fuses.delete(i); continue; }
+    if (t <= 1) burst(run, i); else run.fuses.set(i, t - 1);
+  }
+  // Feuer breitet sich über Bewuchs aus und brennt herunter
+  for (const [i, t] of [...run.fire]) {
+    const x = i % W, y = (i / W) | 0;
+    for (const [ox, oy] of DIRS4) {
+      const n = (y + oy) * W + x + ox, nt = run.tiles[n];
+      if (nt === T.BARREL) ignite(run, x + ox, y + oy);
+      else if (nt === T.GRASS && !run.fire.has(n) && run.rng.chance(0.55)) ignite(run, x + ox, y + oy);
+    }
+    if (t <= 1) { run.fire.delete(i); if (run.tiles[i] === T.GRASS) run.tiles[i] = T.BURNT; }
+    else run.fire.set(i, t - 1);
+  }
 }
 
 // ---------- Schaden ----------
+
+// Betäubt ein Ziel. Danach ist es kurz immun, Bosse nur einen Zug lang betäubt.
+function stun(a: Actor, turns: number) {
+  if (a.st.immun) return;
+  a.st.stun = a.boss ? 1 : turns;
+}
+
 
 function damage(run: Run, dst: Actor, amt: number, col = '#f4f4f4', crit = false) {
   amt = Math.max(1, Math.round(amt));
@@ -158,6 +295,7 @@ function kill(run: Run, m: Actor) {
   p.exp += m.xp;
   run.souls += Math.max(1, Math.round((m.xp / 3) * p.soulMul));
   if (p.vamp) p.hp = Math.min(p.maxHp, p.hp + p.vamp);
+  if (p.cls === 'waldlaeufer') gain(p, 1);
   if (m.boss) {
     say(run, `${m.name} ist besiegt!`);
     run.souls += Math.round(25 * p.soulMul);
@@ -223,8 +361,9 @@ function gain(p: Player, n: number) { p.res = Math.max(0, Math.min(p.resMax, p.r
 function openChest(run: Run, i: number) {
   const p = run.p, r = run.rng.next();
   run.tiles[i] = T.CHEST_OPEN;
-  if (r < 0.4) { p.potions++; say(run, 'Truhe: ein Heiltrank.'); }
-  else if (r < 0.65) { p.atk++; say(run, 'Truhe: bessere Waffe (+1 Angriff).'); }
+  if (r < 0.3) { p.potions++; say(run, 'Truhe: ein Heiltrank.'); }
+  else if (r < 0.5) { p.bombs += 2; say(run, 'Truhe: zwei Bomben.'); }
+  else if (r < 0.7) { p.atk++; say(run, 'Truhe: bessere Waffe (+1 Angriff).'); }
   else if (r < 0.85) { p.def++; say(run, 'Truhe: bessere Rüstung (+1 Verteidigung).'); }
   else { const n = Math.round(10 * p.soulMul); run.souls += n; say(run, `Truhe: ${n} Seelensplitter.`); }
 }
@@ -240,7 +379,7 @@ function useSkill(run: Run, i: number): boolean {
     case 'krieger0': {
       const t = nearestMob(run, 1);
       if (!t) return noTarget();
-      t.st.stun = 2;
+      stun(t, 2);
       run.fx.push({ k: 'lunge', id: 0, dx: Math.sign(t.x - p.x), dy: Math.sign(t.y - p.y) });
       playerHit(run, t, atk * p.pow + 1);
       break;
@@ -257,16 +396,18 @@ function useSkill(run: Run, i: number): boolean {
       const t = nearestMob(run, 7);
       if (!t) return noTarget();
       run.fx.push({ k: 'bolt', x0: p.x, y0: p.y, x1: t.x, y1: t.y, col: '#ef7d57' }, { k: 'shake', n: 3 });
+      for (let y = t.y - 1; y <= t.y + 1; y++) for (let x = t.x - 1; x <= t.x + 1; x++) ignite(run, x, y, 2);
       for (const m of run.mobs.filter(m => cheb(m, t) <= 1)) {
-        m.st.brand = 3;
-        damage(run, m, (m === t ? 7 + p.lvl : 4) * p.pow - m.def, '#ef7d57');
+        m.st.brand = 2;
+        damage(run, m, (m === t ? 6 + p.lvl * 0.5 : 3) * p.pow - m.def, '#ef7d57');
       }
       break;
     }
     case 'magier1': {
       const ts = around(2);
       if (!ts.length) return noTarget();
-      for (const t of ts) { t.st.stun = 3; damage(run, t, 3 * p.pow, '#73eff7'); }
+      for (const i of [...run.fire.keys()]) if (cheb({ x: i % W, y: (i / W) | 0 }, p) <= 2) run.fire.delete(i);
+      for (const t of ts) { stun(t, 2); delete t.st.brand; damage(run, t, 3 * p.pow, '#73eff7'); }
       break;
     }
     case 'magier2': {
@@ -287,7 +428,7 @@ function useSkill(run: Run, i: number): boolean {
       const t = nearestMob(run, 8);
       if (!t) return noTarget();
       run.fx.push({ k: 'bolt', x0: p.x, y0: p.y, x1: t.x, y1: t.y, col: '#ffcd75' });
-      playerHit(run, t, atk * 2.5 * p.pow);
+      playerHit(run, t, atk * 2.2 * p.pow);
       break;
     }
     case 'waldlaeufer1': {
@@ -335,6 +476,15 @@ export function act(run: Run, a: Action): void {
         if (p.cls === 'krieger') gain(p, 2);
         used = true;
       } else if (t === T.CHEST) { openChest(run, i); used = true; }
+      else if (t === T.CRACKED) {
+        const n = (run.cracks.get(i) ?? 0) + 1;
+        run.fx.push({ k: 'lunge', id: 0, dx: a.dx, dy: a.dy }, { k: 'shake', n: 2 });
+        if (n >= 3) breakWall(run, i); else { run.cracks.set(i, n); say(run, n === 1 ? 'Die Wand ist rissig – sie gibt nach.' : 'Noch ein Schlag ...'); }
+        used = true;
+      } else if (t === T.BARREL) {
+        if (!run.fuses.has(i)) { run.fuses.set(i, 2); say(run, 'Die Lunte brennt – weg hier!'); }
+        used = true;
+      }
       else if (t === T.ALTAR) {
         const cost = Math.ceil(p.maxHp * 0.25);
         if (p.hp <= cost) say(run, 'Du bist zu schwach für das Opfer.');
@@ -348,6 +498,15 @@ export function act(run: Run, a: Action): void {
       } else if (walkable(t)) {
         p.x = nx; p.y = ny; used = true;
         if (t === T.STAIRS) say(run, 'Eine Treppe nach unten. [E] zum Abstieg.');
+        else if (t === T.FRAGILE) { run.tiles[i] = T.FRAGILE2; say(run, 'Der Boden knackt unter dir ...'); }
+        else if (t === T.FRAGILE2) {
+          say(run, 'Der Boden bricht ein!');
+          nextFloor(run);
+          damage(run, p, Math.ceil(p.maxHp * 0.15), '#b13e53');
+          run.fx.push({ k: 'shake', n: 8 });
+          used = false;
+          if (p.hp <= 0) { p.hp = 0; run.mode = 'dead'; say(run, 'Du bist gefallen.'); }
+        }
       }
       break;
     }
@@ -361,8 +520,7 @@ export function act(run: Run, a: Action): void {
       const t = nearestMob(run, c.range);
       if (!t) { say(run, 'Kein Ziel in Reichweite.'); break; }
       run.fx.push({ k: 'bolt', x0: p.x, y0: p.y, x1: t.x, y1: t.y, col: c.resCol });
-      playerHit(run, t, playerAtk(p));
-      if (p.cls === 'waldlaeufer') gain(p, 1);
+      playerHit(run, t, playerAtk(p) * (p.cls === 'waldlaeufer' ? 0.75 : 1));
       used = true;
       break;
     }
@@ -378,6 +536,24 @@ export function act(run: Run, a: Action): void {
         used = true;
       }
       break;
+    case 'bomb': {
+      if (p.bombs <= 0) { say(run, 'Keine Bomben mehr.'); break; }
+      // Ziel: Hindernis in Blickrichtung, sonst nächster Gegner, sonst drei Felder voraus
+      let tx = p.x, ty = p.y, found = false;
+      for (let k = 1; k <= 3; k++) {
+        const x = p.x + p.dir[0] * k, y = p.y + p.dir[1] * k, t = run.tiles[y * W + x];
+        if (t === T.CRACKED || t === T.PILLAR || t === T.BARREL) { tx = x; ty = y; found = true; break; }
+        if (opaque(t) || t === undefined) break;
+        tx = x; ty = y;
+      }
+      const m = found ? undefined : nearestMob(run, 5);
+      if (m) { tx = m.x; ty = m.y; }
+      p.bombs--;
+      run.fx.push({ k: 'bolt', x0: p.x, y0: p.y, x1: tx, y1: ty, col: '#1a1c2c' });
+      explode(run, tx, ty, 1);
+      used = true;
+      break;
+    }
     case 'descend':
       if (run.tiles[p.y * W + p.x] === T.STAIRS) nextFloor(run);
       break;
@@ -394,7 +570,7 @@ function hitPlayer(run: Run, m: Actor, melee: boolean) {
   const p = run.p, d = MOBS[m.kind];
   if (melee) run.fx.push({ k: 'lunge', id: m.id, dx: Math.sign(p.x - m.x), dy: Math.sign(p.y - m.y) });
   if (p.st.dodge) { run.fx.push({ k: 'num', x: p.x, y: p.y, s: 'verfehlt', col: '#94b0c2' }); return; }
-  damage(run, p, m.atk - p.def, '#b13e53');
+  damage(run, p, Math.max(Math.ceil(m.atk * 0.3), m.atk - p.def), '#b13e53');
   run.fx.push({ k: 'shake', n: m.boss ? 5 : 2 });
   if (p.cls === 'krieger') gain(p, 1);
   if (d.poison && run.rng.chance(0.5)) p.st.gift = 4;
@@ -407,7 +583,7 @@ function moveMob(run: Run, m: Actor, x: number, y: number) {
   const ti = run.traps.findIndex(t => t.x === x && t.y === y);
   if (ti >= 0) {
     run.traps.splice(ti, 1);
-    m.st.stun = 2;
+    stun(m, 2);
     say(run, `${m.name} tritt in die Falle!`);
     damage(run, m, 8 * run.p.pow + run.p.lvl, '#ffcd75');
   }
@@ -449,6 +625,13 @@ function mobAct(run: Run, m: Actor, dist: Int16Array) {
     if (v >= 0 && v < bd) { bd = v; best = [x, y]; }
   }
   if (best) moveMob(run, m, best[0], best[1]);
+  else if (d.smash) {
+    // Schwere Gegner brechen rissige Wände auf dem Weg zum Spieler ein
+    for (const [ox, oy] of dirs) {
+      const i = (m.y + oy) * W + m.x + ox;
+      if (run.tiles[i] === T.CRACKED && Math.abs(p.x - m.x - ox) + Math.abs(p.y - m.y - oy) < man) { breakWall(run, i); break; }
+    }
+  }
 }
 
 function tickDots(run: Run, a: Actor) {
@@ -460,15 +643,19 @@ function endTurn(run: Run) {
   const p = run.p;
   if (run.mode === 'win') return;
   run.turn++;
+  tickWorld(run);
+  if (run.fire.has(p.y * W + p.x)) p.st.brand = Math.max(p.st.brand ?? 0, 2);
+  for (const m of run.mobs) if (run.fire.has(m.y * W + m.x)) m.st.brand = Math.max(m.st.brand ?? 0, 2);
   tickDots(run, p);
-  if (p.cls === 'magier') gain(p, 1);
+  if (p.cls === 'magier' && run.turn % 3 === 0) gain(p, 1);
   const dist = distMap(run.tiles, p.x, p.y);
   computeFov(run.tiles, p.x, p.y, FOV_R, run.vis, run.seen);
   for (const m of [...run.mobs]) {
     if (m.hp <= 0) continue;
     tickDots(run, m);
     if (m.hp <= 0) continue;
-    if (m.st.stun) { m.st.stun--; continue; }
+    if (m.st.stun) { if (--m.st.stun === 0) m.st.immun = 3; continue; }
+    if (m.st.immun) m.st.immun--;
     mobAct(run, m, dist);
     if (p.hp <= 0) break;
   }

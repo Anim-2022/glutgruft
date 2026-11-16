@@ -1,11 +1,16 @@
 import { RNG } from '../core/rng';
 
 export const W = 52, H = 34;
-export const T = { WALL: 0, FLOOR: 1, STAIRS: 2, CHEST: 3, CHEST_OPEN: 4, ALTAR: 5, ALTAR_USED: 6 } as const;
+export const T = {
+  WALL: 0, FLOOR: 1, STAIRS: 2, CHEST: 3, CHEST_OPEN: 4, ALTAR: 5, ALTAR_USED: 6,
+  CRACKED: 7, BARREL: 8, PILLAR: 9, GRASS: 10, BURNT: 11, FRAGILE: 12, FRAGILE2: 13, RUBBLE: 14,
+} as const;
 
 export interface Room { x: number; y: number; w: number; h: number; }
 
-export const walkable = (t: number) => t === T.FLOOR || t === T.STAIRS;
+export const walkable = (t: number) => t === T.FLOOR || t === T.STAIRS || (t >= T.GRASS && t <= T.RUBBLE);
+export const opaque = (t: number) => t === T.WALL || t === T.CRACKED || t === T.PILLAR;
+export const wallLike = (t: number) => t === T.WALL || t === T.CRACKED;
 export const center = (r: Room): [number, number] => [r.x + (r.w >> 1), r.y + (r.h >> 1)];
 
 export function genDungeon(rng: RNG): { tiles: Uint8Array; rooms: Room[] } {
@@ -44,7 +49,7 @@ export function los(tiles: Uint8Array, x0: number, y0: number, x1: number, y1: n
     if (e2 > -dy) { err -= dy; x0 += sx; }
     if (e2 < dx) { err += dx; y0 += sy; }
     if (x0 === x1 && y0 === y1) return true;
-    if (tiles[y0 * W + x0] === T.WALL) return false;
+    if (opaque(tiles[y0 * W + x0])) return false;
   }
 }
 

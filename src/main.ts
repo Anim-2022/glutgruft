@@ -95,6 +95,7 @@ function onKey(k: string): boolean {
   else if (k === ' ' || k === '.') a = { t: 'wait' };
   else if (k === 'f') a = { t: 'shoot' };
   else if (k === 'q') a = { t: 'potion' };
+  else if (k === 'b') a = { t: 'bomb' };
   else if (k === 'e' || k === 'enter') a = { t: 'descend' };
   else if (k >= '1' && k <= '3') a = { t: 'skill', i: +k - 1 };
   if (!a) return false;
@@ -135,7 +136,7 @@ function drawTitle(time: number, dt: number) {
     ctx.drawImage(sprites[f], VW / 2 - 128 + i * 96, 172, 64, 64);
   });
   if (Math.floor(time * 2) % 2) text(ctx, '[LEERTASTE] Start', VW / 2, 270, '#f4f4f4', 10, 'center');
-  text(ctx, 'Pfeile/WASD bewegen · Leertaste warten · 1-3 Fähigkeiten · F schießen · Q Trank · E Treppe', VW / 2, 322, '#566c86', 8, 'center');
+  text(ctx, 'Pfeile/WASD bewegen · Leertaste warten · 1-3 Fähigkeiten · F schießen · Q Trank · B Bombe · E Treppe', VW / 2, 322, '#566c86', 8, 'center');
   text(ctx, 'V: Vollbild', VW / 2, 336, '#566c86', 8, 'center');
 }
 

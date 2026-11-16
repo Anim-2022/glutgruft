@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { RNG } from '../src/core/rng';
 import { defaultMeta } from '../src/core/save';
-import { W, H, T, genDungeon, distMap, center, los } from '../src/game/dungeon';
+import { W, H, T, genDungeon, distMap, center, los, walkable } from '../src/game/dungeon';
 import { newRun, act, Action } from '../src/game/run';
 import { CLASS_ORDER } from '../src/game/content';
 
@@ -63,10 +63,11 @@ describe('run', () => {
         expect(p.hp).toBeLessThanOrEqual(p.maxHp);
         expect(p.res).toBeGreaterThanOrEqual(0);
         expect(p.res).toBeLessThanOrEqual(p.resMax);
-        expect(run.tiles[p.y * W + p.x] === T.FLOOR || run.tiles[p.y * W + p.x] === T.STAIRS).toBe(true);
+        expect(walkable(run.tiles[p.y * W + p.x])).toBe(true);
         const seen = new Set<number>([p.y * W + p.x]);
         for (const m of run.mobs) {
           expect(m.hp).toBeGreaterThan(0);
+          expect(walkable(run.tiles[m.y * W + m.x])).toBe(true);
           const k = m.y * W + m.x;
           expect(seen.has(k)).toBe(false);
           seen.add(k);
@@ -77,13 +78,14 @@ describe('run', () => {
 });
 
 function randomAction(r: RNG): Action {
-  const n = r.int(0, 13);
+  const n = r.int(0, 14);
   if (n < 8) { const d = [[1, 0], [-1, 0], [0, 1], [0, -1]][n % 4]; return { t: 'move', dx: d[0], dy: d[1] }; }
   if (n === 8) return { t: 'wait' };
   if (n === 9) return { t: 'shoot' };
   if (n === 10) return { t: 'potion' };
   if (n === 11) return { t: 'descend' };
   if (n === 12) return { t: 'skill', i: r.int(0, 2) };
+  if (n === 13) return { t: 'bomb' };
   return { t: 'perk', i: r.int(0, 2) };
 }
 

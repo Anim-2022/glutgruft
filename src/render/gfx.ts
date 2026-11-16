@@ -18,13 +18,13 @@ export function hex(col: string): [number, number, number] {
   return [n >> 16, (n >> 8) & 255, n & 255];
 }
 
-export interface TileSet { floor: HTMLCanvasElement[]; wall: HTMLCanvasElement; top: HTMLCanvasElement; }
+export interface TileSet { floor: HTMLCanvasElement[]; wall: HTMLCanvasElement; top: HTMLCanvasElement; grass: HTMLCanvasElement[]; burnt: HTMLCanvasElement; }
 export const tilesets: TileSet[] = [];
 
 const BIOMES = [
-  { floor: '#343a5c', speck: '#434a70', brick: '#6b82a0', hi: '#8ea4bf', mortar: '#333c5c', top: '#20243a' },
-  { floor: '#22443f', speck: '#2f6a55', brick: '#2f8f85', hi: '#55b89c', mortar: '#174a4c', top: '#16302f' },
-  { floor: '#40262b', speck: '#6a3530', brick: '#9a4a3c', hi: '#c96f45', mortar: '#47222b', top: '#2a171d' },
+  { floor: '#343a5c', speck: '#434a70', brick: '#6b82a0', hi: '#8ea4bf', mortar: '#333c5c', top: '#20243a', g1: '#3f7a5c', g2: '#5fa06a' },
+  { floor: '#22443f', speck: '#2f6a55', brick: '#2f8f85', hi: '#55b89c', mortar: '#174a4c', top: '#16302f', g1: '#38b764', g2: '#a7f070' },
+  { floor: '#40262b', speck: '#6a3530', brick: '#9a4a3c', hi: '#c96f45', mortar: '#47222b', top: '#2a171d', g1: '#1f1418', g2: '#6b4a3a' },
 ];
 
 export function bake(): void {
@@ -77,7 +77,21 @@ export function bake(): void {
     const [top, tg] = mk(TS, TS);
     tg.fillStyle = b.top; tg.fillRect(0, 0, TS, TS);
     tg.fillStyle = b.mortar; tg.fillRect(2, 3, 3, 1); tg.fillRect(9, 10, 4, 1);
-    tilesets.push({ floor, wall, top });
+    const grass: HTMLCanvasElement[] = [];
+    for (let v = 0; v < 3; v++) {
+      const [c, g] = mk(TS, TS);
+      for (let i = 0; i < 9; i++) {
+        const x = 1 + ((rnd() * 13) | 0), y = 3 + ((rnd() * 11) | 0);
+        g.fillStyle = b.g1; g.fillRect(x, y, 1, 3); g.fillRect(x + 1, y + 1, 1, 2);
+        g.fillStyle = b.g2; g.fillRect(x, y - 1, 1, 2);
+      }
+      grass.push(c);
+    }
+    const [burnt, bg] = mk(TS, TS);
+    bg.fillStyle = 'rgba(0,0,0,0.45)'; bg.fillRect(0, 0, TS, TS);
+    bg.fillStyle = '#566c86';
+    for (let i = 0; i < 5; i++) bg.fillRect((rnd() * 15) | 0, (rnd() * 15) | 0, 1, 1);
+    tilesets.push({ floor, wall, top, grass, burnt });
   }
 }
 

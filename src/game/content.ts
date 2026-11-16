@@ -23,19 +23,19 @@ export const CLASSES: Record<ClassId, ClassDef> = {
     ],
   },
   magier: {
-    id: 'magier', name: 'Magier', desc: 'Zerbrechlich, aber verheerend. Mana kehrt jeden Zug zurück.',
-    hp: 18, atk: 3, def: 0, resName: 'Mana', resMax: 12, resStart: 12, resCol: '#41a6f6', range: 4, shot: 'Funke',
+    id: 'magier', name: 'Magier', desc: 'Zerbrechlich, aber verheerend. Mana kehrt langsam von selbst zurück.',
+    hp: 18, atk: 3, def: 0, resName: 'Mana', resMax: 12, resStart: 12, resCol: '#41a6f6', range: 3, shot: 'Funke',
     skills: [
-      { name: 'Feuerball', cost: 4, desc: 'Explosion + Brand' },
-      { name: 'Frostnova', cost: 5, desc: 'Friert Gegner in der Nähe ein' },
+      { name: 'Feuerball', cost: 5, desc: 'Explosion + Brand' },
+      { name: 'Frostnova', cost: 6, desc: 'Friert Gegner in der Nähe ein' },
       { name: 'Blinzeln', cost: 3, desc: 'Teleport weg von Gefahr' },
     ],
   },
   waldlaeufer: {
-    id: 'waldlaeufer', name: 'Waldläufer', desc: 'Schütze mit Fallen. Fokus wächst beim Warten und Schießen.',
-    hp: 24, atk: 4, def: 1, resName: 'Fokus', resMax: 8, resStart: 2, resCol: '#a7f070', range: 6, shot: 'Schuss',
+    id: 'waldlaeufer', name: 'Waldläufer', desc: 'Schütze mit Fallen. Fokus wächst beim Warten und mit jedem besiegten Gegner.',
+    hp: 22, atk: 4, def: 1, resName: 'Fokus', resMax: 8, resStart: 2, resCol: '#a7f070', range: 5, shot: 'Schuss',
     skills: [
-      { name: 'Zielschuss', cost: 3, desc: 'Schwerer Schuss auf große Distanz' },
+      { name: 'Zielschuss', cost: 4, desc: 'Schwerer Schuss auf große Distanz' },
       { name: 'Falle', cost: 2, desc: 'Legt eine Falle: Schaden + Betäubung' },
       { name: 'Ausweichrolle', cost: 2, desc: '2 Felder rollen, weicht Angriffen aus' },
     ],
@@ -45,7 +45,7 @@ export const CLASSES: Record<ClassId, ClassDef> = {
 export interface MobDef {
   name: string; hp: number; atk: number; def: number; xp: number;
   ai: 'chase' | 'erratic' | 'slow' | 'boss';
-  range?: number; poison?: boolean; burn?: boolean; boss?: boolean; minion?: string;
+  range?: number; poison?: boolean; burn?: boolean; boss?: boolean; minion?: string; smash?: boolean;
 }
 
 export const MOBS: Record<string, MobDef> = {
@@ -54,11 +54,11 @@ export const MOBS: Record<string, MobDef> = {
   schuetze: { name: 'Knochenschütze', hp: 8, atk: 3, def: 0, xp: 7, ai: 'chase', range: 5 },
   fledermaus: { name: 'Fledermaus', hp: 5, atk: 3, def: 0, xp: 4, ai: 'erratic' },
   sporling: { name: 'Sporling', hp: 12, atk: 3, def: 1, xp: 7, ai: 'chase', poison: true },
-  golem: { name: 'Steingolem', hp: 30, atk: 8, def: 3, xp: 14, ai: 'slow' },
+  golem: { name: 'Steingolem', hp: 30, atk: 8, def: 3, xp: 14, ai: 'slow', smash: true },
   glutgeist: { name: 'Glutgeist', hp: 14, atk: 5, def: 0, xp: 10, ai: 'erratic', burn: true },
-  koenig: { name: 'Gruftkönig', hp: 60, atk: 7, def: 2, xp: 40, ai: 'boss', boss: true, minion: 'skelett' },
-  mutter: { name: 'Sporenmutter', hp: 110, atk: 9, def: 3, xp: 80, ai: 'boss', boss: true, minion: 'sporling', poison: true },
-  fuerst: { name: 'Schmiedefürst', hp: 180, atk: 13, def: 5, xp: 150, ai: 'boss', boss: true, minion: 'glutgeist', burn: true },
+  koenig: { name: 'Gruftkönig', hp: 60, atk: 7, def: 2, xp: 40, ai: 'boss', boss: true, minion: 'skelett', smash: true },
+  mutter: { name: 'Sporenmutter', hp: 110, atk: 9, def: 3, xp: 80, ai: 'boss', boss: true, minion: 'sporling', poison: true, smash: true },
+  fuerst: { name: 'Schmiedefürst', hp: 180, atk: 13, def: 5, xp: 150, ai: 'boss', boss: true, minion: 'glutgeist', burn: true, smash: true },
 };
 
 export const BOSS_BY_BIOME = ['koenig', 'mutter', 'fuerst'];
