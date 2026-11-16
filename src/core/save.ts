@@ -1,6 +1,6 @@
 export interface Meta {
   souls: number;
-  upg: { vit: number; atk: number; trank: number };
+  upg: Record<string, number>;
   ranger: boolean;
   best: number;
   daily: { date: number; best: number };
@@ -9,7 +9,7 @@ export interface Meta {
 const KEY = 'glutgruft.v1';
 
 export function defaultMeta(): Meta {
-  return { souls: 0, upg: { vit: 0, atk: 0, trank: 0 }, ranger: false, best: 0, daily: { date: 0, best: 0 } };
+  return { souls: 0, upg: { vit: 0, atk: 0, trank: 0, fokus: 0, gold: 0, bombe: 0, fund: 0, wahl: 0, erbe: 0 }, ranger: false, best: 0, daily: { date: 0, best: 0 } };
 }
 
 export function loadMeta(): Meta {

@@ -115,10 +115,10 @@ function randomAction(r: RNG): Action {
   if (n === 10) return { t: 'potion' };
   if (n === 11) return { t: 'descend' };
   if (n === 12) return { t: 'skill', i: r.int(0, 2) };
-  if (n === 13) return { t: 'bomb' };
+  if (n === 13) return r.chance(0.3) ? { t: 'ult' } : { t: 'bomb' };
   if (n === 14) return { t: 'buy', i: r.int(0, 3) };
-  if (n === 17) return { t: 'equip', i: r.int(0, 3) };
-  if (n === 18) return { t: 'unequip', slot: r.int(0, 2) };
+  if (n === 17) return { t: 'equip', i: r.int(0, 5) };
+  if (n === 18) return { t: 'unequip', slot: r.int(0, 3) };
   if (n === 19) return { t: 'sell', i: r.int(0, 3) };
   if (n === 15) return { t: 'leave' };
   if (n === 16) return { t: 'target', x: r.int(0, W - 1), y: r.int(0, H - 1) };
@@ -151,5 +151,45 @@ describe('Blickrichtungen', () => {
         });
       }
     }
+  });
+});
+
+import { PERKS, RELICS, UPGRADES, CONSUMABLES, UNIQUES, ULT, SKILL_UP, AFFIX } from '../src/game/content';
+import { genItem, itemLines } from '../src/game/run';
+import { tr, setLang } from '../src/core/i18n';
+
+describe('Gegenstände und Ausbau', () => {
+  it('Anlegen und Ablegen lässt die Werte unverändert zurück', () => {
+    for (const cls of CLASS_ORDER) {
+      const run = newRun(3, cls, defaultMeta());
+      const p = run.p, snap = () => JSON.stringify([p.atk, p.def, p.maxHp, Math.round(p.crit * 1000), p.vamp, p.thorns, p.resMax, Math.round(p.pow * 1000), Object.entries(p.aff).filter(([, v]) => Math.abs(v) > 1e-9).sort()]);
+      const before = snap();
+      for (let k = 0; k < 300; k++) {
+        run.floor = 1 + (k % 15);
+        const it = genItem(run, k % 9 === 0);
+        expect(itemLines(it).length, it.name).toBeGreaterThan(0);
+        for (const [id] of it.aff ?? []) expect(AFFIX[id], id).toBeTypeOf('function');
+        p.bag = [it];
+        act(run, { t: 'equip', i: 0 });
+        expect(p.gear[it.slot]).toBe(it);
+        act(run, { t: 'unequip', slot: it.slot });
+        p.bag = [];
+        p.hp = p.maxHp;
+      }
+      expect(snap()).toBe(before);
+    }
+  });
+
+  it('alle neuen Texte haben eine englische Fassung', () => {
+    setLang('en');
+    const all: string[] = [];
+    for (const t of [PERKS, RELICS, CONSUMABLES, ULT]) for (const d of Object.values(t)) all.push(d.name, d.desc);
+    for (const u of UPGRADES) all.push(u.name, u.desc);
+    for (const u of UNIQUES) all.push(u.name);
+    for (const v of Object.values(SKILL_UP)) all.push(...v);
+    for (const f of Object.values(AFFIX)) all.push(f(7));
+    const same = all.filter(s => tr(s) === s && !['Berserker', 'Meteor', 'Echo'].includes(s));
+    setLang('de');
+    expect(same).toEqual([]);
   });
 });

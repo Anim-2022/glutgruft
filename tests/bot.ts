@@ -46,7 +46,7 @@ export function botAction(run: Run): Action {
   if (a.t === 'move' && run.mode === 'play') {
     trail.push(run.p.y * W + run.p.x);
     if (trail.length > 14) trail.shift();
-    if (trail.length === 14 && new Set(trail).size <= 2) { trail.length = 0; wander = 8; }
+    if (trail.length === 14 && new Set(trail).size <= 4) { trail.length = 0; wander = 8; }
   } else trail.length = 0;
   return a;
 }
@@ -54,7 +54,7 @@ export function botAction(run: Run): Action {
 function decide(run: Run): Action {
   if (run.mode === 'play' && run.p.bag.length) {
     // Rucksack: Besseres anlegen, den Rest verkaufen
-    const i = run.p.bag.findIndex(it => itemScore(it) > itemScore(run.p.gear[it.slot]!));
+    const i = run.p.bag.findIndex(it => it.slot < 4 && itemScore(it) > itemScore(run.p.gear[it.slot]!));
     return i >= 0 ? { t: 'equip', i } : { t: 'sell', i: 0 };
   }
   const p = run.p, c = CLASSES[p.cls];

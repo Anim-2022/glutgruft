@@ -1,6 +1,6 @@
 import { VW, VH, bake, sprites, tilesets, text, panel, wrap, figure } from './render/gfx';
 import { getLang, setLang } from './core/i18n';
-import { drawRun, resetView, setMouse, toggleMap, setTutorial, tileAt, getOverlay, setOverlay, invMove, invAction } from './render/draw';
+import { drawRun, resetView, setMouse, toggleMap, setTutorial, tileAt, getOverlay, setOverlay, invMove, invAction, lootIndex, lootDone } from './render/draw';
 import { sfx, soundOn, toggleSound, wakeAudio } from './core/audio';
 import { loadMeta, saveMeta } from './core/save';
 import { W } from './game/dungeon';
@@ -79,13 +79,14 @@ function onKey(k: string): boolean {
   if (scene === 'run' && run && run.mode === 'play') {
     // Charakterbogen und Hilfe halten das Spiel an
     if (getOverlay() === 'inv') {
-      if (k === 'escape' || k === 'i') setOverlay('none');
+      if (k === 'escape' || k === 'i') { setOverlay('none'); for (const it of run.p.bag) delete it.neu; }
       else if (MOVES[k]) invMove(run, MOVES[k][0], MOVES[k][1]);
       else if (k === 'enter' || k === 'x') { const a = invAction(run, k === 'x'); if (a) { act(run, a); sfx('pick'); storeRun(); } }
       return true;
     }
     if (getOverlay() !== 'none') { if (k === 'escape' || k === 'c' || k === 'h') setOverlay('none'); return true; }
     if (k === 'i') { setOverlay('inv'); return true; }
+    if (k === 'r') { const i = lootIndex(run); if (i >= 0 && !run.p.bag[i].use) { act(run, { t: 'equip', i }); lootDone(); sfx('pick'); storeRun(); } return true; }
     if (k === 'c') { setOverlay('char'); return true; }
     if (k === 'h') { setOverlay('help'); return true; }
   }
@@ -120,10 +121,10 @@ function onKey(k: string): boolean {
       } else if (row === ROWS - 1) startRun();
       else if (row === ROWS - 2) startRun(true);
       else {
-        const u = UPGRADES[row - 1], lvl = meta.upg[u.id];
+        const u = UPGRADES[row - 1], lvl = meta.upg[u.id] ?? 0;
         if (lvl >= u.max) flash('Bereits auf höchster Stufe.');
         else if (meta.souls < upgCost(u, lvl)) flash('Nicht genug Seelensplitter.');
-        else { meta.souls -= upgCost(u, lvl); meta.upg[u.id]++; saveMeta(meta); }
+        else { meta.souls -= upgCost(u, lvl); meta.upg[u.id] = lvl + 1; saveMeta(meta); }
       }
       return true;
     }
@@ -135,7 +136,7 @@ function onKey(k: string): boolean {
     return false;
   }
   let a: Action | null = null;
-  if (run.mode === 'perk') { if (k >= '1' && k <= '3') a = { t: 'perk', i: +k - 1 }; }
+  if (run.mode === 'perk') { if (k >= '1' && k <= '4') a = { t: 'perk', i: +k - 1 }; }
   else if (run.mode === 'shop') {
     if (k >= '1' && k <= '9') a = { t: 'buy', i: +k - 1 };
     else if (k === ' ' || k === 'escape' || k === 'enter') a = { t: 'leave' };
@@ -154,6 +155,7 @@ function onKey(k: string): boolean {
   else if (k === 'b') a = { t: 'bomb' };
   else if (k === 'e' || k === 'enter') a = { t: 'descend' };
   else if (k >= '1' && k <= '3') a = { t: 'skill', i: +k - 1 };
+  else if (k === '4') a = { t: 'ult' };
   if (!a) return false;
   const before: string = run.mode, solved = !!run.puzzle?.solved, items = run.p.potions + run.p.bombs;
   act(run, a);
@@ -307,9 +309,9 @@ function drawLager(time: number, dt: number) {
   figure(ctx, `${id}:${['f', 'f', 's', 'b', 's'][Math.floor(time * 0.6) % 5]}${Math.floor(time * 2.5) % 2}`, 36, 66, 96, 96);
   ctx.globalAlpha = 1;
   text(ctx, `< ${c.name} >`, 146, 74, '#ffcd75', 16);
-  text(ctx, `Leben ${c.hp + 2 * meta.upg.vit}`, 146, 100, '#b13e53', 8);
-  text(ctx, `Angriff ${c.atk + meta.upg.atk}   Verteidigung ${c.def}`, 146, 112, '#94b0c2', 8);
-  text(ctx, `${c.resName} ${c.resMax}`, 146, 124, c.resCol, 8);
+  text(ctx, `Leben ${c.hp + 2 * (meta.upg.vit ?? 0)}`, 146, 100, '#b13e53', 8);
+  text(ctx, `Angriff ${c.atk + (meta.upg.atk ?? 0)}   Verteidigung ${c.def}`, 146, 112, '#94b0c2', 8);
+  text(ctx, `${c.resName} ${c.resMax + (meta.upg.fokus ?? 0)}`, 146, 124, c.resCol, 8);
   if (c.range) text(ctx, `Fernkampf ${c.range} Felder`, 146, 136, '#94b0c2', 8);
   wrap(c.desc, 44).forEach((l, i) => text(ctx, l, 36, 174 + i * 11, '#f4f4f4', 8));
   c.skills.forEach((s, i) => {
@@ -329,22 +331,24 @@ function drawLager(time: number, dt: number) {
   const ux = 330, uw = VW - ux - 24;
   text(ctx, 'VERBESSERUNGEN', ux + 2, 58, '#94b0c2', 8);
   UPGRADES.forEach((u, i) => {
-    const y = 72 + i * 46, sel = row === i + 1, lvl = meta.upg[u.id], max = lvl >= u.max;
-    panel(ctx, ux, y, uw, 40, sel ? '#ffcd75' : '#566c86');
-    text(ctx, u.name, ux + 10, y + 8, sel ? '#ffcd75' : '#f4f4f4', 10);
-    text(ctx, u.desc, ux + 10, y + 23, '#94b0c2', 8);
-    for (let k = 0; k < u.max; k++) { ctx.fillStyle = k < lvl ? '#73eff7' : '#333c57'; ctx.fillRect(ux + 150 + k * 10, y + 9, 7, 7); }
-    text(ctx, max ? 'MAX' : `${upgCost(u, lvl)}`, ux + uw - 10, y + 8, max ? '#566c86' : meta.souls >= upgCost(u, lvl) ? '#73eff7' : '#b13e53', 10, 'right');
+    const y = 70 + i * 19, sel = row === i + 1, lvl = meta.upg[u.id] ?? 0, max = lvl >= u.max;
+    panel(ctx, ux, y, uw, 16, sel ? '#ffcd75' : '#566c86', sel ? 'rgba(60,50,40,0.9)' : 'rgba(13,14,23,0.88)');
+    text(ctx, u.name, ux + 8, y + 4, sel ? '#ffcd75' : '#f4f4f4', 8);
+    for (let k = 0; k < u.max; k++) { ctx.fillStyle = k < lvl ? '#73eff7' : '#333c57'; ctx.fillRect(ux + 100 + k * 9, y + 5, 6, 6); }
+    text(ctx, max ? 'MAX' : `${upgCost(u, lvl)}`, ux + uw - 8, y + 4, max ? '#566c86' : meta.souls >= upgCost(u, lvl) ? '#73eff7' : '#b13e53', 8, 'right');
+    if (!max) ctx.drawImage(sprites.soul, ux + uw - 24 - `${upgCost(u, lvl)}`.length * 6, y + 2);
   });
-  const dy = 72 + UPGRADES.length * 46 + 4, dsel = row === ROWS - 2, dbest = meta.daily.date === today() ? meta.daily.best : 0;
-  panel(ctx, ux, dy, uw, 30, dsel ? '#ffcd75' : '#566c86');
-  text(ctx, 'Tageslauf', ux + 10, dy + 6, dsel ? '#ffcd75' : '#f4f4f4', 10);
-  text(ctx, 'Heute für alle dieselbe Gruft', ux + 10, dy + 18, '#94b0c2', 8);
+  const ly = 70 + UPGRADES.length * 19 + 2;
+  if (row >= 1 && row <= UPGRADES.length) text(ctx, UPGRADES[row - 1].desc, ux + 2, ly, '#94b0c2', 8);
+  const dy = ly + 13, dsel = row === ROWS - 2, dbest = meta.daily.date === today() ? meta.daily.best : 0;
+  panel(ctx, ux, dy, uw, 26, dsel ? '#ffcd75' : '#566c86');
+  text(ctx, 'Tageslauf', ux + 10, dy + 4, dsel ? '#ffcd75' : '#f4f4f4', 10);
+  text(ctx, 'Heute für alle dieselbe Gruft', ux + 10, dy + 16, '#94b0c2', 8);
   text(ctx, dbest ? (dbest > LAST_FLOOR ? 'bezwungen' : `Ebene ${dbest}`) : 'offen', ux + uw - 10, dy + 6, dbest ? '#73eff7' : '#566c86', 10, 'right');
-  const sy = dy + 38, sel = row === ROWS - 1;
+  const sy = dy + 32, sel = row === ROWS - 1;
   panel(ctx, ux, sy, uw, 36, sel ? '#ffcd75' : '#566c86', sel ? 'rgba(177,62,83,0.5)' : 'rgba(13,14,23,0.88)');
   text(ctx, saved ? `FORTSETZEN · EBENE ${saved.floor}` : 'ABSTIEG BEGINNEN', ux + uw / 2, sy + 11, sel ? '#ffcd75' : '#f4f4f4', 16, 'center');
-  if (saved) text(ctx, 'X: gespeicherten Lauf beenden', ux + uw / 2, sy + 58, '#566c86', 8, 'center');
+  if (saved) text(ctx, 'X: gespeicherten Lauf beenden', ux + uw, 58, '#566c86', 8, 'right');
 
   text(ctx, 'L: Sprache · ESC: Titel', VW / 2, 347, '#333c57', 8, 'center');
   if (noteT > 0) { noteT -= dt; text(ctx, note, ux + uw / 2, sy + 46, '#ffcd75', 8, 'center'); }
