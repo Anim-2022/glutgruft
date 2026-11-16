@@ -1,39 +1,11 @@
 // Palette, Sprite-Atlas und Pixeltext. Alles wird beim Start im Code erzeugt.
-export const VW = 480, VH = 270, TS = 16;
+export const VW = 640, VH = 360, TS = 16;
 
-export const PAL: Record<string, string> = {
-  k: '#1a1c2c', w: '#f4f4f4', g: '#94b0c2', d: '#566c86', r: '#b13e53', o: '#ef7d57', y: '#ffcd75',
-  l: '#a7f070', G: '#38b764', t: '#257179', b: '#3b5dc9', c: '#41a6f6', s: '#73eff7', p: '#5d275d',
-  n: '#8a5a3a', h: '#e8b796', v: '#9a4fc0',
-};
-
-// 8x8-Matrizen, doppelt skaliert auf 16x16
-const SPR: Record<string, string[]> = {
-  krieger: ['..gggg..', '..gddg.w', '..hhhh.w', '.rrrrr.w', 'grrrrrgw', 'g.rrrr.n', '..d.d...', '.dd.dd..'],
-  magier: ['...bb...', '..bbbb..', '.bbbbbb.', '..hhhh.s', '.bbbbb.n', '.bcbcb.n', '.bbbbb.n', '..d..d.n'],
-  waldlaeufer: ['..GGGG..', '.GGGGG.n', '..hhhhn.', '.GGGG.n.', '.GnGGGn.', '.GGGG.n.', '..n.n..n', '.nn.nn..'],
-  ratte: ['........', '........', '.d....d.', '.ddddd..', 'dkddddd.', 'hdddddd.', '.d.d.d.h', '........'],
-  skelett: ['..wwww..', '..wkwk..', '..wwww..', '...ww...', '.wwwwww.', 'w.wwww.w', '..w..w..', '.ww..ww.'],
-  schuetze: ['..wwww..', '..wkwk.n', '..wwwwn.', '...ww.n.', '.wwwwwn.', '..wwwwn.', '..w..w.n', '.ww..ww.'],
-  fledermaus: ['........', 'v......v', 'vv.vv.vv', 'vvvvvvvv', 'vvrvvrvv', 'v.vvvv.v', '...vv...', '........'],
-  sporling: ['..rrrr..', '.rwrrwr.', 'rrrrrrrr', 'rrwrrrrr', '..yyyy..', '..ykyk..', '..yyyy..', '.yy..yy.'],
-  golem: ['.dddddd.', '.dodood.', '.dddddd.', 'dddddddd', 'dg.dd.gd', 'dd.dd.dd', '.dd..dd.', '.dd..dd.'],
-  glutgeist: ['...o....', '..oyo...', '.oyyyo..', '.oywyo..', 'oykyykyo', 'oyyyyyyo', '.oyyyyo.', '..oooo..'],
-  koenig: ['.y.yy.y.', '.yyyyyy.', '..wkwk..', '..wwww..', 'vvvwwvvv', 'vwvvvvwv', '.vvvvvv.', '.vv..vv.'],
-  mutter: ['.GGGGGG.', 'GlGGGlGG', 'GGGGGGGG', 'GGlGGGGl', '.yyyyyy.', '.yrkyrk.', '.yyyyyy.', 'yy.yy.yy'],
-  fuerst: ['o.dddd.o', 'oddddddo', '.dyddyd.', '.dddddd.', 'rddrrddr', 'rddooddr', '.dd..dd.', '.oo..oo.'],
-  stairs: ['kkkkkkkk', 'gggggggk', 'dddddddk', 'kkgggggk', 'kkdddddk', 'kkkkgggk', 'kkkkdddk', 'kkkkkkgk'],
-  chest: ['........', '.nnnnnn.', 'nyyyyyyn', 'nnnnnnnn', 'nnnyynnn', 'nnnyynnn', 'nnnnnnnn', '........'],
-  chest_open: ['.nnnnnn.', 'n.kkkk.n', 'nnnnnnnn', 'nkkkkkkn', 'nnnnnnnn', 'nnnnnnnn', 'nnnnnnnn', '........'],
-  altar: ['...ss...', '..scss..', '...ss...', '.gggggg.', '..gddg..', '..gddg..', '.gggggg.', 'dddddddd'],
-  altar_used: ['........', '........', '........', '.gggggg.', '..gddg..', '..gddg..', '.gggggg.', 'dddddddd'],
-  trap: ['........', '........', '........', '.g.g.g.g', 'gdgdgdgd', 'dddddddd', '........', '........'],
-  potion: ['...gg...', '...gg...', '..gggg..', '.grrrrg.', '.grwrrg.', '.grrrrg.', '..gggg..', '........'],
-  soul: ['........', '...s....', '..scs...', '.scwcs..', '.scccs..', '..scs...', '...s....', '........'],
-};
-const NO_OUTLINE = new Set(['stairs', 'trap']);
+import { PAL, SPR, ACTORS, NO_OUTLINE } from './sprites';
+export { PAL };
 
 export const sprites: Record<string, HTMLCanvasElement> = {};
+export const masks: Record<string, HTMLCanvasElement> = {}; // weiße Silhouetten für Trefferblitze
 
 function mk(w: number, h: number): [HTMLCanvasElement, CanvasRenderingContext2D] {
   const c = document.createElement('canvas');
@@ -56,15 +28,29 @@ const BIOMES = [
 ];
 
 export function bake(): void {
-  for (const [name, rows] of Object.entries(SPR)) {
-    const [c, g] = mk(TS, TS);
+  const draw = (rows: string[], line: boolean) => {
+    const [c, g] = mk(rows[0].length, rows.length);
     rows.forEach((row, y) => [...row].forEach((ch, x) => {
       if (ch === '.') return;
       g.fillStyle = PAL[ch];
-      g.fillRect(x * 2, y * 2, 2, 2);
+      g.fillRect(x, y, 1, 1);
     }));
-    if (!NO_OUTLINE.has(name)) outline(g);
-    sprites[name] = c;
+    if (line) outline(g, c.width, c.height);
+    return c;
+  };
+  for (const [name, rows] of Object.entries(SPR)) {
+    sprites[name] = draw(rows, !NO_OUTLINE.has(name));
+    if (!ACTORS.includes(name)) continue;
+    // Zweites Bild: Oberkörper sinkt um ein Pixel, Füße bleiben stehen
+    const h = rows.length;
+    sprites[name + '_b'] = draw(['.'.repeat(rows[0].length), ...rows.slice(0, h - 4), ...rows.slice(h - 3)], true);
+    for (const n of [name, name + '_b']) {
+      const [m, g] = mk(sprites[n].width, sprites[n].height);
+      g.drawImage(sprites[n], 0, 0);
+      g.globalCompositeOperation = 'source-in';
+      g.fillStyle = '#fff'; g.fillRect(0, 0, m.width, m.height);
+      masks[n] = m;
+    }
   }
   let seed = 7;
   const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
@@ -95,13 +81,13 @@ export function bake(): void {
   }
 }
 
-function outline(g: CanvasRenderingContext2D) {
-  const d = g.getImageData(0, 0, TS, TS), src = new Uint8ClampedArray(d.data);
-  const op = (x: number, y: number) => x >= 0 && y >= 0 && x < TS && y < TS && src[(y * TS + x) * 4 + 3] > 0;
+function outline(g: CanvasRenderingContext2D, w: number, h: number) {
+  const d = g.getImageData(0, 0, w, h), src = new Uint8ClampedArray(d.data);
+  const op = (x: number, y: number) => x >= 0 && y >= 0 && x < w && y < h && src[(y * w + x) * 4 + 3] > 0;
   const [r, gg, b] = hex(PAL.k);
-  for (let y = 0; y < TS; y++) for (let x = 0; x < TS; x++) {
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
     if (op(x, y) || !(op(x + 1, y) || op(x - 1, y) || op(x, y + 1) || op(x, y - 1))) continue;
-    const i = (y * TS + x) * 4;
+    const i = (y * w + x) * 4;
     d.data[i] = r; d.data[i + 1] = gg; d.data[i + 2] = b; d.data[i + 3] = 255;
   }
   g.putImageData(d, 0, 0);
@@ -134,7 +120,7 @@ function glyphs(s: string, col: string, size: number): HTMLCanvasElement {
   const key = `${size}|${col}|${s}`;
   let c = cache.get(key);
   if (c) return c;
-  const k = size < 14 ? 1 : size < 30 ? 2 : 5;
+  const k = size < 14 ? 1 : size < 20 ? 2 : size < 30 ? 3 : 5;
   const list = [...s].map(ch => (ch === ' ' ? [0, 0] : GLYPH.get(ch) ?? GLYPH.get('?')!));
   const w = list.reduce((n, g) => n + g.length + 1, 0);
   const [cv, g] = mk(Math.max(1, w * k), 8 * k);

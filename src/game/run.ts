@@ -20,6 +20,9 @@ export interface Player extends Actor {
 export type Fx =
   | { k: 'num'; x: number; y: number; s: string; col: string }
   | { k: 'shake'; n: number }
+  | { k: 'lunge'; id: number; dx: number; dy: number }
+  | { k: 'flash'; id: number }
+  | { k: 'die'; x: number; y: number; kind: string }
   | { k: 'bolt'; x0: number; y0: number; x1: number; y1: number; col: string };
 
 export interface Run {
@@ -137,6 +140,7 @@ function cornerSafe(run: Run, x: number, y: number): boolean {
 function damage(run: Run, dst: Actor, amt: number, col = '#f4f4f4', crit = false) {
   amt = Math.max(1, Math.round(amt));
   dst.hp -= amt;
+  run.fx.push({ k: 'flash', id: dst.id });
   run.fx.push({ k: 'num', x: dst.x, y: dst.y, s: crit ? `${amt}!` : `${amt}`, col: crit ? '#ffcd75' : col });
   if (dst !== run.p && dst.hp <= 0) kill(run, dst);
 }
@@ -149,6 +153,7 @@ function playerHit(run: Run, dst: Actor, base: number) {
 function kill(run: Run, m: Actor) {
   const p = run.p;
   run.mobs = run.mobs.filter(o => o !== m);
+  run.fx.push({ k: 'die', x: m.x, y: m.y, kind: m.kind });
   run.kills++;
   p.exp += m.xp;
   run.souls += Math.max(1, Math.round((m.xp / 3) * p.soulMul));
@@ -236,6 +241,7 @@ function useSkill(run: Run, i: number): boolean {
       const t = nearestMob(run, 1);
       if (!t) return noTarget();
       t.st.stun = 2;
+      run.fx.push({ k: 'lunge', id: 0, dx: Math.sign(t.x - p.x), dy: Math.sign(t.y - p.y) });
       playerHit(run, t, atk * p.pow + 1);
       break;
     }
@@ -324,6 +330,7 @@ export function act(run: Run, a: Action): void {
       p.dir = [a.dx, a.dy];
       const i = ny * W + nx, t = run.tiles[i], m = mobAt(run, nx, ny);
       if (m) {
+        run.fx.push({ k: 'lunge', id: 0, dx: a.dx, dy: a.dy });
         playerHit(run, m, playerAtk(p) * (CLASSES[p.cls].range ? 0.6 : 1));
         if (p.cls === 'krieger') gain(p, 2);
         used = true;
@@ -385,6 +392,7 @@ export function act(run: Run, a: Action): void {
 
 function hitPlayer(run: Run, m: Actor, melee: boolean) {
   const p = run.p, d = MOBS[m.kind];
+  if (melee) run.fx.push({ k: 'lunge', id: m.id, dx: Math.sign(p.x - m.x), dy: Math.sign(p.y - m.y) });
   if (p.st.dodge) { run.fx.push({ k: 'num', x: p.x, y: p.y, s: 'verfehlt', col: '#94b0c2' }); return; }
   damage(run, p, m.atk - p.def, '#b13e53');
   run.fx.push({ k: 'shake', n: m.boss ? 5 : 2 });

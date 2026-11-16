@@ -86,3 +86,16 @@ function randomAction(r: RNG): Action {
   if (n === 12) return { t: 'skill', i: r.int(0, 2) };
   return { t: 'perk', i: r.int(0, 2) };
 }
+
+import { SPR, PAL } from '../src/render/sprites';
+
+describe('sprites', () => {
+  it('sind rechteckig, quadratisch und nutzen nur Palettenfarben', () => {
+    for (const [name, rows] of Object.entries(SPR)) {
+      for (const [i, row] of rows.entries()) {
+        expect(row.length, `${name} Zeile ${i}`).toBe(rows.length);
+        for (const ch of row) expect(ch === '.' || ch in PAL, `${name} Zeichen ${ch}`).toBe(true);
+      }
+    }
+  });
+});

@@ -1,6 +1,6 @@
 import { RNG } from '../core/rng';
 
-export const W = 44, H = 30;
+export const W = 52, H = 34;
 export const T = { WALL: 0, FLOOR: 1, STAIRS: 2, CHEST: 3, CHEST_OPEN: 4, ALTAR: 5, ALTAR_USED: 6 } as const;
 
 export interface Room { x: number; y: number; w: number; h: number; }
@@ -12,7 +12,7 @@ export function genDungeon(rng: RNG): { tiles: Uint8Array; rooms: Room[] } {
   for (;;) {
     const tiles = new Uint8Array(W * H);
     const rooms: Room[] = [];
-    for (let i = 0; i < 80 && rooms.length < 9; i++) {
+    for (let i = 0; i < 120 && rooms.length < 10; i++) {
       const w = rng.int(4, 8), h = rng.int(3, 6);
       const x = rng.int(1, W - w - 2), y = rng.int(1, H - h - 2);
       if (rooms.some(r => x <= r.x + r.w + 1 && x + w + 1 >= r.x && y <= r.y + r.h + 1 && y + h + 1 >= r.y)) continue;
