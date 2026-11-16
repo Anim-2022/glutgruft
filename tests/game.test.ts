@@ -113,7 +113,7 @@ describe('sprites', () => {
   it('sind rechteckig, quadratisch und nutzen nur Palettenfarben', () => {
     for (const [name, rows] of Object.entries(SPR)) {
       for (const [i, row] of rows.entries()) {
-        expect(row.length, `${name} Zeile ${i}`).toBe(rows.length);
+        expect(row.length, `${name} Zeile ${i}`).toBe(rows[0].length);
         for (const ch of row) expect(ch === '.' || ch in PAL, `${name} Zeichen ${ch}`).toBe(true);
       }
     }
@@ -128,7 +128,7 @@ describe('Blickrichtungen', () => {
       for (const [key, rows] of Object.entries(v)) {
         expect(rows.length, `${name}.${key}`).toBe(SPR[name].length);
         rows.forEach((r, i) => {
-          expect(r.length, `${name}.${key} Zeile ${i}`).toBe(SPR[name].length);
+          expect(r.length, `${name}.${key} Zeile ${i}`).toBe(SPR[name][0].length);
           for (const ch of r) expect(ch === '.' || ch in PAL, `${name}.${key} Zeichen ${ch}`).toBe(true);
         });
       }

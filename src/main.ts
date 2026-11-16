@@ -1,4 +1,4 @@
-import { VW, VH, bake, sprites, tilesets, text, panel, wrap } from './render/gfx';
+import { VW, VH, bake, sprites, tilesets, text, panel, wrap, figure } from './render/gfx';
 import { getLang, setLang } from './core/i18n';
 import { drawRun, resetView, setMouse, toggleMap, setTutorial, tileAt, getOverlay, setOverlay, invMove, invAction } from './render/draw';
 import { sfx, soundOn, toggleSound, wakeAudio } from './core/audio';
@@ -303,7 +303,8 @@ function drawLager(time: number, dt: number) {
   const id = CLASS_ORDER[clsIdx], c = CLASSES[id], lock = locked();
   panel(ctx, 24, 56, 286, 256, row === 0 ? '#ffcd75' : '#566c86');
   ctx.globalAlpha = lock ? 0.35 : 1;
-  ctx.drawImage(sprites[Math.floor(time * 2.5) % 2 ? id + '_b' : id], 36, 66, 96, 96);
+  panel(ctx, 34, 64, 100, 100, '#333c57', '#1c2033');
+  figure(ctx, `${id}:${['f', 'f', 's', 'b', 's'][Math.floor(time * 0.6) % 5]}${Math.floor(time * 2.5) % 2}`, 36, 66, 96, 96);
   ctx.globalAlpha = 1;
   text(ctx, `< ${c.name} >`, 146, 74, '#ffcd75', 16);
   text(ctx, `Leben ${c.hp + 2 * meta.upg.vit}`, 146, 100, '#b13e53', 8);

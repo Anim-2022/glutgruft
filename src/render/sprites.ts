@@ -5,6 +5,7 @@ export const PAL: Record<string, string> = {
   l: '#a7f070', G: '#38b764', T: '#257179', b: '#3b5dc9', B: '#29366f',
   c: '#41a6f6', s: '#73eff7', p: '#5d275d', v: '#9a4fc0',
   n: '#8a5a3a', N: '#5a3a28', h: '#e8b796', H: '#c48a6a',
+  S: '#c9d4dc', F: '#1e6b3a',
 };
 
 export const ACTORS = ['krieger', 'magier', 'waldlaeufer', 'ratte', 'skelett', 'schuetze', 'fledermaus', 'sporling', 'golem', 'glutgeist', 'koenig', 'mutter', 'fuerst'];
@@ -708,3 +709,65 @@ SPR.gate = ['yYdYYdYYdYYdYYdy', 'Y.d..d..d..d..dY', 'Y.d..d..d..d..dY', 'YYdYYdY
   'Y.d..dyYYy.d..dY', 'Y.d..d.yy..d..dY', 'Y.d..d..d..d..dY', 'YYdYYdYYdYYdYYdY', 'Y.d..d..d..d..dY', 'Y.d..d..d..d..dY', 'Y.d..d..d..d..dY', 'yYdYYdYYdYYdYYdy'];
 SPR.key = ['............', '............', '..yyy.......', '.y...y......', '.y...yyyyyy.', '.y...y..y.y.', '..yyy...y.y.', '............', '............', '............', '............', '............'];
 NO_OUTLINE.add('gate');
+
+// ---------- Helden: 16x20, von Hand in drei Ansichten ----------
+SPR.krieger = [
+  '.......oo.......', '......oooo......', '.....dggggd.....', '....dgSggggd....', '....dggggggd..w.',
+  '....dDhhhhDd..w.', '....dhkhhkhd..w.', '....dhhHHhhd..w.', '.....dhhhhd...w.', '...ggrrrrrrgg.w.',
+  '..gSgrryyrrgSgw.', '.bbbbrryyrrehnnn', '.bcsbrrrrrre..n.', '.bccbdYYYYYd....', '.bbbbeerreee....',
+  '..bb.eer.ree....', '.....dd..dd.....', '.....dd..dd.....', '.....gg..gg.....', '....DDD..DDD....',
+];
+VIEWS.krieger = {
+  b: [
+    '.......oo.......', '......oooo......', '.....dggggd.....', '....dggggggd....', '.w..dggggggd....',
+    '.w..dggggggd....', '.w..dgggggDd....', '.w..dDggggDd....', '.w...dDDDDd.....', '.w.ggeeeeeegg...',
+    '.wgSgerrrregSg..', 'nnnherrrrrrebbbb', '.n..errrrrrebccb', '....derrrrrdbccb', '....eerrrrrebbbb',
+    '....eeerrreee.bb', '.....dd..dd.....', '.....dd..dd.....', '.....gg..gg.....', '....DDD..DDD....',
+  ],
+  s: [
+    '......oo........', '.....oooo.......', '.....dgggd......', '....dgSgggd.....', '....dgggggd.....',
+    '....dggDhhhd....', '....dggDhkh.....', '....dggdhhh...w.', '.....dddhh...w..', '....ggrrrr..w...',
+    '...gSgrrrrgw....', '..bbbbrrrrhn....', '..bcsbrrrr.n....', '..bccbYYYY......', '..bbbberre......',
+    '...bb.eree......', '......ddd.......', '......dd.d......', '......gg.g......', '.....DDD.DD.....',
+  ],
+};
+SPR.magier = [
+  '.......bb.......', '......bbbb......', '......bBbb....s.', '.....bbBbbb..scs', '.....bbybbb..scs',
+  '....bbbbbbbb..s.', '..yyyyyyyyyyy.n.', '....hhhhhhhh..n.', '....hkhhhhkh..n.', '....hwwHHwwh..n.',
+  '....wwwwwwww..n.', '...bbwwwwwwbb.n.', '..bbbbwwwwbbbbhn', '..bBbbbwwbbbBb.n', '..bBbbbyybbbBb.n',
+  '...bbbbyybbbb..n', '...bBbbbbbbBb..n', '...bBbbbbbbBb..n', '..bbBbbbbbbBbb.n', '..BBBBBBBBBBBB.n',
+];
+VIEWS.magier = {
+  b: [
+    '.......bb.......', '......bbbb......', '.s....bbBb......', 'scs..bbbBbb.....', 'scs..bbbBbb.....',
+    '.s..bbbbbbbb....', '.n.yyyyyyyyyyy..', '.n..wwwwwwww....', '.n..wwwwwwww....', '.n..wwwwwwww....',
+    '.n...wwwwww.....', '.n.bbbwwwwbbb...', 'nhbbbbbBBbbbbb..', 'n.bBbbbBBbbbBb..', 'n.bBbbbBBbbbBb..',
+    'n..bbbbBBbbbb...', 'n..bBbbBBbbBb...', 'n..bBbbBBbbBb...', 'n.bbBbbBBbbBbb..', 'n.BBBBBBBBBBBB..',
+  ],
+  s: [
+    '......bb........', '.....bbbb.......', '.....bbBb.....s.', '....bbbBbb...scs', '....bbybbb...scs',
+    '...bbbbbbbb...s.', '.yyyyyyyyyyyy.n.', '....wwhhhhh...n.', '....wwhhhkh...n.', '....wwhHwwh...n.',
+    '.....wwwwww...n.', '....bbbwwww...n.', '...bbbbbwwbbh.n.', '...bBbbbbbb...n.', '...bBbbbybb...n.',
+    '...bbbbbybb...n.', '...bBbbbbbb...n.', '...bBbbbbBb...n.', '..bbBbbbbBbb..n.', '..BBBBBBBBBB..n.',
+  ],
+};
+SPR.waldlaeufer = [
+  '................', '......GGGG......', '.ww..GGGGGG.....', '.yy.GGlGGGGG..n.', '.nn.GGGGGGGG.n.w',
+  '..n.GFhhhhFG.n.w', '..n.GhkhhkhGn..w', '....GhhHHhhGn..w', '.....Ghhhhh.n..w', '....GGGGGGGGn..w',
+  '...GGGnGGGGGGh.w', '...GFGGnGGGFGn.w', '...GFGGGnGGFG.nw', '...GFnnnYnnFG.n.', '....GGGGGGGG.n..',
+  '....GFGGGGFG....', '.....TT..TT.....', '.....TT..TT.....', '.....nn..nn.....', '....NNN..NNN....',
+];
+VIEWS.waldlaeufer = {
+  b: [
+    '................', '......GGGG......', '.....GGGGGG.ww..', '.n..GGGGGGGGyy..', 'w.n.GGGGGGGGnn..',
+    'w.n.GGGFFGGGn...', 'w..nGGGFFGGGn...', 'w..nGGGGGGGGn...', 'w..n.GGGGGGnn...', 'w..nGGGGGGnnG...',
+    'w.hGGGGGGnnGGG..', 'w.nGFGGGnnGGFG..', 'wn.GFGGnnGGGFG..', '.n.GFnnnnnnnFG..', '..n.GGGGGGGG....',
+    '....GFGGGGFG....', '.....TT..TT.....', '.....TT..TT.....', '.....nn..nn.....', '....NNN..NNN....',
+  ],
+  s: [
+    '................', '.....GGGG.......', '....GGGGGG......', '.ww.GGlGGGG..n..', '.yy.GGGGGFG...n.',
+    '.nn.GGGhhhh...nw', '..n..GGhhkh...nw', '..n..GGhhhh...nw', '.....GGGhh....nw', '....GGGGGGG...nw',
+    '....nGGGGGGGh.nw', '....GnGGGGG...nw', '....GGnGGGG...nw', '....GnnYnnG..n..', '....GGGGGGG.n...',
+    '.....GFGGFG.....', '......TTT.......', '......TT.T......', '......nn.n......', '.....NNN.NN.....',
+  ],
+};

@@ -68,7 +68,7 @@ const ARMOR_COL: [string, string][] = [['#8a5a3a', '#5a3a28'], ['#94b0c2', '#566
 const PARTS: Record<string, { w: string[]; a: string[] }> = {
   krieger: { w: ['w'], a: ['r', 'e'] },
   magier: { w: ['s', 'c'], a: ['b', 'B'] },
-  waldlaeufer: { w: ['w', 'n'], a: ['G', 'T'] },
+  waldlaeufer: { w: ['w', 'n'], a: ['G', 'F', 'l'] },
 };
 
 // Liefert den Spritenamen der Heldenfigur passend zur Ausrüstung (wird bei Bedarf gebacken).
@@ -78,9 +78,15 @@ export function heroLook(cls: string, weapon: number, armor: number): string {
   if (sprites[key]) return key;
   const pal = { ...PAL }, parts = PARTS[cls];
   if (weapon > 0) { pal[parts.w[0]] = WEAPON_COL[weapon]; if (parts.w[1]) pal[parts.w[1]] = WEAPON_SHADE[weapon]; }
-  if (armor >= 0) { pal[parts.a[0]] = ARMOR_COL[armor][0]; pal[parts.a[1]] = ARMOR_COL[armor][1]; }
+  if (armor >= 0) { pal[parts.a[0]] = ARMOR_COL[armor][0]; pal[parts.a[1]] = ARMOR_COL[armor][1]; if (parts.a[2]) pal[parts.a[2]] = ARMOR_COL[armor][0]; }
   bakeActor(cls, key, pal);
   return key;
+}
+
+// Figur maßstabsgetreu in ein Feld zeichnen: ganzzahlig vergrößert, unten mittig
+export function figure(ctx: CanvasRenderingContext2D, key: string, x: number, y: number, w: number, h: number) {
+  const img = sprites[key], k = Math.max(1, Math.floor(Math.min(w / img.width, h / img.height)));
+  ctx.drawImage(img, x + ((w - img.width * k) >> 1), y + h - img.height * k - ((h - img.height * k) >> 2), img.width * k, img.height * k);
 }
 
 export function bake(): void {

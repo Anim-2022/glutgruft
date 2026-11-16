@@ -1,4 +1,4 @@
-import { VW, VH, TS, sprites, masks, tilesets, text, panel, bar, heroLook } from './gfx';
+import { VW, VH, TS, sprites, masks, tilesets, text, panel, bar, heroLook, figure } from './gfx';
 import { GLOW } from './sprites';
 import { W, H, T, wallLike, walkable } from '../game/dungeon';
 import { sfx } from '../core/audio';
@@ -240,7 +240,7 @@ export function drawRun(ctx: CanvasRenderingContext2D, run: Run, dt: number, tim
       lights.push({ x: q.x, y: q.y, r: glow[0] * flick(a.id), col: glow[1] });
       if (Math.random() < dt * 9) bits.push({ x: (q.x * TS) + 4 + Math.random() * 8, y: q.y * TS + 2 + Math.random() * 6, vx: (Math.random() - 0.5) * 10, vy: -18 - Math.random() * 14, col: Math.random() < 0.5 ? '#ffcd75' : '#ef7d57', t: 0, g: -10 });
     }
-    if (a === p && p.gear[2] && v === 'f') { ctx.fillStyle = RARITY_COL[p.gear[2].rar]; ctx.fillRect(dx + 7, dy + 9, 2, 1); ctx.fillRect(dx + 7, dy + 10, 1, 1); }
+    if (a === p && p.gear[2] && v === 'f') { ctx.fillStyle = RARITY_COL[p.gear[2].rar]; ctx.fillRect(dx + 7, dy + 9, 2, 1); ctx.fillRect(dx + 7, dy + 10, 2, 1); }
     if (a.elite) {
       ctx.fillStyle = '#ffcd75';
       ctx.fillRect(dx + 5, dy - 3, 1, 2); ctx.fillRect(dx + 8, dy - 4, 1, 3); ctx.fillRect(dx + 11, dy - 3, 1, 2); ctx.fillRect(dx + 5, dy - 1, 7, 1);
@@ -356,7 +356,7 @@ function hud(ctx: CanvasRenderingContext2D, run: Run) {
   // Spieler
   panel(ctx, 6, 6, 196, 54);
   panel(ctx, 11, 11, 36, 36, '#333c57', '#1c2033');
-  ctx.drawImage(sprites[lookOf(p)], 13, 13, 32, 32);
+  ctx.drawImage(sprites[lookOf(p)], 0, 1, 16, 16, 13, 13, 32, 32);
   text(ctx, c.name, 53, 11, '#ffcd75');
   text(ctx, `Stufe ${p.lvl}`, 196, 11, '#94b0c2', 8, 'right');
   ctx.fillStyle = '#b13e53'; ctx.fillRect(53, 24, 3, 2); ctx.fillRect(57, 24, 3, 2); ctx.fillRect(53, 26, 7, 2); ctx.fillRect(54, 28, 5, 1); ctx.fillRect(55, 29, 3, 1); ctx.fillRect(56, 30, 1, 1);
@@ -464,7 +464,7 @@ function invSheet(ctx: CanvasRenderingContext2D, run: Run, time: number) {
   // Figur zeigt die angelegte Ausrüstung
   panel(ctx, x + 14, y + 36, 100, 100, '#333c57', '#1c2033');
   const look = lookOf(p);
-  ctx.drawImage(sprites[`${look}:${['f', 's', 'b', 's'][Math.floor(time * 0.7) % 4]}${Math.floor(time * 3) % 2}`], x + 16, y + 38, 96, 96);
+  figure(ctx, `${look}:${['f', 's', 'b', 's'][Math.floor(time * 0.7) % 4]}${Math.floor(time * 3) % 2}`, x + 16, y + 38, 96, 96);
   const stats: [string, string, string][] = [['Leben', `${p.hp} / ${p.maxHp}`, '#b13e53'], ['Angriff', `${p.atk}`, '#f4f4f4'], ['Verteidigung', `${p.def}`, '#f4f4f4'], ['Kritisch', `${Math.round(p.crit * 100)} %`, '#f4f4f4']];
   stats.forEach(([k, v, col], i) => { text(ctx, k, x + 124, y + 42 + i * 12, '#94b0c2', 8); text(ctx, v, x + 232, y + 42 + i * 12, col, 8, 'right'); });
   ctx.drawImage(sprites.coin, x + 122, y + 94);
@@ -500,7 +500,7 @@ function charSheet(ctx: CanvasRenderingContext2D, run: Run) {
   ctx.fillStyle = 'rgba(13,14,23,0.8)'; ctx.fillRect(0, 0, VW, VH);
   panel(ctx, x, y, w, h, '#ffcd75');
   panel(ctx, x + 12, y + 12, 68, 68, '#333c57', '#1c2033');
-  ctx.drawImage(sprites[lookOf(p)], x + 14, y + 14, 64, 64);
+  figure(ctx, lookOf(p), x + 14, y + 14, 64, 64);
   text(ctx, c.name, x + 90, y + 14, '#ffcd75', 16);
   text(ctx, `Stufe ${p.lvl}   Ebene ${run.floor}   Zug ${run.turn}`, x + 90, y + 34, '#94b0c2', 8);
   const stats: [string, string, string][] = [
