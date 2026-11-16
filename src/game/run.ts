@@ -367,6 +367,11 @@ function resetCrates(run: Run) {
 function tryBlock(run: Run, x: number, y: number, tile: number): boolean {
   const i = y * W + x;
   if (run.tiles[i] !== T.FLOOR || !isFree(run, x, y)) return false;
+  // Nie in einen Durchgang: die begehbaren Nachbarn müssen ringsum eine einzige zusammenhängende Gruppe bilden
+  const ring = [[-1, -1], [0, -1], [1, -1], [1, 0], [1, 1], [0, 1], [-1, 1], [-1, 0]].map(([ox, oy]) => walkable(run.tiles[(y + oy) * W + x + ox]));
+  let groups = 0;
+  for (let k = 0; k < 8; k++) if (ring[k] && !ring[(k + 7) % 8]) groups++;
+  if (groups > 1) return false;
   const reach = (d: Int16Array) => d.reduce((n, v) => n + (v >= 0 ? 1 : 0), 0);
   const before = reach(distMap(run.tiles, run.p.x, run.p.y));
   run.tiles[i] = tile;

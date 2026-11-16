@@ -43,6 +43,24 @@ describe('run', () => {
     }
   });
 
+  it('Objekte stehen nie in einem Durchgang', () => {
+    const block = new Set<number>([T.CHEST, T.CURSED, T.ALTAR, T.BARREL, T.PILLAR, T.TRADER, T.FOUNTAIN, T.TABLET]);
+    for (let seed = 1; seed <= 120; seed++) {
+      const run = newRun(seed, 'krieger', defaultMeta());
+      if (seed % 3) { run.floor = 5 + (seed % 9); run.tiles[run.p.y * W + run.p.x] = T.STAIRS; act(run, { t: 'descend' }); }
+      for (let y = 1; y < H - 1; y++) for (let x = 1; x < W - 1; x++) {
+        if (!block.has(run.tiles[y * W + x])) continue;
+        const open = (ox: number, oy: number) => walkable(run.tiles[(y + oy) * W + x + ox]);
+        // weder waagrecht noch senkrecht zwischen zwei Wänden eingeklemmt, wenn es dort durchgeht
+        const wall = (ox: number, oy: number) => run.tiles[(y + oy) * W + x + ox] === T.WALL;
+        const corridorH = open(-1, 0) && open(1, 0) && wall(0, -1) && wall(0, 1);
+        const corridorV = open(0, -1) && open(0, 1) && wall(-1, 0) && wall(1, 0);
+        // Kammern hinter Gitter/Riss sind absichtlich eng; dort stehen Truhen an der Wand, nie im Gang
+        expect(corridorH || corridorV, `Seed ${seed} Feld ${x},${y} Typ ${run.tiles[y * W + x]}`).toBe(false);
+      }
+    }
+  });
+
   it('gleicher Seed ergibt gleichen Verlauf', () => {
     const play = () => {
       const run = newRun(7, 'magier', defaultMeta());
