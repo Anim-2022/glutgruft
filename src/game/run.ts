@@ -17,7 +17,7 @@ export interface Player extends Actor {
   res: number; resMax: number; potions: number; bombs: number;
   crit: number; pow: number; vamp: number; thorns: number; soulMul: number;
   dir: [number, number]; perks: string[]; relics: string[]; hits: number;
-  gold: number; gear: (Item | null)[]; keys: number;
+  gold: number; gear: (Item | null)[]; bag: Item[]; keys: number;
 }
 
 export interface Puzzle {
@@ -58,7 +58,8 @@ export type Action =
   | { t: 'move'; dx: number; dy: number }
   | { t: 'wait' } | { t: 'shoot' } | { t: 'potion' } | { t: 'descend' } | { t: 'bomb' }
   | { t: 'skill'; i: number } | { t: 'perk'; i: number }
-  | { t: 'buy'; i: number } | { t: 'leave' } | { t: 'target'; x: number; y: number };
+  | { t: 'buy'; i: number } | { t: 'leave' } | { t: 'target'; x: number; y: number }
+  | { t: 'equip'; i: number } | { t: 'unequip'; slot: number } | { t: 'sell'; i: number };
 
 const FOV_R = 8;
 const cheb = (a: { x: number; y: number }, b: { x: number; y: number }) => Math.max(Math.abs(a.x - b.x), Math.abs(a.y - b.y));
@@ -77,7 +78,7 @@ export function newRun(seed: number, cls: ClassId, meta: Meta): Run {
     id: 0, kind: cls, name: c.name, x: 0, y: 0, hp, maxHp: hp, atk: c.atk + meta.upg.atk, def: c.def,
     st: {}, xp: 0, cd: 0, awake: true,
     cls, lvl: 1, exp: 0, res: c.resStart, resMax: c.resMax, potions: 1 + meta.upg.trank, bombs: 1,
-    crit: 0.05, pow: 1, vamp: 0, thorns: 0, soulMul: 1, dir: [1, 0], perks: [], relics: [], hits: 0, gold: 0, gear: [null, null, null], keys: 0,
+    crit: 0.05, pow: 1, vamp: 0, thorns: 0, soulMul: 1, dir: [1, 0], perks: [], relics: [], hits: 0, gold: 0, gear: [null, null, null], bag: [], keys: 0,
   };
   const run: Run = {
     seed, rng: new RNG(seed), floor: 0,
@@ -114,14 +115,21 @@ const DIRS4 = [[1, 0], [-1, 0], [0, 1], [0, -1]];
 
 // ---------- Ausrüstung, Gold und Händler ----------
 
-const ITEM_NAMES: Record<ClassId, string> = { krieger: 'Klinge', magier: 'Stab', waldlaeufer: 'Bogen' };
+export const BAG_MAX = 10;
+const WEAPON_NAMES: Record<ClassId, string[]> = {
+  krieger: ['Eisenklinge', 'Stahlklinge', 'Runenklinge', 'Glutklinge'],
+  magier: ['Eichenstab', 'Kristallstab', 'Runenstab', 'Glutstab'],
+  waldlaeufer: ['Eschenbogen', 'Stahlbogen', 'Runenbogen', 'Glutbogen'],
+};
+const ARMOR_NAMES = ['Lederrüstung', 'Kettenhemd', 'Runenpanzer', 'Glutpanzer'];
+const AMULET_NAMES = ['Kupferamulett', 'Silberamulett', 'Runenamulett', 'Glutamulett'];
 
 export function genItem(run: Run, cursed = false): Item {
   const rng = run.rng, slot = rng.int(0, 2) as 0 | 1 | 2;
   const r = rng.next() + run.floor * 0.012;
   let rar = r < 0.55 ? 0 : r < 0.85 ? 1 : r < 0.97 ? 2 : 3;
   if (cursed) rar = Math.min(3, rar + 1);
-  const it: Item = { slot, name: [ITEM_NAMES[run.p.cls], 'Rüstung', 'Amulett'][slot], rar, atk: 0, def: 0, hp: 0, crit: 0, cursed };
+  const it: Item = { slot, name: [WEAPON_NAMES[run.p.cls], ARMOR_NAMES, AMULET_NAMES][slot][rar], rar, atk: 0, def: 0, hp: 0, crit: 0, cursed };
   if (slot === 0) it.atk = 1 + rar;
   else if (slot === 1) { it.def = 1 + (rar >= 2 ? 1 : 0); it.hp = rar * 3; }
   else { it.crit = 0.04 * (rar + 1); it.hp = 2 * rar; }
@@ -129,7 +137,7 @@ export function genItem(run: Run, cursed = false): Item {
   return it;
 }
 
-const itemScore = (it: Item) => it.atk * 3 + it.def * 3 + it.hp * 0.5 + it.crit * 40;
+export const itemScore = (it: Item) => it.atk * 3 + it.def * 3 + it.hp * 0.5 + it.crit * 40;
 export const itemText = (it: Item) =>
   [it.atk ? `+${it.atk} Angriff` : '', it.def ? `+${it.def} Vert.` : '', it.hp ? `${it.hp > 0 ? '+' : ''}${it.hp} Leben` : '', it.crit ? `+${Math.round(it.crit * 100)} % Krit` : ''].filter(Boolean).join(', ');
 
@@ -140,19 +148,56 @@ function wear(p: Player, it: Item, sign: 1 | -1) {
   p.hp = Math.min(p.hp, p.maxHp);
 }
 
-// Legt bessere Ausrüstung an, schlechtere wird zu Gold.
+export const itemValue = (it: Item) => 5 * (it.rar + 1) * (it.cursed ? 0 : 1) + (it.cursed ? 2 : 0);
+
+// Neue Ausrüstung: freier Platz wird sofort belegt, sonst wandert sie in den Rucksack.
 function takeItem(run: Run, it: Item, from: string) {
-  const p = run.p, cur = p.gear[it.slot], label = `${it.name} (${RARITY[it.rar]}${it.cursed ? ', verflucht' : ''}: ${itemText(it)})`;
-  if (cur && itemScore(cur) >= itemScore(it)) {
-    const g = 5 * (it.rar + 1);
-    p.gold += g;
-    say(run, `${from}: ${label} – schwächer, für ${g} Gold verkauft.`);
-    return;
+  const p = run.p, label = `${it.name} (${RARITY[it.rar]}${it.cursed ? ', verflucht' : ''}: ${itemText(it)})`;
+  if (!p.gear[it.slot]) {
+    wear(p, it, 1);
+    p.gear[it.slot] = it;
+    say(run, `${from}: ${label} angelegt.`);
+  } else if (p.bag.length < BAG_MAX) {
+    p.bag.push(it);
+    say(run, `${from}: ${label} – im Rucksack [I].`);
+  } else {
+    p.gold += itemValue(it);
+    say(run, `${from}: ${label} – Rucksack voll, für ${itemValue(it)} Gold verkauft.`);
   }
-  if (cur) wear(p, cur, -1);
-  wear(p, it, 1);
-  p.gear[it.slot] = it;
-  say(run, `${from}: ${label} angelegt.`);
+}
+
+// Rucksack: kostet keinen Zug
+function manage(run: Run, a: Action): boolean {
+  const p = run.p;
+  if (a.t === 'equip') {
+    const it = p.bag[a.i];
+    if (!it) return true;
+    const cur = p.gear[it.slot];
+    if (cur) { wear(p, cur, -1); p.bag[a.i] = cur; } else p.bag.splice(a.i, 1);
+    wear(p, it, 1);
+    p.gear[it.slot] = it;
+    say(run, `${it.name} angelegt.`);
+    return true;
+  }
+  if (a.t === 'unequip') {
+    const cur = p.gear[a.slot];
+    if (!cur) return true;
+    if (p.bag.length >= BAG_MAX) { say(run, 'Der Rucksack ist voll.'); return true; }
+    wear(p, cur, -1);
+    p.gear[a.slot] = null;
+    p.bag.push(cur);
+    say(run, `${cur.name} abgelegt.`);
+    return true;
+  }
+  if (a.t === 'sell') {
+    const it = p.bag[a.i];
+    if (!it) return true;
+    p.bag.splice(a.i, 1);
+    p.gold += itemValue(it);
+    say(run, `${it.name} für ${itemValue(it)} Gold verkauft.`);
+    return true;
+  }
+  return false;
 }
 
 function stock(run: Run): Offer[] {
@@ -162,7 +207,7 @@ function stock(run: Run): Offer[] {
   ];
   for (let k = 0; k < 2; k++) {
     const it = genItem(run);
-    offers.push({ kind: 'item', name: `${it.name} (${RARITY[it.rar]})`, desc: itemText(it), price: 18 + it.rar * 22 + f * 2, sold: false, item: it });
+    offers.push({ kind: 'item', name: it.name, desc: itemText(it), price: 18 + it.rar * 22 + f * 2, sold: false, item: it });
   }
   return offers;
 }
@@ -769,6 +814,7 @@ export function act(run: Run, a: Action): void {
     return;
   }
   if (run.mode !== 'play') return;
+  if (manage(run, a)) return;
   if (a.t === 'target') {
     const m = mobAt(run, a.x, a.y);
     run.target = m && run.vis[m.y * W + m.x] ? m.id : 0;
@@ -1024,7 +1070,7 @@ function endTurn(run: Run) {
 
 // ---------- Speichern eines laufenden Abstiegs ----------
 
-const SAVE_VERSION = 2;
+const SAVE_VERSION = 3;
 
 export function serialize(run: Run): string {
   return JSON.stringify({

@@ -2,6 +2,7 @@
 export const VW = 640, VH = 360, TS = 16;
 
 import { PAL, SPR, ACTORS, NO_OUTLINE, VIEWS, FLOATERS } from './sprites';
+import { tr } from '../core/i18n';
 export { PAL };
 
 export const sprites: Record<string, HTMLCanvasElement> = {};
@@ -27,38 +28,64 @@ const BIOMES = [
   { floor: '#40262b', speck: '#6a3530', brick: '#9a4a3c', hi: '#c96f45', mortar: '#47222b', top: '#2a171d', g1: '#1f1418', g2: '#6b4a3a' },
 ];
 
-export function bake(): void {
-  const draw = (rows: string[], line: boolean) => {
-    const [c, g] = mk(rows[0].length, rows.length);
-    rows.forEach((row, y) => [...row].forEach((ch, x) => {
-      if (ch === '.') return;
-      g.fillStyle = PAL[ch];
-      g.fillRect(x, y, 1, 1);
-    }));
-    if (line) outline(g, c.width, c.height);
-    return c;
-  };
-  const mask = (n: string) => {
-    const [m, g] = mk(sprites[n].width, sprites[n].height);
-    g.drawImage(sprites[n], 0, 0);
-    g.globalCompositeOperation = 'source-in';
-    g.fillStyle = '#fff'; g.fillRect(0, 0, m.width, m.height);
-    masks[n] = m;
-  };
-  for (const [name, rows] of Object.entries(SPR)) sprites[name] = draw(rows, !NO_OUTLINE.has(name));
-  // Figuren: je Blickrichtung (f vorn, b hinten, s Seite) vier Bilder – 0 Stand, 1 Atmen, 2/3 Schritt
-  for (const name of ACTORS) {
-    const views: Record<string, string[]> = { f: SPR[name], b: VIEWS[name].b, s: VIEWS[name].s };
-    for (const [v, rows] of Object.entries(views)) {
-      const h = rows.length, w = rows[0].length, half = w >> 1;
-      const breath = ['.'.repeat(w), ...rows.slice(0, h - 4), ...rows.slice(h - 3)];
-      const lift = (left: boolean) => rows.map((r, y) => (y !== h - 1 ? r : left ? '.'.repeat(half) + r.slice(half) : r.slice(0, half) + '.'.repeat(w - half)));
-      const alt = VIEWS[name].alt ?? breath;
-      const frames = FLOATERS.has(name) ? [rows, alt, alt, rows] : [rows, breath, lift(true), lift(false)];
-      frames.forEach((f, i) => { const key = `${name}:${v}${i}`; sprites[key] = draw(f, true); mask(key); });
-    }
-    sprites[name + '_b'] = sprites[`${name}:f1`];
+function drawRows(rows: string[], line: boolean, pal: Record<string, string> = PAL): HTMLCanvasElement {
+  const [c, g] = mk(rows[0].length, rows.length);
+  rows.forEach((row, y) => [...row].forEach((ch, x) => {
+    if (ch === '.') return;
+    g.fillStyle = pal[ch];
+    g.fillRect(x, y, 1, 1);
+  }));
+  if (line) outline(g, c.width, c.height);
+  return c;
+}
+
+function makeMask(n: string) {
+  const [m, g] = mk(sprites[n].width, sprites[n].height);
+  g.drawImage(sprites[n], 0, 0);
+  g.globalCompositeOperation = 'source-in';
+  g.fillStyle = '#fff'; g.fillRect(0, 0, m.width, m.height);
+  masks[n] = m;
+}
+
+// Figur backen: je Blickrichtung (f vorn, b hinten, s Seite) vier Bilder – 0 Stand, 1 Atmen, 2/3 Schritt
+function bakeActor(name: string, prefix: string, pal: Record<string, string> = PAL) {
+  const views: Record<string, string[]> = { f: SPR[name], b: VIEWS[name].b, s: VIEWS[name].s };
+  for (const [v, rows] of Object.entries(views)) {
+    const h = rows.length, w = rows[0].length, half = w >> 1;
+    const breath = ['.'.repeat(w), ...rows.slice(0, h - 4), ...rows.slice(h - 3)];
+    const lift = (left: boolean) => rows.map((r, y) => (y !== h - 1 ? r : left ? '.'.repeat(half) + r.slice(half) : r.slice(0, half) + '.'.repeat(w - half)));
+    const alt = VIEWS[name].alt ?? breath;
+    const frames = FLOATERS.has(name) ? [rows, alt, alt, rows] : [rows, breath, lift(true), lift(false)];
+    frames.forEach((f, i) => { const key = `${prefix}:${v}${i}`; sprites[key] = drawRows(f, true, pal); makeMask(key); });
   }
+  sprites[prefix] = sprites[`${prefix}:f0`];
+  sprites[prefix + '_b'] = sprites[`${prefix}:f1`];
+}
+
+// Ausrüstung färbt die Figur um: Waffe und Rüstung je nach Seltenheit.
+const WEAPON_COL = ['', '#73eff7', '#c08cff', '#ffcd75'], WEAPON_SHADE = ['', '#41a6f6', '#9a4fc0', '#ef7d57'];
+const ARMOR_COL: [string, string][] = [['#8a5a3a', '#5a3a28'], ['#94b0c2', '#566c86'], ['#9a4fc0', '#5d275d'], ['#ffcd75', '#c98a3a']];
+const PARTS: Record<string, { w: string[]; a: string[] }> = {
+  krieger: { w: ['w'], a: ['r', 'e'] },
+  magier: { w: ['s', 'c'], a: ['b', 'B'] },
+  waldlaeufer: { w: ['w', 'n'], a: ['G', 'T'] },
+};
+
+// Liefert den Spritenamen der Heldenfigur passend zur Ausrüstung (wird bei Bedarf gebacken).
+export function heroLook(cls: string, weapon: number, armor: number): string {
+  if (weapon <= 0 && armor < 0) return cls;
+  const key = `${cls}@${weapon}${armor}`;
+  if (sprites[key]) return key;
+  const pal = { ...PAL }, parts = PARTS[cls];
+  if (weapon > 0) { pal[parts.w[0]] = WEAPON_COL[weapon]; if (parts.w[1]) pal[parts.w[1]] = WEAPON_SHADE[weapon]; }
+  if (armor >= 0) { pal[parts.a[0]] = ARMOR_COL[armor][0]; pal[parts.a[1]] = ARMOR_COL[armor][1]; }
+  bakeActor(cls, key, pal);
+  return key;
+}
+
+export function bake(): void {
+  for (const [name, rows] of Object.entries(SPR)) sprites[name] = drawRows(rows, !NO_OUTLINE.has(name));
+  for (const name of ACTORS) bakeActor(name, name);
   // Fackel (zwei Flackerbilder)
   for (const f of [0, 1]) {
     const [c, g] = mk(TS, TS);
@@ -184,6 +211,7 @@ function glyphs(s: string, col: string, size: number): HTMLCanvasElement {
 
 export function text(ctx: CanvasRenderingContext2D, s: string, x: number, y: number, col = '#f4f4f4', size = 10, align: 'left' | 'center' | 'right' = 'left', shadow = true): number {
   if (!s) return 0;
+  s = tr(s);
   const c = glyphs(s, col, size);
   if (align === 'center') x -= c.width >> 1;
   else if (align === 'right') x -= c.width;
@@ -194,6 +222,7 @@ export function text(ctx: CanvasRenderingContext2D, s: string, x: number, y: num
 }
 
 export function wrap(s: string, n: number): string[] {
+  s = tr(s);
   const out: string[] = [];
   let line = '';
   for (const w of s.split(' ')) {

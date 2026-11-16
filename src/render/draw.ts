@@ -1,8 +1,9 @@
-import { VW, VH, TS, sprites, masks, tilesets, text, panel, bar } from './gfx';
+import { VW, VH, TS, sprites, masks, tilesets, text, panel, bar, heroLook } from './gfx';
 import { GLOW } from './sprites';
 import { W, H, T, wallLike, walkable } from '../game/dungeon';
 import { sfx } from '../core/audio';
-import { Run, Actor, xpNeed, skillCost, itemText, RUNE_NAMES } from '../game/run';
+import { tr } from '../core/i18n';
+import { Run, Actor, xpNeed, skillCost, itemText, itemValue, BAG_MAX, RUNE_NAMES } from '../game/run';
 import { CLASSES, MOBS, PERKS, RELICS, RARITY_COL, BIOME_NAMES, biomeOf } from '../game/content';
 
 const pos = new Map<number, { x: number; y: number }>();
@@ -218,7 +219,7 @@ export function drawRun(ctx: CanvasRenderingContext2D, run: Run, dt: number, tim
     const v = f[1] < 0 ? 'b' : f[1] > 0 ? 'f' : 's', mirror = v === 's' && f[0] < 0;
     const moving = Math.abs(q.x - a.x) + Math.abs(q.y - a.y) > 0.04;
     const fr = moving ? [2, 0, 3, 0][Math.floor(time * 11) % 4] : Math.floor(time * 2.5 + a.id * 0.37) % 2;
-    const frame = `${a.kind}:${v}${fr}`, img = sprites[frame];
+    const frame = `${a === p ? lookOf(p) : a.kind}:${v}${fr}`, img = sprites[frame];
     const l = lunges.get(a.id), k = l ? Math.sin((l.t / LUNGE_T) * Math.PI) * 6 : 0;
     const glow = GLOW[a.kind];
     const jx = glow ? Math.round(Math.sin(time * 17 + a.id) * 0.6) : 0;
@@ -239,6 +240,7 @@ export function drawRun(ctx: CanvasRenderingContext2D, run: Run, dt: number, tim
       lights.push({ x: q.x, y: q.y, r: glow[0] * flick(a.id), col: glow[1] });
       if (Math.random() < dt * 9) bits.push({ x: (q.x * TS) + 4 + Math.random() * 8, y: q.y * TS + 2 + Math.random() * 6, vx: (Math.random() - 0.5) * 10, vy: -18 - Math.random() * 14, col: Math.random() < 0.5 ? '#ffcd75' : '#ef7d57', t: 0, g: -10 });
     }
+    if (a === p && p.gear[2] && v === 'f') { ctx.fillStyle = RARITY_COL[p.gear[2].rar]; ctx.fillRect(dx + 7, dy + 9, 2, 1); ctx.fillRect(dx + 7, dy + 10, 1, 1); }
     if (a.elite) {
       ctx.fillStyle = '#ffcd75';
       ctx.fillRect(dx + 5, dy - 3, 1, 2); ctx.fillRect(dx + 8, dy - 4, 1, 3); ctx.fillRect(dx + 11, dy - 3, 1, 2); ctx.fillRect(dx + 5, dy - 1, 7, 1);
@@ -325,15 +327,16 @@ export function drawRun(ctx: CanvasRenderingContext2D, run: Run, dt: number, tim
   if (showMap) minimap(ctx, run, time);
   if (overlay === 'char') charSheet(ctx, run);
   else if (overlay === 'help') helpSheet(ctx);
+  else if (overlay === 'inv') invSheet(ctx, run, time);
   if (run.mode === 'perk') perkOverlay(ctx, run);
   if (run.mode === 'shop') shopOverlay(ctx, run);
   if (run.mode === 'dead' || run.mode === 'win') endOverlay(ctx, run);
 }
 
 // ---- Oberfläche ----
-let overlay: 'none' | 'char' | 'help' = 'none';
+let overlay: 'none' | 'char' | 'help' | 'inv' = 'none';
 export const getOverlay = () => overlay;
-export const setOverlay = (o: 'none' | 'char' | 'help') => { overlay = o; };
+export const setOverlay = (o: 'none' | 'char' | 'help' | 'inv') => { overlay = o; };
 
 interface Slot { key: string; icon: string; name: string; desc: string; cost: string; count: string; ok: boolean; }
 
@@ -353,7 +356,7 @@ function hud(ctx: CanvasRenderingContext2D, run: Run) {
   // Spieler
   panel(ctx, 6, 6, 196, 54);
   panel(ctx, 11, 11, 36, 36, '#333c57', '#1c2033');
-  ctx.drawImage(sprites[p.cls], 13, 13, 32, 32);
+  ctx.drawImage(sprites[lookOf(p)], 13, 13, 32, 32);
   text(ctx, c.name, 53, 11, '#ffcd75');
   text(ctx, `Stufe ${p.lvl}`, 196, 11, '#94b0c2', 8, 'right');
   ctx.fillStyle = '#b13e53'; ctx.fillRect(53, 24, 3, 2); ctx.fillRect(57, 24, 3, 2); ctx.fillRect(53, 26, 7, 2); ctx.fillRect(54, 28, 5, 1); ctx.fillRect(55, 29, 3, 1); ctx.fillRect(56, 30, 1, 1);
@@ -367,7 +370,7 @@ function hud(ctx: CanvasRenderingContext2D, run: Run) {
   let sx = 8;
   for (const [id, name, col] of STATUS) {
     if (!p.st[id]) continue;
-    const label = `${name} ${p.st[id]}`, w = label.length * 6 + 8;
+    const label = tr(`${name} ${p.st[id]}`), w = label.length * 6 + 8;
     panel(ctx, sx, 64, w, 13, col);
     text(ctx, label, sx + 4, 67, col, 8);
     sx += w + 3;
@@ -386,7 +389,7 @@ function hud(ctx: CanvasRenderingContext2D, run: Run) {
   text(ctx, `${p.gold}`, rx + 20, 27, '#ffcd75');
   if (p.keys) { ctx.drawImage(sprites.key, rx + 48, 24); text(ctx, `${p.keys}`, rx + 62, 27, '#ffcd75'); }
   text(ctx, `Angriff ${p.atk}${p.st.stark ? '+3' : ''}   Vert. ${p.def}`, rx + 6, 42, '#94b0c2', 8);
-  text(ctx, '[C]', VW - 12, 42, '#566c86', 8, 'right');
+  text(ctx, `[I] ${p.bag.length}`, VW - 12, 42, p.bag.length ? '#ffcd75' : '#566c86', 8, 'right');
 
   // Schnellleiste
   const sl = slots(run), S = 30, gap = 4, x0 = (VW - sl.length * S - (sl.length - 1) * gap) >> 1, y0 = VH - S - 8;
@@ -408,7 +411,7 @@ function hud(ctx: CanvasRenderingContext2D, run: Run) {
     }
   });
   if (hover) {
-    const h = hover as Slot, lines = wrapText(h.desc, 44), w = Math.max(h.name.length * 6, ...lines.map(l => l.length * 6)) + 14, hh = 20 + lines.length * 10;
+    const h = hover as Slot, lines = wrapText(h.desc, 44), w = Math.max(tr(h.name).length * 6, ...lines.map(l => l.length * 6)) + 14, hh = 20 + lines.length * 10;
     const x = Math.max(4, Math.min(VW - w - 4, mouse.x - w / 2));
     panel(ctx, x, y0 - hh - 4, w, hh, '#ffcd75');
     text(ctx, h.name, x + 6, y0 - hh + 1, '#ffcd75');
@@ -416,7 +419,7 @@ function hud(ctx: CanvasRenderingContext2D, run: Run) {
   }
 
   // Meldungen
-  const lines = run.log.slice(-4);
+  const lines = run.log.slice(-4).map(tr);
   if (lines.length) {
     const w = Math.min(x0 - 12, Math.max(...lines.map(l => l.length)) * 6 + 10), yy = VH - 12 - lines.length * 10;
     ctx.fillStyle = 'rgba(8,9,15,0.6)'; ctx.fillRect(4, yy - 3, Math.max(w, 60), lines.length * 10 + 5);
@@ -424,7 +427,7 @@ function hud(ctx: CanvasRenderingContext2D, run: Run) {
   }
 
   if (tutorial && run.mode === 'play') {
-    const h = hint(run);
+    const h0 = hint(run), h = h0 && tr(h0);
     if (h) { const w = h.length * 6 + 16; panel(ctx, (VW - w) >> 1, 62, w, 16, '#ffcd75'); text(ctx, h, VW / 2, 67, '#ffcd75', 8, 'center'); }
   }
   const boss = run.mobs.find(m => m.boss && m.awake);
@@ -435,12 +438,69 @@ function hud(ctx: CanvasRenderingContext2D, run: Run) {
   }
 }
 
+// ---- Rucksack ----
+const inv = { col: 1, row: 0 };
+export function invMove(run: Run, dx: number, dy: number) {
+  if (dx) inv.col = dx > 0 ? 1 : 0;
+  const n = inv.col ? Math.max(1, run.p.bag.length) : 3;
+  inv.row = Math.max(0, Math.min(n - 1, inv.row + dy));
+}
+// Aktion für die Auswahl: Eingabetaste (anlegen/ablegen) oder Verkauf
+export function invAction(run: Run, sell: boolean): import('../game/run').Action | null {
+  const p = run.p;
+  invMove(run, 0, 0);
+  if (inv.col === 0) return !sell && p.gear[inv.row] ? { t: 'unequip', slot: inv.row } : null;
+  if (!p.bag[inv.row]) return null;
+  return sell ? { t: 'sell', i: inv.row } : { t: 'equip', i: inv.row };
+}
+const lookOf = (p: Run['p']) => heroLook(p.cls, p.gear[0]?.rar ?? 0, p.gear[1]?.rar ?? -1);
+
+function invSheet(ctx: CanvasRenderingContext2D, run: Run, time: number) {
+  const p = run.p, x = 60, y = 30, w = VW - 120, h = VH - 60;
+  invMove(run, 0, 0);
+  ctx.fillStyle = 'rgba(13,14,23,0.8)'; ctx.fillRect(0, 0, VW, VH);
+  panel(ctx, x, y, w, h, '#ffcd75');
+  text(ctx, 'RUCKSACK', x + 14, y + 12, '#ffcd75', 16);
+  // Figur zeigt die angelegte Ausrüstung
+  panel(ctx, x + 14, y + 36, 100, 100, '#333c57', '#1c2033');
+  const look = lookOf(p);
+  ctx.drawImage(sprites[`${look}:${['f', 's', 'b', 's'][Math.floor(time * 0.7) % 4]}${Math.floor(time * 3) % 2}`], x + 16, y + 38, 96, 96);
+  const stats: [string, string, string][] = [['Leben', `${p.hp} / ${p.maxHp}`, '#b13e53'], ['Angriff', `${p.atk}`, '#f4f4f4'], ['Verteidigung', `${p.def}`, '#f4f4f4'], ['Kritisch', `${Math.round(p.crit * 100)} %`, '#f4f4f4']];
+  stats.forEach(([k, v, col], i) => { text(ctx, k, x + 124, y + 42 + i * 12, '#94b0c2', 8); text(ctx, v, x + 232, y + 42 + i * 12, col, 8, 'right'); });
+  ctx.drawImage(sprites.coin, x + 122, y + 94);
+  text(ctx, `${p.gold} Gold`, x + 138, y + 97, '#ffcd75', 8);
+  text(ctx, 'ANGELEGT', x + 14, y + 146, '#94b0c2', 8);
+  ['Waffe', 'Rüstung', 'Amulett'].forEach((slot, i) => {
+    const it = p.gear[i], gy = y + 158 + i * 26, sel = inv.col === 0 && inv.row === i;
+    panel(ctx, x + 14, gy, 220, 23, sel ? '#ffcd75' : it ? RARITY_COL[it.rar] : '#333c57', sel ? 'rgba(60,50,40,0.9)' : 'rgba(13,14,23,0.9)');
+    text(ctx, slot, x + 228, gy + 4, '#566c86', 8, 'right');
+    text(ctx, it ? it.name : 'leer', x + 20, gy + 4, it ? RARITY_COL[it.rar] : '#566c86', 8);
+    if (it) text(ctx, itemText(it) + (it.cursed ? ' · verflucht' : ''), x + 20, gy + 13, '#94b0c2', 8);
+  });
+  // Rucksack
+  const bx = x + 250, bw = w - 264;
+  text(ctx, `Im Rucksack: ${p.bag.length} / ${BAG_MAX}`, bx, y + 36, '#94b0c2', 8);
+  if (!p.bag.length) text(ctx, 'Leer. Truhen und Händler füllen ihn.', bx, y + 52, '#566c86', 8);
+  p.bag.forEach((it, i) => {
+    const gy = y + 48 + i * 20, sel = inv.col === 1 && inv.row === i;
+    panel(ctx, bx, gy, bw, 18, sel ? '#ffcd75' : '#333c57', sel ? 'rgba(60,50,40,0.9)' : 'rgba(13,14,23,0.9)');
+    text(ctx, it.name, bx + 6, gy + 5, RARITY_COL[it.rar], 8);
+    text(ctx, itemText(it) + (it.cursed ? ' · verflucht' : ''), bx + bw - 6, gy + 5, '#94b0c2', 8, 'right');
+  });
+  // Vergleich und Tasten
+  const cur = inv.col === 1 ? p.bag[inv.row] : undefined, worn = cur ? p.gear[cur.slot] : undefined;
+  if (cur) text(ctx, worn ? `Ersetzt: ${worn.name} (${itemText(worn)})` : 'Dieser Platz ist noch frei.', x + 14, y + h - 40, '#94b0c2', 8);
+  const keys = inv.col === 1 ? (cur ? `[ENTER] anlegen · [X] verkaufen (${itemValue(cur)} Gold)` : '') : (p.gear[inv.row] ? '[ENTER] ablegen' : '');
+  text(ctx, keys, x + 14, y + h - 27, '#ffcd75', 8);
+  text(ctx, 'Pfeile: wählen · [I] oder [ESC] schließen', x + w - 14, y + h - 14, '#566c86', 8, 'right');
+}
+
 function charSheet(ctx: CanvasRenderingContext2D, run: Run) {
   const p = run.p, c = CLASSES[p.cls], x = 50, y = 30, w = VW - 100, h = VH - 60;
   ctx.fillStyle = 'rgba(13,14,23,0.8)'; ctx.fillRect(0, 0, VW, VH);
   panel(ctx, x, y, w, h, '#ffcd75');
   panel(ctx, x + 12, y + 12, 68, 68, '#333c57', '#1c2033');
-  ctx.drawImage(sprites[p.cls], x + 14, y + 14, 64, 64);
+  ctx.drawImage(sprites[lookOf(p)], x + 14, y + 14, 64, 64);
   text(ctx, c.name, x + 90, y + 14, '#ffcd75', 16);
   text(ctx, `Stufe ${p.lvl}   Ebene ${run.floor}   Zug ${run.turn}`, x + 90, y + 34, '#94b0c2', 8);
   const stats: [string, string, string][] = [
@@ -484,7 +544,7 @@ function charSheet(ctx: CanvasRenderingContext2D, run: Run) {
 const HELP: [string, string][] = [
   ['Pfeile / WASD', 'bewegen, in Gegner laufen greift an'], ['Leertaste', 'einen Zug warten'], ['1  2  3', 'Fähigkeiten'], ['F', 'Fernangriff (Magier, Waldläufer)'],
   ['Q', 'Heiltrank trinken'], ['B', 'Bombe werfen'], ['E', 'Treppe hinabsteigen'], ['Klick / Tab', 'Ziel wählen'], ['Maus', 'über etwas halten zeigt Details'],
-  ['C', 'Charakter, Ausrüstung, Reliquien'], ['N', 'Minikarte ein/aus'], ['M', 'Ton ein/aus'], ['V', 'Vollbild'], ['H', 'diese Hilfe'],
+  ['I', 'Rucksack: Ausrüstung wechseln, verkaufen'], ['C', 'Charakter, Reliquien, Gaben'], ['N', 'Minikarte ein/aus'], ['M', 'Ton ein/aus'], ['V', 'Vollbild'], ['H', 'diese Hilfe'],
 ];
 
 function helpSheet(ctx: CanvasRenderingContext2D) {
@@ -527,7 +587,7 @@ function tooltip(ctx: CanvasRenderingContext2D, run: Run, ox: number, oy: number
   }
   if (!lines.length) return;
   ctx.strokeStyle = '#ffcd75'; ctx.lineWidth = 1; ctx.strokeRect(tx * TS + ox + 0.5, ty * TS + oy + 0.5, TS - 1, TS - 1);
-  const w = Math.max(...lines.map(l => l.length)) * 6 + 12, h = lines.length * 10 + 8;
+  const w = Math.max(...lines.map(l => tr(l).length)) * 6 + 12, h = lines.length * 10 + 8;
   const x = Math.min(VW - w - 4, mouse.x + 10), y = Math.max(4, Math.min(VH - h - 44, mouse.y + 10));
   panel(ctx, x, y, w, h, '#ffcd75');
   lines.forEach((l, k) => text(ctx, l, x + 6, y + 5 + k * 10, k ? '#94b0c2' : '#f4f4f4', 8));
@@ -565,6 +625,7 @@ function hint(run: Run): string | null {
 }
 
 function wrapText(s: string, n: number): string[] {
+  s = tr(s);
   const out: string[] = [];
   let line = '';
   for (const w of s.split(' ')) {

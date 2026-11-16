@@ -1,6 +1,6 @@
 // Einfacher Autospieler für Balance- und Stabilitätsläufe.
 import { W, H, T, walkable } from '../src/game/dungeon';
-import { Run, Action, act, playerAtk } from '../src/game/run';
+import { Run, Action, act, playerAtk, itemScore } from '../src/game/run';
 import { CLASSES, MOBS } from '../src/game/content';
 
 const DIRS = [[1, 0], [-1, 0], [0, 1], [0, -1]];
@@ -52,6 +52,11 @@ export function botAction(run: Run): Action {
 }
 
 function decide(run: Run): Action {
+  if (run.mode === 'play' && run.p.bag.length) {
+    // Rucksack: Besseres anlegen, den Rest verkaufen
+    const i = run.p.bag.findIndex(it => itemScore(it) > itemScore(run.p.gear[it.slot]!));
+    return i >= 0 ? { t: 'equip', i } : { t: 'sell', i: 0 };
+  }
   const p = run.p, c = CLASSES[p.cls];
   if (run.mode === 'perk') return { t: 'perk', i: 0 };
   if (run.mode === 'shop') {

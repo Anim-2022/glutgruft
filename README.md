@@ -18,7 +18,7 @@ Build-Befehl `npm run build`, Ausgabeverzeichnis `dist`.
 ## Steuerung
 
 Pfeile/WASD bewegen und angreifen · Leertaste warten · 1–3 Fähigkeiten · F Fernangriff · Q Heiltrank · B Bombe · E Treppe
-Klick oder Tab wählt ein Ziel · N Minikarte · M Ton · V Vollbild
+Klick oder Tab wählt ein Ziel · I Rucksack · C Charakter · H Hilfe · N Minikarte · M Ton · V Vollbild · L Sprache (DE/EN)
 
 ## Inhalt
 

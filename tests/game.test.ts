@@ -90,7 +90,7 @@ describe('run', () => {
 });
 
 function randomAction(r: RNG): Action {
-  const n = r.int(0, 17);
+  const n = r.int(0, 20);
   if (n < 8) { const d = [[1, 0], [-1, 0], [0, 1], [0, -1]][n % 4]; return { t: 'move', dx: d[0], dy: d[1] }; }
   if (n === 8) return { t: 'wait' };
   if (n === 9) return { t: 'shoot' };
@@ -99,6 +99,9 @@ function randomAction(r: RNG): Action {
   if (n === 12) return { t: 'skill', i: r.int(0, 2) };
   if (n === 13) return { t: 'bomb' };
   if (n === 14) return { t: 'buy', i: r.int(0, 3) };
+  if (n === 17) return { t: 'equip', i: r.int(0, 3) };
+  if (n === 18) return { t: 'unequip', slot: r.int(0, 2) };
+  if (n === 19) return { t: 'sell', i: r.int(0, 3) };
   if (n === 15) return { t: 'leave' };
   if (n === 16) return { t: 'target', x: r.int(0, W - 1), y: r.int(0, H - 1) };
   return { t: 'perk', i: r.int(0, 2) };
