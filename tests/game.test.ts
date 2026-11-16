@@ -15,8 +15,8 @@ describe('rng', () => {
 describe('dungeon', () => {
   it('alle Räume sind vom Start erreichbar', () => {
     for (let seed = 1; seed <= 200; seed++) {
-      const { tiles, rooms } = genDungeon(new RNG(seed));
-      expect(rooms.length).toBeGreaterThanOrEqual(4);
+      const { tiles, rooms } = genDungeon(new RNG(seed), seed % 3);
+      expect(rooms.length).toBeGreaterThanOrEqual(6);
       const [sx, sy] = center(rooms[0]);
       const d = distMap(tiles, sx, sy);
       for (const r of rooms) { const [x, y] = center(r); expect(d[y * W + x]).toBeGreaterThanOrEqual(0); }
@@ -100,7 +100,7 @@ function randomAction(r: RNG): Action {
   if (n === 13) return { t: 'bomb' };
   if (n === 14) return { t: 'buy', i: r.int(0, 3) };
   if (n === 15) return { t: 'leave' };
-  if (n === 16) return { t: 'target', x: r.int(0, 51), y: r.int(0, 33) };
+  if (n === 16) return { t: 'target', x: r.int(0, W - 1), y: r.int(0, H - 1) };
   return { t: 'perk', i: r.int(0, 2) };
 }
 
@@ -112,6 +112,22 @@ describe('sprites', () => {
       for (const [i, row] of rows.entries()) {
         expect(row.length, `${name} Zeile ${i}`).toBe(rows.length);
         for (const ch of row) expect(ch === '.' || ch in PAL, `${name} Zeichen ${ch}`).toBe(true);
+      }
+    }
+  });
+});
+
+import { VIEWS } from '../src/render/sprites';
+
+describe('Blickrichtungen', () => {
+  it('haben dieselbe Größe wie die Vorderansicht', () => {
+    for (const [name, v] of Object.entries(VIEWS)) {
+      for (const [key, rows] of Object.entries(v)) {
+        expect(rows.length, `${name}.${key}`).toBe(SPR[name].length);
+        rows.forEach((r, i) => {
+          expect(r.length, `${name}.${key} Zeile ${i}`).toBe(SPR[name].length);
+          for (const ch of r) expect(ch === '.' || ch in PAL, `${name}.${key} Zeichen ${ch}`).toBe(true);
+        });
       }
     }
   });

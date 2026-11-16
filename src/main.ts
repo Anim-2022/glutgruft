@@ -1,7 +1,8 @@
 import { VW, VH, bake, sprites, text, panel, wrap } from './render/gfx';
-import { drawRun, resetView, setMouse, toggleMap, setTutorial, tileAt } from './render/draw';
+import { drawRun, resetView, setMouse, toggleMap, setTutorial, tileAt, getOverlay, setOverlay } from './render/draw';
 import { sfx, soundOn, toggleSound, wakeAudio } from './core/audio';
 import { loadMeta, saveMeta } from './core/save';
+import { W } from './game/dungeon';
 import { newRun, act, serialize, deserialize, Run, Action } from './game/run';
 import { CLASSES, CLASS_ORDER, UPGRADES, RANGER_COST, upgCost, LAST_FLOOR } from './game/content';
 
@@ -74,6 +75,12 @@ function onKey(k: string): boolean {
   wakeAudio();
   if (k === 'm') { flash(toggleSound() ? 'Ton an' : 'Ton aus'); return true; }
   if (k === 'n' && scene === 'run') { toggleMap(); return true; }
+  if (scene === 'run' && run && run.mode === 'play') {
+    // Charakterbogen und Hilfe halten das Spiel an
+    if (getOverlay() !== 'none') { if (k === 'escape' || k === 'c' || k === 'h') setOverlay('none'); return true; }
+    if (k === 'c') { setOverlay('char'); return true; }
+    if (k === 'h') { setOverlay('help'); return true; }
+  }
   if (k === 'v') {
     if (document.fullscreenElement) document.exitFullscreen();
     else document.documentElement.requestFullscreen().catch(() => { /* nicht erlaubt */ });
@@ -123,7 +130,7 @@ function onKey(k: string): boolean {
   }
   else if (k === 'tab') {
     // nächstes sichtbares Ziel anwählen
-    const r = run, vis = r.mobs.filter(m => r.vis[m.y * 52 + m.x]);
+    const r = run, vis = r.mobs.filter(m => r.vis[m.y * W + m.x]);
     if (!vis.length) return true;
     const n = vis[(vis.findIndex(m => m.id === r.target) + 1) % vis.length];
     a = { t: 'target', x: n.x, y: n.y };
@@ -194,7 +201,7 @@ function drawTitle(time: number, dt: number) {
   });
   if (Math.floor(time * 2) % 2) text(ctx, '[LEERTASTE] Start', VW / 2, 270, '#f4f4f4', 10, 'center');
   text(ctx, 'Pfeile/WASD bewegen · Leertaste warten · 1-3 Fähigkeiten · F schießen · Q Trank · B Bombe · E Treppe · Klick/Tab Ziel', VW / 2, 322, '#566c86', 8, 'center');
-  text(ctx, `V: Vollbild · M: Ton ${soundOn() ? 'an' : 'aus'} · N: Karte`, VW / 2, 336, '#566c86', 8, 'center');
+  text(ctx, `V: Vollbild · M: Ton ${soundOn() ? 'an' : 'aus'} · N: Karte · C: Charakter · H: Hilfe`, VW / 2, 336, '#566c86', 8, 'center');
 }
 
 function drawLager(time: number, dt: number) {

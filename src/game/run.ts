@@ -8,7 +8,8 @@ export interface Actor {
   id: number; kind: string; name: string;
   x: number; y: number; hp: number; maxHp: number; atk: number; def: number;
   st: Record<string, number>; // Statuseffekte -> verbleibende Züge
-  xp: number; cd: number; awake: boolean; boss?: boolean; arena?: boolean;
+  xp: number; cd: number; awake: boolean; boss?: boolean; arena?: boolean; elite?: boolean;
+  f?: [number, number]; // Blickrichtung
 }
 
 export interface Player extends Actor {
@@ -16,7 +17,7 @@ export interface Player extends Actor {
   res: number; resMax: number; potions: number; bombs: number;
   crit: number; pow: number; vamp: number; thorns: number; soulMul: number;
   dir: [number, number]; perks: string[]; relics: string[]; hits: number;
-  gold: number; gear: (Item | null)[];
+  gold: number; gear: (Item | null)[]; keys: number;
 }
 
 export interface Puzzle {
@@ -76,7 +77,7 @@ export function newRun(seed: number, cls: ClassId, meta: Meta): Run {
     id: 0, kind: cls, name: c.name, x: 0, y: 0, hp, maxHp: hp, atk: c.atk + meta.upg.atk, def: c.def,
     st: {}, xp: 0, cd: 0, awake: true,
     cls, lvl: 1, exp: 0, res: c.resStart, resMax: c.resMax, potions: 1 + meta.upg.trank, bombs: 1,
-    crit: 0.05, pow: 1, vamp: 0, thorns: 0, soulMul: 1, dir: [1, 0], perks: [], relics: [], hits: 0, gold: 0, gear: [null, null, null],
+    crit: 0.05, pow: 1, vamp: 0, thorns: 0, soulMul: 1, dir: [1, 0], perks: [], relics: [], hits: 0, gold: 0, gear: [null, null, null], keys: 0,
   };
   const run: Run = {
     seed, rng: new RNG(seed), floor: 0,
@@ -90,11 +91,11 @@ export function newRun(seed: number, cls: ClassId, meta: Meta): Run {
 
 function spawnMob(run: Run, kind: string, x: number, y: number): Actor {
   const d = MOBS[kind];
-  const s = 1 + 0.22 * (run.floor - 1);
-  const hp = d.boss ? d.hp : Math.round(d.hp * s);
+  const s = 1 + 0.34 * (run.floor - 1);
+  const hp = d.boss ? Math.round(d.hp * 1.6) : Math.round(d.hp * s);
   const m: Actor = {
     id: run.nextId++, kind, name: d.name, x, y, hp, maxHp: hp,
-    atk: d.boss ? d.atk : d.atk + Math.round(run.floor * 0.7), def: d.def,
+    atk: d.boss ? d.atk + 3 : d.atk + Math.round(run.floor * 1.0), def: d.def,
     st: {}, xp: d.xp, cd: 0, awake: false, boss: d.boss,
   };
   run.mobs.push(m);
@@ -226,7 +227,7 @@ function addVault(run: Run, rooms: Room[]): boolean {
       // Die Tafel mit der Reihenfolge steht in einem anderen Raum
       let placed = false;
       for (const r of rng.shuffle(rooms.slice(1))) {
-        if (tryBlock(run, r.x, r.y, T.TABLET) || tryBlock(run, r.x + r.w - 1, r.y, T.TABLET)) { placed = true; break; }
+        if (placeIn(run, r, T.TABLET)) { placed = true; break; }
       }
       if (!placed) put(3, 0, T.TABLET);
     }
@@ -329,40 +330,57 @@ function tryBlock(run: Run, x: number, y: number, tile: number): boolean {
   return false;
 }
 
-// Versteck hinter einer rissigen Wand: 3x3-Kammer mit Truhe, ringsum massiver Fels.
-function addSecret(run: Run, rooms: Room[]): boolean {
+// Kammer im Fels neben einem Raum: Versteck hinter rissiger Wand oder Schatzkammer hinter einem Gitter.
+function addSecret(run: Run, rooms: Room[], gate = false): boolean {
   const t = run.tiles;
-  for (let n = 0; n < 40; n++) {
+  for (let n = 0; n < 80; n++) {
     const r = run.rng.pick(rooms), [ox, oy] = run.rng.pick(DIRS4);
     const wx = ox ? (ox > 0 ? r.x + r.w : r.x - 1) : run.rng.int(r.x, r.x + r.w - 1);
     const wy = oy ? (oy > 0 ? r.y + r.h : r.y - 1) : run.rng.int(r.y, r.y + r.h - 1);
     const cx = wx + ox * 2, cy = wy + oy * 2; // Mitte der Kammer
     if (cx < 3 || cy < 3 || cx >= W - 3 || cy >= H - 3) continue;
+    if (t[(wy - oy) * W + wx - ox] !== T.FLOOR) continue; // davor muss freier Raumboden liegen
     let solid = true;
     for (let y = cy - 2; y <= cy + 2 && solid; y++) for (let x = cx - 2; x <= cx + 2; x++) {
-      const inner = x === wx - ox && y === wy - oy; // das Raumfeld vor der Wand
-      if (!inner && t[y * W + x] !== T.WALL) { solid = false; break; }
+      if (t[y * W + x] !== T.WALL) { solid = false; break; }
     }
     if (!solid) continue;
     for (let y = cy - 1; y <= cy + 1; y++) for (let x = cx - 1; x <= cx + 1; x++) t[y * W + x] = T.FLOOR;
-    t[cy * W + cx] = T.CHEST;
-    t[wy * W + wx] = T.CRACKED;
+    if (gate) {
+      // zwei Truhen in den hinteren Ecken
+      t[(cy + oy + (ox ? -1 : 0)) * W + cx + ox + (oy ? -1 : 0)] = T.CHEST;
+      t[(cy + oy + (ox ? 1 : 0)) * W + cx + ox + (oy ? 1 : 0)] = T.CHEST;
+      t[wy * W + wx] = T.GATE;
+    } else {
+      t[cy * W + cx] = T.CHEST;
+      t[wy * W + wx] = T.CRACKED;
+    }
     return true;
   }
   return false;
 }
 
+// Stellt ein Objekt in einen Raum: bevorzugt in eine Ecke, sonst irgendwo, ohne Wege zu versperren.
+function placeIn(run: Run, r: Room, tile: number): boolean {
+  const rng = run.rng;
+  const spots = rng.shuffle([[r.x, r.y], [r.x + r.w - 1, r.y], [r.x, r.y + r.h - 1], [r.x + r.w - 1, r.y + r.h - 1]]);
+  for (let k = 0; k < 8; k++) spots.push([rng.int(r.x, r.x + r.w - 1), rng.int(r.y, r.y + r.h - 1)]);
+  const [mx, my] = center(r);
+  return spots.some(([x, y]) => !(x === mx && y === my) && tryBlock(run, x, y, tile));
+}
+
 function nextFloor(run: Run) {
   run.floor++;
   if (run.floor > 1) run.souls += Math.round(5 * run.p.soulMul);
-  const { tiles, rooms } = genDungeon(run.rng);
   const rng = run.rng, biome = biomeOf(run.floor);
+  const { tiles, rooms } = genDungeon(rng, biome);
   run.tiles = tiles;
   run.seen = new Uint8Array(W * H);
   run.mobs = [];
   run.traps = [];
   run.fire = new Map(); run.fuses = new Map(); run.cracks = new Map();
   run.puzzle = null; run.willUsed = false;
+  run.p.keys = 0;
   if (has(run.p, 'sprengmeister') && run.floor > 1) run.p.bombs++;
   [run.p.x, run.p.y] = center(rooms[0]);
   const last = rooms[rooms.length - 1];
@@ -374,7 +392,7 @@ function nextFloor(run: Run) {
     const [sx, sy] = center(last);
     run.tiles[sy * W + sx] = T.STAIRS;
   }
-  if (!bossFloor && rng.chance(0.6)) addVault(run, rooms);
+  if (!bossFloor && rng.chance(0.8)) addVault(run, rooms);
   // Bewuchs (brennbar): Moos in der Gruft, Pilzrasen in der Höhle, Kohlenstaub in der Schmiede
   for (const r of rooms) {
     if (!rng.chance([0.3, 0.6, 0.35][biome])) continue;
@@ -388,15 +406,14 @@ function nextFloor(run: Run) {
   const table = spawnTable(run.floor);
   for (let i = 1; i < rooms.length; i++) {
     const r = rooms[i];
-    const n = (bossFloor && r === last) ? 0 : rng.int(1, 2) + Math.floor(run.floor / 4);
+    const n = (bossFloor && r === last) ? 0 : rng.int(1, 2) + Math.floor(run.floor / 5);
     for (let k = 0; k < n; k++) {
       const f = freeInRoom(run, r);
       if (f) spawnMob(run, rng.pick(table), f[0], f[1]);
     }
     if (rng.chance(0.4)) {
-      const cx = rng.chance(0.5) ? r.x : r.x + r.w - 1, cy = rng.chance(0.5) ? r.y : r.y + r.h - 1;
       const roll = rng.next();
-      tryBlock(run, cx, cy, roll < 0.22 ? T.ALTAR : roll < 0.34 ? T.CURSED : T.CHEST);
+      placeIn(run, r, roll < 0.22 ? T.ALTAR : roll < 0.34 ? T.CURSED : T.CHEST);
     }
     // Säulen in großen Räumen, Fässer verstreut
     if (r.w >= 6 && r.h >= 5 && rng.chance(0.5)) {
@@ -415,10 +432,20 @@ function nextFloor(run: Run) {
   run.shop = [];
   run.target = 0;
   if (!bossFloor && rng.chance(0.5)) {
-    const r = rng.pick(rooms.slice(1));
-    if (tryBlock(run, r.x + (r.w >> 1) - 1, r.y, T.TRADER) || tryBlock(run, r.x + 1, r.y + r.h - 1, T.TRADER)) run.shop = stock(run);
+    if (placeIn(run, rng.pick(rooms.slice(1)), T.TRADER)) run.shop = stock(run);
   }
   if (rng.chance(0.65)) addSecret(run, rooms);
+  if (rng.chance(0.45)) placeIn(run, rng.pick(rooms.slice(1)), T.FOUNTAIN);
+  // Schatzkammer hinter einem Gitter; den Schlüssel trägt ein Elitegegner am anderen Ende der Ebene
+  const cands = run.mobs.filter(m => !m.boss);
+  if (cands.length && rng.chance(0.6) && addSecret(run, rooms, true)) {
+    const d0 = distMap(run.tiles, run.p.x, run.p.y);
+    const e = cands.reduce((a, b) => (d0[a.y * W + a.x] >= d0[b.y * W + b.x] ? a : b));
+    e.elite = true;
+    e.name = `Elite-${e.name}`;
+    e.maxHp = e.hp = Math.round(e.hp * 1.8);
+    e.atk += 2; e.xp *= 2;
+  }
   computeFov(run.tiles, run.p.x, run.p.y, fovR(run), run.vis, run.seen);
   say(run, `Ebene ${run.floor} – ${BIOME_NAMES[biome]}`);
   if (bossFloor) say(run, 'Etwas Mächtiges lauert hier ...');
@@ -552,6 +579,10 @@ function kill(run: Run, m: Actor) {
     if (run.floor >= LAST_FLOOR) { run.mode = 'win'; return; }
     run.tiles[m.y * W + m.x] = T.STAIRS;
     p.potions++;
+  } else if (m.elite) {
+    p.keys++;
+    p.potions++;
+    say(run, `${m.name} lässt einen Schlüssel und einen Heiltrank fallen.`);
   } else if (run.rng.chance(0.08)) {
     p.potions++;
     say(run, `${m.name} lässt einen Heiltrank fallen.`);
@@ -756,6 +787,18 @@ export function act(run: Run, a: Action): void {
         if (p.cls === 'krieger') gain(p, 2);
         used = true;
       } else if (t === T.CHEST || t === T.CURSED) { openChest(run, i); used = true; }
+      else if (t === T.FOUNTAIN) {
+        const n = Math.ceil(p.maxHp * 0.35);
+        p.hp = Math.min(p.maxHp, p.hp + n);
+        delete p.st.gift; delete p.st.brand;
+        run.tiles[i] = T.FOUNTAIN_DRY;
+        run.fx.push({ k: 'num', x: p.x, y: p.y, s: `+${n}`, col: '#a7f070' });
+        say(run, 'Du trinkst aus dem Brunnen. Er versiegt.');
+        used = true;
+      } else if (t === T.GATE) {
+        if (p.keys > 0) { p.keys--; run.tiles[i] = T.FLOOR; say(run, 'Der Schlüssel passt. Das Gitter öffnet sich.'); used = true; }
+        else say(run, 'Ein verschlossenes Gitter. Ein Elitegegner auf dieser Ebene trägt den Schlüssel.');
+      }
       else if (t === T.TRADER) { if (run.shop.length) { run.mode = 'shop'; say(run, 'Händler: "Sieh dich um, Wanderer."'); } }
       else if (t === T.CRACKED) {
         const n = (run.cracks.get(i) ?? 0) + 1;
@@ -870,6 +913,7 @@ export function act(run: Run, a: Action): void {
 
 function hitPlayer(run: Run, m: Actor, melee: boolean) {
   const p = run.p, d = MOBS[m.kind];
+  m.f = Math.abs(p.x - m.x) >= Math.abs(p.y - m.y) ? [Math.sign(p.x - m.x), 0] : [0, Math.sign(p.y - m.y)];
   if (melee) run.fx.push({ k: 'lunge', id: m.id, dx: Math.sign(p.x - m.x), dy: Math.sign(p.y - m.y) });
   if (p.st.dodge) { run.fx.push({ k: 'num', x: p.x, y: p.y, s: 'verfehlt', col: '#94b0c2' }); return; }
   damage(run, p, Math.max(Math.ceil(m.atk * 0.3), m.atk - p.def) - (has(p, 'steinhaut') ? 1 : 0), '#b13e53');
@@ -881,6 +925,7 @@ function hitPlayer(run: Run, m: Actor, melee: boolean) {
 }
 
 function moveMob(run: Run, m: Actor, x: number, y: number) {
+  m.f = [Math.sign(x - m.x), Math.sign(y - m.y)];
   m.x = x; m.y = y;
   const ti = run.traps.findIndex(t => t.x === x && t.y === y);
   if (ti >= 0) {
@@ -979,7 +1024,7 @@ function endTurn(run: Run) {
 
 // ---------- Speichern eines laufenden Abstiegs ----------
 
-const SAVE_VERSION = 1;
+const SAVE_VERSION = 2;
 
 export function serialize(run: Run): string {
   return JSON.stringify({

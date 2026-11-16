@@ -612,3 +612,99 @@ RUNES.forEach(([col, pat], k) => {
 
 // Verfluchte Truhe: gleiche Form, violett statt braun
 SPR.cursed = SPR.chest.map(r => r.replace(/n/g, 'p').replace(/N/g, 'k').replace(/Y/g, 'v').replace(/y/g, 'v'));
+
+// ---------- Blickrichtungen ----------
+// Vorderansicht ist das Grundbild; Rücken- und Seitenansicht sind eigene Bilder
+// (als vollständige Matrix oder als Zeilen, die die Vorderansicht ersetzen). Seite zeigt nach rechts.
+type Over = Record<number, string>;
+const ov = (base: string[], o: Over) => base.map((r, i) => o[i] ?? r);
+const flip = (rows: string[]) => rows.map(r => [...r].reverse().join(''));
+const E = '................';
+
+export const VIEWS: Record<string, { b: string[]; s: string[]; alt?: string[] }> = {
+  krieger: {
+    b: ov(SPR.krieger, {
+      3: '.w..dggggggd....', 4: '.w..dggggggd....', 5: '.w..dggggggd....', 6: '.w...dggggd.....', 7: '.w...dddddd.....',
+      8: '.w..rrrrrrrr....', 9: '.w.grreeeerrg...', 10: 'nnnhrrrrrrrrbbbb', 11: '.n..rrrrrrrrbccb', 12: '....eerreerrbbbb', 13: '......dd..dd.bb.',
+    }),
+    s: [E, '.....ddddd......', '....dgggggd.....', '....dgwgggd.....', '....dggggdd.....', '....dgghhhh.....', '.....gghkh......', '.....gghhh....w.',
+      '.....rrrrr...w..', '....brrrrrg.w...', '...bcbrrrrhn....', '...bbbrrrr.n....', '....b.eerr......', '......ddd.......', '......dd.d......', '.....DDD.DD.....'],
+  },
+  magier: {
+    b: ov(SPR.magier, {
+      2: '.s....bbbb......', 3: 'scs..bbBbbb.....', 4: '.s..bbbBbbbb....', 5: '.n.yyyyyyyyyy...', 6: '.n...bbbbbb.....', 7: '.n...bbbbbb.....', 8: '.n...bbBBbb.....',
+      9: '.n..bbbBBbbb....', 10: '.nhbbbbBBbbbb...', 11: '.n.bBbbBBbbBb...', 12: '.n.bBbbBBbbBb...', 13: '.n..bbbbbbbb....', 14: '.n..bBbbbbBb....', 15: '.n.BBBBBBBBBB...',
+    }),
+    s: [E, '......bb........', '.....bbbb.....s.', '....bbBbbb...scs', '...bbbBbbbb...s.', '..yyyyyyyyyy..n.', '.....bhhhh....n.', '.....bhhkh....n.',
+      '.....bwwwh....n.', '.....bbwww....n.', '....bbbbbbbbhhn.', '....bBbbbbb...n.', '....bBbbybb...n.', '....bbbbbbb...n.', '....bBbbbBb...n.', '...BBBBBBBBB..n.'],
+  },
+  waldlaeufer: {
+    b: ov(SPR.waldlaeufer, {
+      2: '.n..GGGGGGGG....', 3: 'w.n.GGGGGGGG....', 4: 'w.n.GGGGGGGG....', 5: 'w..n.GGGGGG.....', 6: 'w..n.GGTTGG.....', 7: 'w..nGGGGGGGGw...',
+      8: 'w..hGGGGGGnnG...', 9: 'w.n.GTGGGnnTG...', 10: 'w.n.GTGGnnGTG...', 11: 'wn..GGGGGGGG....', 12: '.n..nnnnnnnn....',
+    }),
+    s: [E, '.....GGGGG......', '....GGGGGGG..n..', '....GGGGGTG...n.', '....GGGhhhh...nw', '.....GGhkh....nw', '.....GGhhh....nw', '.....GGGGG....nw',
+      '....nGGGGGGGh.nw', '....nnGGGG....nw', '....nGGGGG....nw', '.....GGGGG...n..', '.....nnYnn..n...', '......TTT.......', '......TT.T......', '.....NNN.NN.....'],
+  },
+  ratte: {
+    // das Grundbild der Ratte ist bereits eine Seitenansicht (nach links)
+    b: [E, E, E, '........h.......', '.......h........', '.......h........', '....dd....dd....', '...dhhd..dhhd...', '...dddddddddd...', '..dddddddddddd..',
+      '..dddddddddddd..', '..dddddddddddd..', '...dddddddddd...', '...h.h....h.h...', E, E],
+    s: flip(SPR.ratte),
+  },
+  skelett: {
+    b: ov(SPR.skelett, { 3: '....wwwwwwww....', 4: '....wwwwwwww....', 5: '....wwwwwwww....', 6: '.....wwwwww.....', 9: '...w.wgwwgw.w...', 11: '...w.wgwwgw.w...' }),
+    s: [E, '......wwwww.....', '.....wwwwwww....', '.....wwwwkkw....', '.....wwwwkkw....', '.....wwwwwkw....', '......wwkwk.....', '.......www......',
+      '.....w.gww......', '.....wwwgw......', '......wwww.w....', '......gwgw......', '.......ww.......', '......ww.w......', '......w..w......', '.....ww..ww.....'],
+  },
+  schuetze: {
+    b: ov(SPR.schuetze, { 3: '....eeeeeeee.n.g', 4: '....eeeeeeee.n.g', 5: '.....eeeeee.n..g', 6: '......eeee..n..g' }),
+    s: [E, '......eeeee.....', '.....eeeeeee..n.', '.....eeewkwe.n.g', '.....eeewwwe.n.g', '......eewkwkn..g', '.......wwww.n..g', '.....w.gww..n..g',
+      '.....wwwgwwwh..g', '......wwww...n.g', '......gwgw...n.g', '.......ww.....ng', '......ww.w....n.', '......w..w......', '.....ww..ww.....', E],
+  },
+  fledermaus: {
+    b: ov(SPR.fledermaus, { 7: '..vpvvppppvvpv..', 9: '.....vppppv.....' }),
+    s: SPR.fledermaus,
+    // Flügelschlag: zweites Bild mit gesenkten Flügeln
+    alt: ov(SPR.fledermaus, {
+      2: E, 3: E, 4: '......p..p......', 5: '..vv..pppp..vv..', 6: '.vvvvvppppvvvvv.', 7: '.vpvvvpyypvvvpv.', 8: '.vv.vvppppvv.vv.', 9: '.v...vpwwpv...v.', 10: '.v....pppp....v.',
+    }),
+  },
+  sporling: {
+    b: ov(SPR.sporling, { 9: '....yyyyyyyy....', 11: '....yyyyyyyy....' }),
+    s: ov(SPR.sporling, { 9: '....yyyyykky....', 11: '....yyyyyykk....' }),
+  },
+  golem: {
+    b: ov(SPR.golem, { 3: '...dddddddddd...', 5: '..dddddDDddddd..', 8: '.dd.ddDddDdd.dd.' }),
+    s: ov(SPR.golem, { 3: '...ddddddoodd...' }),
+  },
+  glutgeist: {
+    b: ov(SPR.glutgeist, { 7: '..ooyyyyyyyyo...', 8: '..oyyyyyyyyyo...', 10: '..oyyyyyyyyyo...' }),
+    s: ov(SPR.glutgeist, { 7: '..ooyyywwyywo...', 8: '..oyyyywkywko...', 10: '..oyyyyykkyyo...' }),
+  },
+  koenig: {
+    b: ov(SPR.koenig, { 6: '......wwwwwwwwwwww......', 7: '......wwwwwwwwwwww......', 8: '......wwwwwwwwwwww......', 9: '.......wwwwwwwwww.......', 12: '...vvvvvvvvvvvvvvvvvvn..', 13: '..vvvpvvvvvvvvvvvvpvvhh.' }),
+    s: SPR.koenig,
+  },
+  mutter: {
+    b: ov(SPR.mutter, { 13: '.....yyyyyyyyyyyyyy.....', 14: '.....yyyyyyyyyyyyyy.....', 16: '.....yyyyyyyyyyyyyy.....', 17: '.....yyyyyyyyyyyyyy.....' }),
+    s: SPR.mutter,
+  },
+  fuerst: {
+    b: ov(SPR.fuerst, { 6: '.....DddddddddddddD.....', 7: '.....DddddddddddddD.....', 9: '.....DDddddddddddDD.....', 12: '..rrrrrrrrrrrrrrrrrrrrn.', 13: '.rrerrrrrrrrrrrrrrrerrhh' }),
+    s: SPR.fuerst,
+  },
+};
+
+// Schwebende Wesen laufen nicht – sie wippen nur
+export const FLOATERS = new Set(['fledermaus', 'glutgeist', 'ratte']);
+// Wesen, die selbst leuchten: Radius in Feldern und Farbe
+export const GLOW: Record<string, [number, string]> = { glutgeist: [3.4, '#ef7d57'], fuerst: [5, '#ef7d57'] };
+
+SPR.fountain = [E, E, '.......ss.......', '......scws......', '.....s.ss.s.....', '....s..cc..s....', '...gggggggggg...', '..gccscccscccg..', '..gcccccccccsg..', '..gggggggggggg..',
+  '...gddddddddg...', '....gddddddg....', '....gddddddg....', '...gggggggggg...', '..DDDDDDDDDDDD..', E];
+SPR.fountain_dry = ov(SPR.fountain, { 2: E, 3: E, 4: E, 5: E, 7: '..gDDDDDDDDDDg..', 8: '..gDDDDDDDDDDg..' });
+SPR.gate = ['yYdYYdYYdYYdYYdy', 'Y.d..d..d..d..dY', 'Y.d..d..d..d..dY', 'YYdYYdYYdYYdYYdY', 'Y.d..d..d..d..dY', 'Y.d..d..d..d..dY', 'Y.d..d.yy..d..dY', 'Y.d..dyYYy.d..dY',
+  'Y.d..dyYYy.d..dY', 'Y.d..d.yy..d..dY', 'Y.d..d..d..d..dY', 'YYdYYdYYdYYdYYdY', 'Y.d..d..d..d..dY', 'Y.d..d..d..d..dY', 'Y.d..d..d..d..dY', 'yYdYYdYYdYYdYYdy'];
+SPR.key = ['............', '............', '..yyy.......', '.y...y......', '.y...yyyyyy.', '.y...y..y.y.', '..yyy...y.y.', '............', '............', '............', '............', '............'];
+NO_OUTLINE.add('gate');

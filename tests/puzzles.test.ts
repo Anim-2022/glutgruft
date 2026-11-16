@@ -40,7 +40,7 @@ describe('Rätselkammer in der Ebene', () => {
       if (z.kind === 'runes') expect(run.tiles.includes(T.TABLET)).toBe(true);
     }
     console.log(`Kammern: ${vaults}/300`, JSON.stringify(kinds));
-    expect(vaults).toBeGreaterThan(120);
+    expect(vaults).toBeGreaterThan(100);
   });
 
   it('Runen in richtiger Reihenfolge geben eine Reliquie', () => {

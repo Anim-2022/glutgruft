@@ -1,7 +1,7 @@
 // Palette, Sprite-Atlas und Pixeltext. Alles wird beim Start im Code erzeugt.
 export const VW = 640, VH = 360, TS = 16;
 
-import { PAL, SPR, ACTORS, NO_OUTLINE } from './sprites';
+import { PAL, SPR, ACTORS, NO_OUTLINE, VIEWS, FLOATERS } from './sprites';
 export { PAL };
 
 export const sprites: Record<string, HTMLCanvasElement> = {};
@@ -38,19 +38,26 @@ export function bake(): void {
     if (line) outline(g, c.width, c.height);
     return c;
   };
-  for (const [name, rows] of Object.entries(SPR)) {
-    sprites[name] = draw(rows, !NO_OUTLINE.has(name));
-    if (!ACTORS.includes(name)) continue;
-    // Zweites Bild: Oberkörper sinkt um ein Pixel, Füße bleiben stehen
-    const h = rows.length;
-    sprites[name + '_b'] = draw(['.'.repeat(rows[0].length), ...rows.slice(0, h - 4), ...rows.slice(h - 3)], true);
-    for (const n of [name, name + '_b']) {
-      const [m, g] = mk(sprites[n].width, sprites[n].height);
-      g.drawImage(sprites[n], 0, 0);
-      g.globalCompositeOperation = 'source-in';
-      g.fillStyle = '#fff'; g.fillRect(0, 0, m.width, m.height);
-      masks[n] = m;
+  const mask = (n: string) => {
+    const [m, g] = mk(sprites[n].width, sprites[n].height);
+    g.drawImage(sprites[n], 0, 0);
+    g.globalCompositeOperation = 'source-in';
+    g.fillStyle = '#fff'; g.fillRect(0, 0, m.width, m.height);
+    masks[n] = m;
+  };
+  for (const [name, rows] of Object.entries(SPR)) sprites[name] = draw(rows, !NO_OUTLINE.has(name));
+  // Figuren: je Blickrichtung (f vorn, b hinten, s Seite) vier Bilder – 0 Stand, 1 Atmen, 2/3 Schritt
+  for (const name of ACTORS) {
+    const views: Record<string, string[]> = { f: SPR[name], b: VIEWS[name].b, s: VIEWS[name].s };
+    for (const [v, rows] of Object.entries(views)) {
+      const h = rows.length, w = rows[0].length, half = w >> 1;
+      const breath = ['.'.repeat(w), ...rows.slice(0, h - 4), ...rows.slice(h - 3)];
+      const lift = (left: boolean) => rows.map((r, y) => (y !== h - 1 ? r : left ? '.'.repeat(half) + r.slice(half) : r.slice(0, half) + '.'.repeat(w - half)));
+      const alt = VIEWS[name].alt ?? breath;
+      const frames = FLOATERS.has(name) ? [rows, alt, alt, rows] : [rows, breath, lift(true), lift(false)];
+      frames.forEach((f, i) => { const key = `${name}:${v}${i}`; sprites[key] = draw(f, true); mask(key); });
     }
+    sprites[name + '_b'] = sprites[`${name}:f1`];
   }
   // Fackel (zwei Flackerbilder)
   for (const f of [0, 1]) {
@@ -197,10 +204,19 @@ export function wrap(s: string, n: number): string[] {
   return out;
 }
 
-export function panel(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, border = '#566c86', fill = 'rgba(13,14,23,0.88)') {
+// Rahmen im Pixelstil: dunkle Außenkante, farbiger Rand, Glanzlinie oben, betonte Ecken
+export function panel(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, border = '#566c86', fill = 'rgba(13,14,23,0.9)') {
+  x |= 0; y |= 0; w |= 0; h |= 0;
+  ctx.fillStyle = '#05060c';
+  ctx.fillRect(x - 1, y, 1, h); ctx.fillRect(x + w, y, 1, h); ctx.fillRect(x, y - 1, w, 1); ctx.fillRect(x, y + h, w, 1);
   ctx.fillStyle = fill; ctx.fillRect(x, y, w, h);
   ctx.fillStyle = border;
   ctx.fillRect(x, y, w, 1); ctx.fillRect(x, y + h - 1, w, 1); ctx.fillRect(x, y, 1, h); ctx.fillRect(x + w - 1, y, 1, h);
+  if (w < 14 || h < 14) return;
+  ctx.fillStyle = 'rgba(255,255,255,0.07)'; ctx.fillRect(x + 1, y + 1, w - 2, 1);
+  ctx.fillStyle = 'rgba(0,0,0,0.35)'; ctx.fillRect(x + 1, y + h - 2, w - 2, 1);
+  ctx.fillStyle = border;
+  for (const [cx, cy] of [[x + 1, y + 1], [x + w - 3, y + 1], [x + 1, y + h - 3], [x + w - 3, y + h - 3]]) ctx.fillRect(cx, cy, 2, 2);
 }
 
 export function bar(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, frac: number, col: string) {

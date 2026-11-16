@@ -15,7 +15,7 @@ describe('bot', () => {
           const run = botRun(newRun(seed * 7919, cls, meta));
           floors.push(run.floor);
           if (run.mode === 'win') wins++;
-          if (run.mode !== 'win' && run.mode !== 'dead') { stuck++; if (stuck === 1) console.log('HÄNGT', cls, seed, run.floor, run.turn, run.mobs.length, run.log.slice(-3), JSON.stringify({ p: [run.p.x, run.p.y, run.p.hp, run.p.res], vis: run.mobs.filter(m => run.vis[m.y * 52 + m.x]).map(m => [m.kind, m.x, m.y, m.awake]), fire: run.fire.size })); }
+          if (run.mode !== 'win' && run.mode !== 'dead') { stuck++; if (stuck === 1) console.log('HÄNGT', cls, seed, run.floor, run.turn, run.mobs.length, run.log.slice(-3), JSON.stringify({ p: [run.p.x, run.p.y, run.p.hp, run.p.res], vis: run.mobs.filter(m => run.vis[m.y * 64 + m.x]).map(m => [m.kind, m.x, m.y, m.awake]), fire: run.fire.size })); }
         }
         floors.sort((a, b) => a - b);
         const hist = [1, 3, 5, 6, 10, 11, 15].map(f => `>=${f}:${floors.filter(x => x >= f).length}`).join(' ');
