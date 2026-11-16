@@ -52,6 +52,14 @@ export function bake(): void {
       masks[n] = m;
     }
   }
+  // Eis
+  {
+    const [c, g] = mk(TS, TS);
+    g.fillStyle = '#5aa9d6'; g.fillRect(0, 0, TS, TS);
+    g.fillStyle = '#a8e0f0'; g.fillRect(2, 3, 5, 1); g.fillRect(3, 4, 2, 1); g.fillRect(9, 10, 4, 1); g.fillRect(11, 5, 2, 1);
+    g.fillStyle = '#3b7fb0'; g.fillRect(0, 15, TS, 1); g.fillRect(15, 0, 1, TS); g.fillRect(6, 12, 3, 1);
+    sprites.ice = c;
+  }
   let seed = 7;
   const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
   for (const b of BIOMES) {

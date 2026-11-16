@@ -63,7 +63,7 @@ describe('run', () => {
         expect(p.hp).toBeLessThanOrEqual(p.maxHp);
         expect(p.res).toBeGreaterThanOrEqual(0);
         expect(p.res).toBeLessThanOrEqual(p.resMax);
-        expect(walkable(run.tiles[p.y * W + p.x])).toBe(true);
+        expect(walkable(run.tiles[p.y * W + p.x]) || run.tiles[p.y * W + p.x] === T.ICE).toBe(true);
         const seen = new Set<number>([p.y * W + p.x]);
         for (const m of run.mobs) {
           expect(m.hp).toBeGreaterThan(0);

@@ -8,7 +8,8 @@ export const PAL: Record<string, string> = {
 };
 
 export const ACTORS = ['krieger', 'magier', 'waldlaeufer', 'ratte', 'skelett', 'schuetze', 'fledermaus', 'sporling', 'golem', 'glutgeist', 'koenig', 'mutter', 'fuerst'];
-export const NO_OUTLINE = new Set(['stairs', 'trap', 'rubble', 'crack', 'crack2', 'fire_a', 'fire_b']);
+export const NO_OUTLINE = new Set(['stairs', 'trap', 'rubble', 'crack', 'crack2', 'fire_a', 'fire_b', 'plate', 'goal',
+  'rune0', 'rune1', 'rune2', 'rune3', 'rune0_on', 'rune1_on', 'rune2_on', 'rune3_on']);
 
 export const SPR: Record<string, string[]> = {
   krieger: [
@@ -486,6 +487,78 @@ export const SPR: Record<string, string[]> = {
     '................',
   ],
   bomb: ['............', '.......y....', '......o.....', '.....n......', '....DDDD....', '...DDDDDD...', '..DDgDDDDD..', '..DDgDDDDD..', '..DDDDDDDD..', '...DDDDDD...', '....DDDD....', '............'],
+  crate: [
+    '................',
+    '.nnnnnnnnnnnnnn.',
+    '.nYYYYYYYYYYYYn.',
+    '.nYNnnnnnnnnNYn.',
+    '.nYnNnnnnnnNnYn.',
+    '.nYnnNnnnnNnnYn.',
+    '.nYnnnNnnNnnnYn.',
+    '.nYnnnnNNnnnnYn.',
+    '.nYnnnnNNnnnnYn.',
+    '.nYnnnNnnNnnnYn.',
+    '.nYnnNnnnnNnnYn.',
+    '.nYnNnnnnnnNnYn.',
+    '.nYNnnnnnnnnNYn.',
+    '.nYYYYYYYYYYYYn.',
+    '.NNNNNNNNNNNNNN.',
+    '................',
+  ],
+  plate: [
+    '................',
+    '................',
+    '..dddddddddddd..',
+    '..dggggggggggd..',
+    '..dgDDDDDDDDgd..',
+    '..dgDggggggDgd..',
+    '..dgDgyyyygDgd..',
+    '..dgDgyyyygDgd..',
+    '..dgDgyyyygDgd..',
+    '..dgDgyyyygDgd..',
+    '..dgDggggggDgd..',
+    '..dgDDDDDDDDgd..',
+    '..dggggggggggd..',
+    '..dddddddddddd..',
+    '................',
+    '................',
+  ],
+  lever: [
+    '................',
+    '................',
+    '.........rr.....',
+    '.........rr.....',
+    '.........dd.....',
+    '........dd......',
+    '........dd......',
+    '.......dd.......',
+    '.......dd.......',
+    '......dd........',
+    '....gggggggg....',
+    '...gddddddddg...',
+    '...gddddddddg...',
+    '...DDDDDDDDDD...',
+    '................',
+    '................',
+  ],
+  tablet: [
+    '................',
+    '....gggggggg....',
+    '...gddddddddg...',
+    '..gddddddddddg..',
+    '..gdyydssdvvdg..',
+    '..gdyydssdvvdg..',
+    '..gddddddddddg..',
+    '..gdwwddddyydg..',
+    '..gdwwddddyydg..',
+    '..gddddddddddg..',
+    '..gdDDDDDDDDdg..',
+    '..gddddddddddg..',
+    '..gddddddddddg..',
+    '..gggggggggggg..',
+    '..DDDDDDDDDDDD..',
+    '................',
+  ],
   // ---- Symbole 12x12 ----
   potion: ['............', '....nnnn....', '.....gg.....', '.....gg.....', '....gggg....', '...grrrrg...', '..grrwwrrg..', '..grwrrrrg..', '..grrrrrrg..', '..grrrrrrg..', '...gggggg...', '............'],
   soul: ['............', '.....ss.....', '....sccs....', '...sccccs...', '..sccwwccs..', '..scwwcccs..', '..sccccccs..', '...sccccs...', '....sccs....', '.....ss.....', '............', '............'],
@@ -503,3 +576,17 @@ export const SPR: Record<string, string[]> = {
 };
 
 SPR.fire_b = SPR.fire_a.map(r => [...r].reverse().join(''));
+
+// Zielplatte und Runen entstehen aus der Druckplatte
+SPR.goal = SPR.plate.map(r => r.replace(/y/g, 's'));
+const RUNES: [string, string[]][] = [
+  ['y', ['.yy.', 'yyyy', 'yyyy', '.yy.']],
+  ['s', ['.ss.', 'ss..', 'ss..', '.ss.']],
+  ['w', ['w..w', '.ww.', '.ww.', 'w..w']],
+  ['v', ['.vv.', 'vwkv', 'vkwv', '.vv.']],
+];
+RUNES.forEach(([col, pat], k) => {
+  const base = SPR.plate.map((r, y) => (y >= 6 && y <= 9 ? r.slice(0, 6) + pat[y - 6].replace(/\./g, 'D') + r.slice(10) : r));
+  SPR[`rune${k}`] = base;
+  SPR[`rune${k}_on`] = base.map(r => r.replace(/g/g, col));
+});

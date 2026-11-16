@@ -1,7 +1,7 @@
 import { VW, VH, TS, sprites, masks, tilesets, text, panel, bar } from './gfx';
 import { W, H, T, wallLike } from '../game/dungeon';
-import { Run, Actor, xpNeed } from '../game/run';
-import { CLASSES, PERKS, BIOME_NAMES, biomeOf } from '../game/content';
+import { Run, Actor, xpNeed, skillCost } from '../game/run';
+import { CLASSES, PERKS, RELICS, BIOME_NAMES, biomeOf } from '../game/content';
 
 const pos = new Map<number, { x: number; y: number }>();
 const lunges = new Map<number, { dx: number; dy: number; t: number }>();
@@ -45,6 +45,7 @@ function shatter(kind: string, tx: number, ty: number) {
 
 const TILE_SPR: Record<number, string> = {
   [T.STAIRS]: 'stairs', [T.CHEST]: 'chest', [T.CHEST_OPEN]: 'chest_open', [T.ALTAR]: 'altar', [T.ALTAR_USED]: 'altar_used',
+  [T.CRATE]: 'crate', [T.CRATE_ON]: 'crate', [T.PLATE]: 'plate', [T.LEVER]: 'lever', [T.TABLET]: 'tablet', [T.GOAL]: 'goal',
   [T.BARREL]: 'barrel', [T.PILLAR]: 'pillar', [T.RUBBLE]: 'rubble', [T.FRAGILE]: 'crack', [T.FRAGILE2]: 'crack2',
 };
 
@@ -91,12 +92,21 @@ export function drawRun(ctx: CanvasRenderingContext2D, run: Run, dt: number, tim
       ctx.drawImage(front ? ts.wall : ts.top, dx, dy);
       if (t === T.CRACKED) ctx.drawImage(sprites[(run.cracks.get(i) ?? 0) >= 2 ? 'crack2' : 'crack'], dx, dy);
     } else {
-      ctx.drawImage(ts.floor[(x * 7 + y * 13 + ((x * y) % 5)) % 4], dx, dy);
+      ctx.drawImage(t === T.ICE ? sprites.ice : ts.floor[(x * 7 + y * 13 + ((x * y) % 5)) % 4], dx, dy);
       if (y > 0 && wallLike(run.tiles[i - W])) { ctx.fillStyle = 'rgba(0,0,0,0.3)'; ctx.fillRect(dx, dy, TS, 3); }
       if (t === T.GRASS) ctx.drawImage(ts.grass[(x * 5 + y * 3) % 3], dx, dy);
       else if (t === T.BURNT) ctx.drawImage(ts.burnt, dx, dy);
       const s = TILE_SPR[t];
+      if (t === T.CRATE_ON) ctx.drawImage(sprites.plate, dx, dy);
       if (s) ctx.drawImage(sprites[s], dx, dy);
+      if (t === T.CRATE_ON) { ctx.fillStyle = 'rgba(255,205,117,0.3)'; ctx.fillRect(dx + 1, dy + 1, 14, 14); }
+      if (t === T.GOAL) { ctx.fillStyle = `rgba(115,239,247,${0.15 + 0.1 * Math.sin(time * 4)})`; ctx.fillRect(dx, dy, TS, TS); }
+      if (t === T.RUNE && run.puzzle) {
+        const z = run.puzzle, k = z.runes[i];
+        ctx.globalAlpha = z.dead ? 0.3 : 1;
+        ctx.drawImage(sprites[`rune${k}${z.pressed.includes(k) || z.solved ? '_on' : ''}`], dx, dy);
+        ctx.globalAlpha = 1;
+      }
       if (t === T.BARREL && run.fuses.has(i) && Math.floor(time * 10) % 2) {
         ctx.fillStyle = '#ffcd75'; ctx.fillRect(dx + 7, dy - 1, 2, 2);
         ctx.fillStyle = '#ef7d57'; ctx.fillRect(dx + 6, dy, 1, 1); ctx.fillRect(dx + 9, dy - 2, 1, 1);
@@ -214,6 +224,8 @@ function hud(ctx: CanvasRenderingContext2D, run: Run) {
   text(ctx, `${c.resName} ${p.res}/${p.resMax}`, 114, 35, '#f4f4f4', 8, 'center');
   bar(ctx, 50, 47, 128, 2, p.exp / xpNeed(p.lvl), '#ffcd75');
 
+  p.relics.forEach((id, k) => text(ctx, RELICS[id].name, 8, 62 + k * 10, '#73eff7', 8));
+
   const rx = VW - 176;
   panel(ctx, rx, 6, 170, 50);
   text(ctx, `Ebene ${run.floor}`, VW - 12, 11, '#f4f4f4', 10, 'right');
@@ -240,7 +252,7 @@ function hud(ctx: CanvasRenderingContext2D, run: Run) {
     text(ctx, cost, x + bw - 6, y + 8, ok ? c.resCol : '#566c86', 8, 'right');
   };
   if (c.range) slot('F', `i_${p.cls}_shot`, c.shot, '', true);
-  c.skills.forEach((s, k) => slot(`${k + 1}`, `i_${p.cls}${k}`, s.name, `${s.cost}`, p.res >= s.cost));
+  c.skills.forEach((s, k) => slot(`${k + 1}`, `i_${p.cls}${k}`, s.name, `${skillCost(p, k)}`, p.res >= skillCost(p, k)));
 
   const lines = run.log.slice(-4);
   if (lines.length) {
@@ -267,16 +279,18 @@ function wrapText(s: string, n: number): string[] {
 }
 
 function perkOverlay(ctx: CanvasRenderingContext2D, run: Run) {
+  const ids = run.perkChoices, relic = !!RELICS[ids[0]], col = relic ? '#73eff7' : '#ffcd75';
   ctx.fillStyle = 'rgba(13,14,23,0.75)'; ctx.fillRect(0, 0, VW, VH);
-  text(ctx, 'WÄHLE EINE GABE', VW / 2, 78, '#ffcd75', 24, 'center');
-  run.perkChoices.forEach((id, i) => {
-    const x = VW / 2 - 241 + i * 164, y = 130, pk = PERKS[id];
-    panel(ctx, x, y, 154, 96, '#ffcd75');
-    text(ctx, `[${i + 1}]`, x + 77, y + 10, '#ffcd75', 10, 'center');
+  text(ctx, relic ? 'WÄHLE EINE RELIQUIE' : 'WÄHLE EINE GABE', VW / 2, 78, col, 24, 'center');
+  const x0 = VW / 2 - (ids.length * 164 - 10) / 2;
+  ids.forEach((id, i) => {
+    const x = x0 + i * 164, y = 130, pk = RELICS[id] ?? PERKS[id];
+    panel(ctx, x, y, 154, 96, col);
+    text(ctx, `[${i + 1}]`, x + 77, y + 10, col, 10, 'center');
     text(ctx, pk.name, x + 77, y + 32, '#f4f4f4', 10, 'center');
     wrapText(pk.desc, 22).forEach((l, k) => text(ctx, l, x + 77, y + 54 + k * 11, '#94b0c2', 8, 'center'));
   });
-  text(ctx, 'Taste 1, 2 oder 3', VW / 2, 242, '#94b0c2', 8, 'center');
+  text(ctx, ids.length === 2 ? 'Taste 1 oder 2' : 'Taste 1, 2 oder 3', VW / 2, 242, '#94b0c2', 8, 'center');
 }
 
 function endOverlay(ctx: CanvasRenderingContext2D, run: Run) {

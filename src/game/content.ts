@@ -99,3 +99,21 @@ export const UPGRADES: UpgDef[] = [
 ];
 export const RANGER_COST = 60;
 export const upgCost = (u: UpgDef, lvl: number) => u.cost * (lvl + 1);
+
+export const RELICS: Record<string, PerkDef> = {
+  glutherz: { name: 'Glutherz', desc: 'Brand heilt dich, statt zu schaden' },
+  donnerfaust: { name: 'Donnerfaust', desc: 'Jeder 5. Treffer trifft auch alle Gegner daneben' },
+  pulverfass: { name: 'Pulverhaut', desc: 'Explosionen verletzen dich nicht' },
+  sprengmeister: { name: 'Sprengmeister', desc: '+1 Bombe auf jeder neuen Ebene' },
+  geisterlicht: { name: 'Geisterlicht', desc: 'Du siehst 3 Felder weiter' },
+  steinhaut: { name: 'Steinhaut', desc: 'Jeder Treffer gegen dich: 1 Schaden weniger' },
+  blutpakt: { name: 'Blutpakt', desc: '+4 Angriff, aber -8 max. Leben' },
+  seelenkelch: { name: 'Seelenkelch', desc: 'Heiltränke heilen vollständig' },
+  zeitsand: { name: 'Zeitsand', desc: 'Gegner verlieren manchmal ihren Zug' },
+  giftzahn: { name: 'Giftzahn', desc: 'Deine Treffer vergiften' },
+  frostkern: { name: 'Frostkern', desc: 'Betäubungen halten 1 Zug länger' },
+  muenze: { name: 'Glücksmünze', desc: 'Truhen geben doppelte Beute' },
+  eisenwille: { name: 'Eisenwille', desc: 'Überlebe einmal pro Ebene einen tödlichen Treffer' },
+  jaeger: { name: 'Riesentöter', desc: '+50 % Schaden gegen Bosse' },
+  echo: { name: 'Echo', desc: 'Fähigkeiten kosten 1 weniger' },
+};

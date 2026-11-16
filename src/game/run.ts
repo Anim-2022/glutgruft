@@ -1,7 +1,8 @@
 import { RNG } from '../core/rng';
 import type { Meta } from '../core/save';
 import { W, H, T, Room, genDungeon, center, walkable, opaque, los, computeFov, distMap } from './dungeon';
-import { CLASSES, ClassId, MOBS, PERKS, BOSS_BY_BIOME, BIOME_NAMES, FLOORS_PER_BIOME, LAST_FLOOR, biomeOf, spawnTable } from './content';
+import { VS, CRATE_TEMPLATES, mirror, genIce, slide } from './puzzles';
+import { CLASSES, ClassId, MOBS, PERKS, RELICS, BOSS_BY_BIOME, BIOME_NAMES, FLOORS_PER_BIOME, LAST_FLOOR, biomeOf, spawnTable } from './content';
 
 export interface Actor {
   id: number; kind: string; name: string;
@@ -14,7 +15,15 @@ export interface Player extends Actor {
   cls: ClassId; lvl: number; exp: number;
   res: number; resMax: number; potions: number; bombs: number;
   crit: number; pow: number; vamp: number; thorns: number; soulMul: number;
-  dir: [number, number]; perks: string[];
+  dir: [number, number]; perks: string[]; relics: string[]; hits: number;
+}
+
+export interface Puzzle {
+  kind: 'crates' | 'runes' | 'ice';
+  x: number; y: number; // linke obere Ecke der 7x7 Innenfelder
+  solved: boolean; dead: boolean; entered: boolean;
+  layout: number[];               // Kisten: Ausgangszustand für den Hebel
+  order: number[]; runes: Record<number, number>; pressed: number[]; fails: number;
 }
 
 export type Fx =
@@ -34,6 +43,7 @@ export interface Run {
   fire: Map<number, number>;   // Feld -> verbleibende Züge
   fuses: Map<number, number>;  // Fass -> Züge bis zur Explosion
   cracks: Map<number, number>; // rissige Wand -> erhaltene Schläge
+  puzzle: Puzzle | null; willUsed: boolean;
   log: string[]; fx: Fx[];
   mode: 'play' | 'perk' | 'dead' | 'win';
   perkChoices: string[];
@@ -62,12 +72,12 @@ export function newRun(seed: number, cls: ClassId, meta: Meta): Run {
     id: 0, kind: cls, name: c.name, x: 0, y: 0, hp, maxHp: hp, atk: c.atk + meta.upg.atk, def: c.def,
     st: {}, xp: 0, cd: 0, awake: true,
     cls, lvl: 1, exp: 0, res: c.resStart, resMax: c.resMax, potions: 1 + meta.upg.trank, bombs: 1,
-    crit: 0.05, pow: 1, vamp: 0, thorns: 0, soulMul: 1, dir: [1, 0], perks: [],
+    crit: 0.05, pow: 1, vamp: 0, thorns: 0, soulMul: 1, dir: [1, 0], perks: [], relics: [], hits: 0,
   };
   const run: Run = {
     seed, rng: new RNG(seed), floor: 0,
     tiles: new Uint8Array(W * H), seen: new Uint8Array(W * H), vis: new Uint8Array(W * H),
-    p, mobs: [], traps: [], fire: new Map(), fuses: new Map(), cracks: new Map(), log: [], fx: [], mode: 'play', perkChoices: [],
+    p, mobs: [], traps: [], fire: new Map(), fuses: new Map(), cracks: new Map(), puzzle: null, willUsed: false, log: [], fx: [], mode: 'play', perkChoices: [],
     souls: 0, kills: 0, turn: 0, nextId: 1,
   };
   nextFloor(run);
@@ -96,6 +106,139 @@ function freeInRoom(run: Run, r: Room): [number, number] | null {
 }
 
 const DIRS4 = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+
+// ---------- Rätselkammern ----------
+
+export const RUNE_NAMES = ['Sonne', 'Mond', 'Stern', 'Auge'];
+const has = (p: Player, id: string) => p.relics.includes(id);
+export const skillCost = (p: Player, i: number) => Math.max(1, CLASSES[p.cls].skills[i].cost - (has(p, 'echo') ? 1 : 0));
+const fovR = (run: Run) => FOV_R + (has(run.p, 'geisterlicht') ? 3 : 0);
+
+// Sucht 9x9 massiven Fels, höhlt 7x7 aus und gräbt von der Tür (unten Mitte) einen Gang zum Rest der Ebene.
+function addVault(run: Run, rooms: Room[]): boolean {
+  const t = run.tiles, rng = run.rng;
+  for (let n = 0; n < 150; n++) {
+    const x0 = rng.int(1, W - 10), y0 = rng.int(1, H - 11);
+    let solid = true;
+    for (let y = y0; y < y0 + 9 && solid; y++) for (let x = x0; x < x0 + 9; x++) if (t[y * W + x] !== T.WALL) { solid = false; break; }
+    if (!solid) continue;
+    const dx = x0 + 4, dy = y0 + 8, start = (dy + 1) * W + dx;
+    const inRing = (x: number, y: number) => x >= x0 && x < x0 + 9 && y >= y0 && y < y0 + 9;
+    const from = new Map<number, number>([[start, -1]]);
+    let end = -1;
+    if (walkable(t[start])) from.clear();
+    else if (t[start] !== T.WALL) continue;
+    else {
+      const q = [start];
+      for (let h = 0; h < q.length && end < 0; h++) {
+        const c = q[h], cx = c % W, cy = (c / W) | 0;
+        for (const [ox, oy] of DIRS4) {
+          const nx = cx + ox, ny = cy + oy, ni = ny * W + nx;
+          if (nx < 1 || ny < 1 || nx >= W - 1 || ny >= H - 1 || inRing(nx, ny) || from.has(ni)) continue;
+          if (walkable(t[ni])) { end = c; break; }
+          if (t[ni] !== T.WALL) continue;
+          from.set(ni, c);
+          q.push(ni);
+        }
+      }
+      if (end < 0) continue;
+      for (let c = end; c !== -1; c = from.get(c)!) t[c] = T.FLOOR;
+    }
+    t[dy * W + dx] = T.FLOOR;
+    const ix = x0 + 1, iy = y0 + 1;
+    const pz: Puzzle = { kind: rng.pick(['crates', 'runes', 'ice'] as const), x: ix, y: iy, solved: false, dead: false, entered: false, layout: [], order: [], runes: {}, pressed: [], fails: 0 };
+    const put = (x: number, y: number, tile: number) => { t[(iy + y) * W + ix + x] = tile; };
+    if (pz.kind === 'crates') {
+      let tpl = rng.pick(CRATE_TEMPLATES);
+      if (rng.chance(0.5)) tpl = mirror(tpl);
+      const map: Record<string, number> = { '.': T.FLOOR, '#': T.WALL, c: T.CRATE, p: T.PLATE, L: T.LEVER };
+      for (let y = 0; y < VS; y++) for (let x = 0; x < VS; x++) { put(x, y, map[tpl[y][x]]); pz.layout.push(map[tpl[y][x]]); }
+    } else if (pz.kind === 'ice') {
+      const grid = genIce(rng);
+      for (let y = 0; y < VS; y++) for (let x = 0; x < VS; x++) put(x, y, grid[y][x] === '#' ? T.WALL : grid[y][x] === 'g' ? T.GOAL : T.ICE);
+    } else {
+      for (let y = 0; y < VS; y++) for (let x = 0; x < VS; x++) put(x, y, T.FLOOR);
+      const kinds = rng.shuffle([0, 1, 2, 3]);
+      [[1, 1], [5, 1], [1, 4], [5, 4]].forEach(([x, y], k) => { put(x, y, T.RUNE); pz.runes[(iy + y) * W + ix + x] = kinds[k]; });
+      pz.order = rng.shuffle([0, 1, 2, 3]);
+      // Die Tafel mit der Reihenfolge steht in einem anderen Raum
+      let placed = false;
+      for (const r of rng.shuffle(rooms.slice(1))) {
+        if (tryBlock(run, r.x, r.y, T.TABLET) || tryBlock(run, r.x + r.w - 1, r.y, T.TABLET)) { placed = true; break; }
+      }
+      if (!placed) put(3, 0, T.TABLET);
+    }
+    run.puzzle = pz;
+    return true;
+  }
+  return false;
+}
+
+function inVault(run: Run, x: number, y: number): boolean {
+  const z = run.puzzle;
+  return !!z && x >= z.x && x < z.x + VS && y >= z.y && y < z.y + VS;
+}
+
+function solve(run: Run) {
+  const z = run.puzzle!, p = run.p;
+  z.solved = true;
+  say(run, 'Das Rätsel ist gelöst!');
+  run.souls += Math.round(15 * p.soulMul);
+  run.fx.push({ k: 'shake', n: 3 });
+  const pool = run.rng.shuffle(Object.keys(RELICS).filter(id => !has(p, id)));
+  if (!pool.length) { p.potions += 2; return; }
+  run.perkChoices = pool.slice(0, 2);
+  run.mode = 'perk';
+}
+
+// Wird nach jedem Schritt des Spielers aufgerufen.
+function afterStep(run: Run) {
+  const z = run.puzzle, p = run.p;
+  if (!z) return;
+  const i = p.y * W + p.x, t = run.tiles[i];
+  if (!z.entered && inVault(run, p.x, p.y)) {
+    z.entered = true;
+    say(run, z.kind === 'crates' ? 'Rätsel: Schiebe jede Kiste auf eine Platte. Der Hebel setzt zurück.'
+      : z.kind === 'ice' ? 'Rätsel: Auf dem Eis rutschst du. Erreiche die leuchtende Platte.'
+      : 'Rätsel: Betritt die Runen in der richtigen Reihenfolge. Eine Tafel kennt sie.');
+  }
+  if (z.solved || z.dead) return;
+  if (t === T.GOAL) solve(run);
+  else if (t === T.RUNE) {
+    const k = z.runes[i];
+    if (z.pressed.includes(k)) return;
+    if (k === z.order[z.pressed.length]) {
+      z.pressed.push(k);
+      say(run, `${RUNE_NAMES[k]} leuchtet auf.`);
+      if (z.pressed.length === z.order.length) solve(run);
+    } else {
+      z.pressed = [];
+      z.fails++;
+      for (const m of run.mobs) m.awake = true;
+      run.fx.push({ k: 'shake', n: 5 });
+      if (z.fails >= 3) { z.dead = true; say(run, 'Falsch! Die Runen zerfallen zu Staub.'); }
+      else say(run, 'Falsch! Die Runen erlöschen – und die ganze Ebene erwacht.');
+    }
+  }
+}
+
+function checkCrates(run: Run) {
+  const z = run.puzzle;
+  if (!z || z.solved || z.kind !== 'crates') return;
+  for (let y = 0; y < VS; y++) for (let x = 0; x < VS; x++) if (run.tiles[(z.y + y) * W + z.x + x] === T.PLATE) return;
+  solve(run);
+}
+
+function resetCrates(run: Run) {
+  const z = run.puzzle;
+  if (!z || z.kind !== 'crates') return;
+  if (z.solved) { say(run, 'Das Rätsel ist bereits gelöst.'); return; }
+  if (run.mobs.some(m => inVault(run, m.x, m.y))) { say(run, 'Der Hebel klemmt, solange Gegner im Raum sind.'); return; }
+  z.layout.forEach((tile, k) => { run.tiles[(z.y + ((k / VS) | 0)) * W + z.x + (k % VS)] = tile; });
+  say(run, 'Die Kisten rumpeln zurück an ihren Platz.');
+}
+
+
 
 // Setzt ein blockierendes Objekt nur, wenn danach noch alles erreichbar bleibt.
 function tryBlock(run: Run, x: number, y: number, tile: number): boolean {
@@ -142,6 +285,8 @@ function nextFloor(run: Run) {
   run.mobs = [];
   run.traps = [];
   run.fire = new Map(); run.fuses = new Map(); run.cracks = new Map();
+  run.puzzle = null; run.willUsed = false;
+  if (has(run.p, 'sprengmeister') && run.floor > 1) run.p.bombs++;
   [run.p.x, run.p.y] = center(rooms[0]);
   const last = rooms[rooms.length - 1];
   const bossFloor = run.floor % FLOORS_PER_BIOME === 0;
@@ -152,6 +297,7 @@ function nextFloor(run: Run) {
     const [sx, sy] = center(last);
     run.tiles[sy * W + sx] = T.STAIRS;
   }
+  if (!bossFloor && rng.chance(0.6)) addVault(run, rooms);
   // Bewuchs (brennbar): Moos in der Gruft, Pilzrasen in der Höhle, Kohlenstaub in der Schmiede
   for (const r of rooms) {
     if (!rng.chance([0.3, 0.6, 0.35][biome])) continue;
@@ -189,7 +335,7 @@ function nextFloor(run: Run) {
     if (f && tryBlock(run, f[0], f[1], T.BARREL)) run.tiles[f[1] * W + f[0]] = T.FRAGILE;
   }
   if (rng.chance(0.65)) addSecret(run, rooms);
-  computeFov(run.tiles, run.p.x, run.p.y, FOV_R, run.vis, run.seen);
+  computeFov(run.tiles, run.p.x, run.p.y, fovR(run), run.vis, run.seen);
   say(run, `Ebene ${run.floor} – ${BIOME_NAMES[biome]}`);
   if (bossFloor) say(run, 'Etwas Mächtiges lauert hier ...');
 }
@@ -218,7 +364,7 @@ export function explode(run: Run, x: number, y: number, r = 1) {
   }
   const dmg = 9 + run.floor;
   for (const m of run.mobs.filter(m => Math.abs(m.x - x) <= r && Math.abs(m.y - y) <= r)) damage(run, m, dmg, '#ef7d57');
-  if (Math.abs(p.x - x) <= r && Math.abs(p.y - y) <= r) damage(run, p, Math.ceil(dmg / 2), '#b13e53');
+  if (!has(p, 'pulverfass') && Math.abs(p.x - x) <= r && Math.abs(p.y - y) <= r) damage(run, p, Math.ceil(dmg / 2), '#b13e53');
   for (const i of chain) if (run.tiles[i] === T.BARREL) burst(run, i);
 }
 
@@ -242,7 +388,7 @@ function collapse(run: Run, x: number, y: number) {
   say(run, 'Eine Säule stürzt ein!');
   for (const [ox, oy] of DIRS4) {
     const m = mobAt(run, x + ox, y + oy);
-    if (m) { stun(m, 2); damage(run, m, 8 + run.floor, '#94b0c2'); }
+    if (m) { stun(run, m, 2); damage(run, m, 8 + run.floor, '#94b0c2'); }
     else if (run.p.x === x + ox && run.p.y === y + oy) damage(run, run.p, 4 + Math.floor(run.floor / 2), '#b13e53');
   }
 }
@@ -268,9 +414,9 @@ function tickWorld(run: Run) {
 // ---------- Schaden ----------
 
 // Betäubt ein Ziel. Danach ist es kurz immun, Bosse nur einen Zug lang betäubt.
-function stun(a: Actor, turns: number) {
+function stun(run: Run, a: Actor, turns: number) {
   if (a.st.immun) return;
-  a.st.stun = a.boss ? 1 : turns;
+  a.st.stun = (a.boss ? 1 : turns) + (has(run.p, 'frostkern') ? 1 : 0);
 }
 
 
@@ -283,8 +429,25 @@ function damage(run: Run, dst: Actor, amt: number, col = '#f4f4f4', crit = false
 }
 
 function playerHit(run: Run, dst: Actor, base: number) {
-  const crit = run.rng.chance(run.p.crit);
+  const p = run.p;
+  if (dst.boss && has(p, 'jaeger')) base *= 1.5;
+  const crit = run.rng.chance(p.crit);
+  if (has(p, 'giftzahn')) dst.st.gift = 3;
   damage(run, dst, (crit ? base * 2 : base) - dst.def, '#f4f4f4', crit);
+  if (has(p, 'donnerfaust') && ++p.hits % 5 === 0) {
+    run.fx.push({ k: 'shake', n: 4 });
+    for (const m of run.mobs.filter(m => m !== dst && cheb(m, dst) <= 1)) damage(run, m, base * 0.6, '#ffcd75');
+  }
+}
+
+// Tödlicher Treffer? Eisenwille rettet einmal pro Ebene.
+function fatal(run: Run) {
+  const p = run.p;
+  if (p.hp > 0) return;
+  if (has(p, 'eisenwille') && !run.willUsed) { run.willUsed = true; p.hp = 1; say(run, 'Eisenwille hält dich am Leben!'); return; }
+  p.hp = 0;
+  run.mode = 'dead';
+  say(run, 'Du bist gefallen.');
 }
 
 function kill(run: Run, m: Actor) {
@@ -328,6 +491,12 @@ function offerPerks(run: Run) {
 
 function applyPerk(run: Run, id: string) {
   const p = run.p;
+  if (RELICS[id]) {
+    p.relics.push(id);
+    if (id === 'blutpakt') { p.atk += 4; p.maxHp = Math.max(5, p.maxHp - 8); p.hp = Math.min(p.hp, p.maxHp); }
+    say(run, `Reliquie: ${RELICS[id].name}`);
+    return;
+  }
   p.perks.push(id);
   switch (id) {
     case 'zaeh': p.maxHp += 6; p.hp = Math.min(p.maxHp, p.hp + 6); break;
@@ -359,19 +528,23 @@ function nearestMob(run: Run, range: number): Actor | undefined {
 function gain(p: Player, n: number) { p.res = Math.max(0, Math.min(p.resMax, p.res + n)); }
 
 function openChest(run: Run, i: number) {
-  const p = run.p, r = run.rng.next();
+  const p = run.p;
   run.tiles[i] = T.CHEST_OPEN;
-  if (r < 0.3) { p.potions++; say(run, 'Truhe: ein Heiltrank.'); }
-  else if (r < 0.5) { p.bombs += 2; say(run, 'Truhe: zwei Bomben.'); }
-  else if (r < 0.7) { p.atk++; say(run, 'Truhe: bessere Waffe (+1 Angriff).'); }
-  else if (r < 0.85) { p.def++; say(run, 'Truhe: bessere Rüstung (+1 Verteidigung).'); }
-  else { const n = Math.round(10 * p.soulMul); run.souls += n; say(run, `Truhe: ${n} Seelensplitter.`); }
+  for (let k = has(p, 'muenze') ? 2 : 1; k > 0; k--) {
+    const r = run.rng.next();
+    if (r < 0.3) { p.potions++; say(run, 'Truhe: ein Heiltrank.'); }
+    else if (r < 0.5) { p.bombs += 2; say(run, 'Truhe: zwei Bomben.'); }
+    else if (r < 0.7) { p.atk++; say(run, 'Truhe: bessere Waffe (+1 Angriff).'); }
+    else if (r < 0.87) { p.def++; say(run, 'Truhe: bessere Rüstung (+1 Verteidigung).'); }
+    else { const n = Math.round(10 * p.soulMul); run.souls += n; say(run, `Truhe: ${n} Seelensplitter.`); }
+  }
 }
 
 function useSkill(run: Run, i: number): boolean {
   const p = run.p, sk = CLASSES[p.cls].skills[i];
   if (!sk) return false;
-  if (p.res < sk.cost) { say(run, `Nicht genug ${CLASSES[p.cls].resName}.`); return false; }
+  const cost = skillCost(p, i);
+  if (p.res < cost) { say(run, `Nicht genug ${CLASSES[p.cls].resName}.`); return false; }
   const atk = playerAtk(p);
   const around = (r: number) => run.mobs.filter(m => cheb(m, p) <= r && run.vis[m.y * W + m.x]);
   const noTarget = () => { say(run, 'Kein Ziel in Reichweite.'); return false; };
@@ -379,7 +552,7 @@ function useSkill(run: Run, i: number): boolean {
     case 'krieger0': {
       const t = nearestMob(run, 1);
       if (!t) return noTarget();
-      stun(t, 2);
+      stun(run, t, 2);
       run.fx.push({ k: 'lunge', id: 0, dx: Math.sign(t.x - p.x), dy: Math.sign(t.y - p.y) });
       playerHit(run, t, atk * p.pow + 1);
       break;
@@ -407,7 +580,7 @@ function useSkill(run: Run, i: number): boolean {
       const ts = around(2);
       if (!ts.length) return noTarget();
       for (const i of [...run.fire.keys()]) if (cheb({ x: i % W, y: (i / W) | 0 }, p) <= 2) run.fire.delete(i);
-      for (const t of ts) { stun(t, 2); delete t.st.brand; damage(run, t, 3 * p.pow, '#73eff7'); }
+      for (const t of ts) { stun(run, t, 2); delete t.st.brand; damage(run, t, 3 * p.pow, '#73eff7'); }
       break;
     }
     case 'magier2': {
@@ -448,7 +621,7 @@ function useSkill(run: Run, i: number): boolean {
       break;
     }
   }
-  p.res -= sk.cost;
+  p.res -= cost;
   return true;
 }
 
@@ -481,6 +654,27 @@ export function act(run: Run, a: Action): void {
         run.fx.push({ k: 'lunge', id: 0, dx: a.dx, dy: a.dy }, { k: 'shake', n: 2 });
         if (n >= 3) breakWall(run, i); else { run.cracks.set(i, n); say(run, n === 1 ? 'Die Wand ist rissig – sie gibt nach.' : 'Noch ein Schlag ...'); }
         used = true;
+      } else if (t === T.CRATE || t === T.CRATE_ON) {
+        const bx = nx + a.dx, by = ny + a.dy, bi = by * W + bx, bt = run.tiles[bi];
+        if ((bt === T.FLOOR || bt === T.PLATE) && !mobAt(run, bx, by)) {
+          run.tiles[bi] = bt === T.PLATE ? T.CRATE_ON : T.CRATE;
+          run.tiles[i] = t === T.CRATE_ON ? T.PLATE : T.FLOOR;
+          p.x = nx; p.y = ny; used = true;
+          checkCrates(run);
+        } else say(run, 'Die Kiste lässt sich so nicht schieben.');
+      } else if (t === T.LEVER) { resetCrates(run); used = true; }
+      else if (t === T.TABLET) {
+        const z = run.puzzle;
+        say(run, z ? `Die Tafel zeigt: ${z.order.map(k => RUNE_NAMES[k]).join(' – ')}` : 'Die Tafel ist verwittert.');
+      } else if (t === T.ICE) {
+        const kind = (x: number, y: number) => {
+          const tt = run.tiles[y * W + x];
+          if (mobAt(run, x, y)) return 'block' as const;
+          return tt === T.ICE ? 'ice' as const : walkable(tt) ? 'floor' as const : 'block' as const;
+        };
+        [p.x, p.y] = slide(kind, p.x, p.y, a.dx, a.dy);
+        used = true;
+        afterStep(run);
       } else if (t === T.BARREL) {
         if (!run.fuses.has(i)) { run.fuses.set(i, 2); say(run, 'Die Lunte brennt – weg hier!'); }
         used = true;
@@ -505,8 +699,8 @@ export function act(run: Run, a: Action): void {
           damage(run, p, Math.ceil(p.maxHp * 0.15), '#b13e53');
           run.fx.push({ k: 'shake', n: 8 });
           used = false;
-          if (p.hp <= 0) { p.hp = 0; run.mode = 'dead'; say(run, 'Du bist gefallen.'); }
-        }
+          fatal(run);
+        } else afterStep(run);
       }
       break;
     }
@@ -529,7 +723,7 @@ export function act(run: Run, a: Action): void {
       else if (p.hp >= p.maxHp) say(run, 'Du bist bereits bei voller Gesundheit.');
       else {
         p.potions--;
-        const n = Math.ceil(p.maxHp * 0.45);
+        const n = has(p, 'seelenkelch') ? p.maxHp : Math.ceil(p.maxHp * 0.45);
         p.hp = Math.min(p.maxHp, p.hp + n);
         delete p.st.gift; delete p.st.brand;
         run.fx.push({ k: 'num', x: p.x, y: p.y, s: `+${n}`, col: '#a7f070' });
@@ -570,7 +764,7 @@ function hitPlayer(run: Run, m: Actor, melee: boolean) {
   const p = run.p, d = MOBS[m.kind];
   if (melee) run.fx.push({ k: 'lunge', id: m.id, dx: Math.sign(p.x - m.x), dy: Math.sign(p.y - m.y) });
   if (p.st.dodge) { run.fx.push({ k: 'num', x: p.x, y: p.y, s: 'verfehlt', col: '#94b0c2' }); return; }
-  damage(run, p, Math.max(Math.ceil(m.atk * 0.3), m.atk - p.def), '#b13e53');
+  damage(run, p, Math.max(Math.ceil(m.atk * 0.3), m.atk - p.def) - (has(p, 'steinhaut') ? 1 : 0), '#b13e53');
   run.fx.push({ k: 'shake', n: m.boss ? 5 : 2 });
   if (p.cls === 'krieger') gain(p, 1);
   if (d.poison && run.rng.chance(0.5)) p.st.gift = 4;
@@ -583,7 +777,7 @@ function moveMob(run: Run, m: Actor, x: number, y: number) {
   const ti = run.traps.findIndex(t => t.x === x && t.y === y);
   if (ti >= 0) {
     run.traps.splice(ti, 1);
-    stun(m, 2);
+    stun(run, m, 2);
     say(run, `${m.name} tritt in die Falle!`);
     damage(run, m, 8 * run.p.pow + run.p.lvl, '#ffcd75');
   }
@@ -636,7 +830,12 @@ function mobAct(run: Run, m: Actor, dist: Int16Array) {
 
 function tickDots(run: Run, a: Actor) {
   if (a.st.gift) { a.st.gift--; damage(run, a, 1, '#38b764'); }
-  if (a.hp > 0 && a.st.brand) { a.st.brand--; damage(run, a, 2, '#ef7d57'); }
+  if (a.hp > 0 && a.st.brand) {
+    a.st.brand--;
+    if (a === run.p && has(run.p, 'glutherz')) {
+      if (a.hp < a.maxHp) { a.hp++; run.fx.push({ k: 'num', x: a.x, y: a.y, s: '+1', col: '#a7f070' }); }
+    } else damage(run, a, 2, '#ef7d57');
+  }
 }
 
 function endTurn(run: Run) {
@@ -649,21 +848,18 @@ function endTurn(run: Run) {
   tickDots(run, p);
   if (p.cls === 'magier' && run.turn % 3 === 0) gain(p, 1);
   const dist = distMap(run.tiles, p.x, p.y);
-  computeFov(run.tiles, p.x, p.y, FOV_R, run.vis, run.seen);
+  computeFov(run.tiles, p.x, p.y, fovR(run), run.vis, run.seen);
   for (const m of [...run.mobs]) {
     if (m.hp <= 0) continue;
     tickDots(run, m);
     if (m.hp <= 0) continue;
     if (m.st.stun) { if (--m.st.stun === 0) m.st.immun = 3; continue; }
     if (m.st.immun) m.st.immun--;
+    if (has(p, 'zeitsand') && run.rng.chance(0.12)) continue;
     mobAct(run, m, dist);
     if (p.hp <= 0) break;
   }
   if (p.st.stark) p.st.stark--;
   if (p.st.dodge) p.st.dodge--;
-  if (p.hp <= 0) {
-    p.hp = 0;
-    run.mode = 'dead';
-    say(run, 'Du bist gefallen.');
-  }
+  fatal(run);
 }

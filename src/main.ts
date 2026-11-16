@@ -202,4 +202,6 @@ function frame(now: number) {
 requestAnimationFrame(frame);
 
 // Für automatisierte Tests
-(window as unknown as { __g: unknown }).__g = { get run() { return run; }, get scene() { return scene; }, meta, sprites };
+(window as unknown as { __g: unknown }).__g = { get run() { return run; }, get scene() { return scene; }, meta, sprites,
+  start(seed: number, cls: 'krieger' | 'magier' | 'waldlaeufer') { resetView(); run = newRun(seed, cls, meta); scene = 'run'; return run; },
+};
