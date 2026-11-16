@@ -86,11 +86,12 @@ function onKey(k: string): boolean {
       else if (k === 'o') act(run, { t: 'sort' });
       return true;
     }
-    if (getOverlay() !== 'none') { if (k === 'escape' || k === 'c' || k === 'h') setOverlay('none'); return true; }
+    if (getOverlay() !== 'none') { if (k === 'escape' || k === 'c' || k === 'h' || k === 'j') setOverlay('none'); return true; }
     if (k === 'i') { setOverlay('inv'); return true; }
     if (k === 'r') { const i = lootIndex(run); if (i >= 0 && !run.p.bag[i].use) { act(run, { t: 'equip', i }); lootDone(); sfx('pick'); storeRun(); } return true; }
     if (k === 'c') { setOverlay('char'); return true; }
     if (k === 'h') { setOverlay('help'); return true; }
+    if (k === 'j') { setOverlay('log'); return true; }
   }
   if (k === 'v') {
     if (document.fullscreenElement) document.exitFullscreen();

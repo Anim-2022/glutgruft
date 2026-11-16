@@ -351,6 +351,7 @@ export function drawRun(ctx: CanvasRenderingContext2D, run: Run, dt: number, tim
   if (mapMode) minimap(ctx, run, time);
   if (overlay === 'char') charSheet(ctx, run);
   else if (overlay === 'help') helpSheet(ctx);
+  else if (overlay === 'log') logSheet(ctx, run);
   else if (overlay === 'inv') invSheet(ctx, run, time);
   if (run.mode === 'perk') perkOverlay(ctx, run);
   if (run.mode === 'shop') shopOverlay(ctx, run);
@@ -358,9 +359,10 @@ export function drawRun(ctx: CanvasRenderingContext2D, run: Run, dt: number, tim
 }
 
 // ---- Oberfläche ----
-let overlay: 'none' | 'char' | 'help' | 'inv' = 'none';
+type Overlay = 'none' | 'char' | 'help' | 'inv' | 'log';
+let overlay: Overlay = 'none';
 export const getOverlay = () => overlay;
-export const setOverlay = (o: 'none' | 'char' | 'help' | 'inv') => { overlay = o; };
+export const setOverlay = (o: Overlay) => { overlay = o; };
 
 interface Slot { key: string; icon: string; name: string; desc: string; cost: string; count: string; ok: boolean; }
 
@@ -451,16 +453,19 @@ function hud(ctx: CanvasRenderingContext2D, run: Run, time: number) {
     lines.forEach((l, k) => text(ctx, l, x + 6, y0 - hh + 13 + k * 10, '#94b0c2', 8));
   }
 
-  // Meldungen: höchstens zwei Zeilen, blenden nach ein paar Sekunden aus
-  const lines = run.log.slice(-2).map(tr), sig = `${run.log.length}:${lines[lines.length - 1] ?? ''}`;
+  // Meldungen: ganze Sätze mit Umbruch, über der Schnellleiste; lange bleiben länger stehen
+  const msgs = run.log.slice(-3), last = msgs[msgs.length - 1] ?? '', sig = `${run.log.length}:${last}`;
   if (sig !== logSeen) { logSeen = sig; logAt = time; }
-  const age = time - logAt, la = age < 4 ? 1 : Math.max(0, 1 - (age - 4));
-  if (lines.length && la > 0) {
-    const max = Math.floor((x0 - 20) / 6), cut = lines.map(l => l.length > max ? l.slice(0, max - 3) + '...' : l);
-    const w = Math.max(...cut.map(l => l.length)) * 6 + 10, yy = VH - 6 - cut.length * 10;
-    ctx.globalAlpha = la * (under(0, yy - 4, w + 6, 40) ? 0.25 : 1);
-    ctx.fillStyle = 'rgba(8,9,15,0.6)'; ctx.fillRect(2, yy - 3, w, cut.length * 10 + 5);
-    cut.forEach((l, k) => text(ctx, l, 6, yy + k * 10, k === cut.length - 1 ? '#f4f4f4' : '#94b0c2', 8));
+  const hold = 4 + tr(last).length * 0.05, age = time - logAt, la = age < hold ? 1 : Math.max(0, 1 - (age - hold));
+  if (msgs.length && la > 0) {
+    let rows: [string, boolean][] = [];
+    msgs.forEach((m, k) => { for (const l of wrapText(m, 56)) rows.push([l, k === msgs.length - 1]); });
+    const mine = rows.filter(r => r[1]).length;
+    rows = rows.slice(-Math.max(5, mine));
+    const w = Math.max(...rows.map(r => r[0].length)) * 6 + 10, yy = y0 - 6 - rows.length * 10;
+    ctx.globalAlpha = la * (under(0, yy - 4, w + 6, rows.length * 10 + 8) ? 0.25 : 1);
+    ctx.fillStyle = 'rgba(8,9,15,0.6)'; ctx.fillRect(2, yy - 3, w, rows.length * 10 + 5);
+    rows.forEach(([l, cur], k) => text(ctx, l, 6, yy + k * 10, cur ? '#f4f4f4' : '#94b0c2', 8));
     ctx.globalAlpha = 1;
   }
 
@@ -682,8 +687,22 @@ function charSheet(ctx: CanvasRenderingContext2D, run: Run) {
 const HELP: [string, string][] = [
   ['Pfeile / WASD', 'bewegen, in Gegner laufen greift an'], ['Leertaste', 'einen Zug warten'], ['1  2  3', 'Fähigkeiten'], ['4', 'Ultimative Fähigkeit ab Stufe 5'], ['5 6 7 8', 'Rollen und Tränke benutzen'], ['R', 'letzten Fund anlegen'], ['F', 'Fernangriff (Magier, Waldläufer)'],
   ['Q', 'Heiltrank trinken'], ['B', 'Bombe werfen'], ['E', 'Treppe hinabsteigen'], ['Klick / Tab', 'Ziel wählen'], ['Maus', 'über etwas halten zeigt Details'],
-  ['I', 'Rucksack: anlegen, benutzen, verkaufen'], ['C', 'Charakter, Reliquien, Gaben'], ['N', 'Karte: klein, groß, aus'], ['M', 'Ton ein/aus'], ['V', 'Vollbild'], ['H', 'diese Hilfe'],
+  ['I', 'Rucksack: anlegen, benutzen, verkaufen'], ['C', 'Charakter, Reliquien, Gaben'], ['N', 'Karte: klein, groß, aus'], ['M', 'Ton ein/aus'], ['V', 'Vollbild'], ['J', 'Journal: alle Meldungen nachlesen'], ['H', 'diese Hilfe'],
 ];
+
+// Journal: die letzten Meldungen in voller Länge
+function logSheet(ctx: CanvasRenderingContext2D, run: Run) {
+  const x = 60, y = 24, w = VW - 120, h = VH - 48, chars = Math.floor((w - 28) / 6), maxRows = Math.floor((h - 60) / 10);
+  ctx.fillStyle = 'rgba(13,14,23,0.8)'; ctx.fillRect(0, 0, VW, VH);
+  panel(ctx, x, y, w, h, '#ffcd75');
+  text(ctx, 'JOURNAL', x + 14, y + 10, '#ffcd75', 16);
+  let rows: [string, boolean][] = [];
+  run.log.forEach((m, k) => wrapText(m, chars).forEach((l, j) => rows.push([(j ? '  ' : '') + l, k === run.log.length - 1])));
+  rows = rows.slice(-maxRows);
+  rows.forEach(([l, cur], k) => text(ctx, l, x + 14, y + 36 + k * 10, cur ? '#f4f4f4' : '#94b0c2', 8));
+  if (!rows.length) text(ctx, 'Noch nichts geschehen.', x + 14, y + 36, '#566c86', 8);
+  text(ctx, '[J] oder [ESC] schließen', VW / 2, y + h - 13, '#566c86', 8, 'center');
+}
 
 function helpSheet(ctx: CanvasRenderingContext2D) {
   const w = 380, h = 56 + HELP.length * 13, x = (VW - w) >> 1, y = (VH - h) >> 1;
