@@ -2,13 +2,13 @@ import { RNG } from '../core/rng';
 import type { Meta } from '../core/save';
 import { W, H, T, Room, genDungeon, center, walkable, opaque, los, computeFov, distMap } from './dungeon';
 import { VS, CRATE_TEMPLATES, mirror, genIce, slide } from './puzzles';
-import { CLASSES, ClassId, MOBS, PERKS, RELICS, BOSS_BY_BIOME, BIOME_NAMES, FLOORS_PER_BIOME, LAST_FLOOR, biomeOf, spawnTable } from './content';
+import { CLASSES, ClassId, MOBS, PERKS, RELICS, RARITY, Item, Offer, BOSS_BY_BIOME, BIOME_NAMES, FLOORS_PER_BIOME, LAST_FLOOR, biomeOf, spawnTable } from './content';
 
 export interface Actor {
   id: number; kind: string; name: string;
   x: number; y: number; hp: number; maxHp: number; atk: number; def: number;
   st: Record<string, number>; // Statuseffekte -> verbleibende Züge
-  xp: number; cd: number; awake: boolean; boss?: boolean;
+  xp: number; cd: number; awake: boolean; boss?: boolean; arena?: boolean;
 }
 
 export interface Player extends Actor {
@@ -16,10 +16,12 @@ export interface Player extends Actor {
   res: number; resMax: number; potions: number; bombs: number;
   crit: number; pow: number; vamp: number; thorns: number; soulMul: number;
   dir: [number, number]; perks: string[]; relics: string[]; hits: number;
+  gold: number; gear: (Item | null)[];
 }
 
 export interface Puzzle {
-  kind: 'crates' | 'runes' | 'ice';
+  kind: 'crates' | 'runes' | 'ice' | 'arena';
+  started: boolean; timer: number; // Arena
   x: number; y: number; // linke obere Ecke der 7x7 Innenfelder
   solved: boolean; dead: boolean; entered: boolean;
   layout: number[];               // Kisten: Ausgangszustand für den Hebel
@@ -44,8 +46,9 @@ export interface Run {
   fuses: Map<number, number>;  // Fass -> Züge bis zur Explosion
   cracks: Map<number, number>; // rissige Wand -> erhaltene Schläge
   puzzle: Puzzle | null; willUsed: boolean;
+  shop: Offer[]; target: number; daily: boolean;
   log: string[]; fx: Fx[];
-  mode: 'play' | 'perk' | 'dead' | 'win';
+  mode: 'play' | 'perk' | 'shop' | 'dead' | 'win';
   perkChoices: string[];
   souls: number; kills: number; turn: number; nextId: number;
 }
@@ -53,7 +56,8 @@ export interface Run {
 export type Action =
   | { t: 'move'; dx: number; dy: number }
   | { t: 'wait' } | { t: 'shoot' } | { t: 'potion' } | { t: 'descend' } | { t: 'bomb' }
-  | { t: 'skill'; i: number } | { t: 'perk'; i: number };
+  | { t: 'skill'; i: number } | { t: 'perk'; i: number }
+  | { t: 'buy'; i: number } | { t: 'leave' } | { t: 'target'; x: number; y: number };
 
 const FOV_R = 8;
 const cheb = (a: { x: number; y: number }, b: { x: number; y: number }) => Math.max(Math.abs(a.x - b.x), Math.abs(a.y - b.y));
@@ -67,17 +71,17 @@ const isFree = (run: Run, x: number, y: number) =>
 
 export function newRun(seed: number, cls: ClassId, meta: Meta): Run {
   const c = CLASSES[cls];
-  const hp = c.hp + 3 * meta.upg.vit;
+  const hp = c.hp + 2 * meta.upg.vit;
   const p: Player = {
     id: 0, kind: cls, name: c.name, x: 0, y: 0, hp, maxHp: hp, atk: c.atk + meta.upg.atk, def: c.def,
     st: {}, xp: 0, cd: 0, awake: true,
     cls, lvl: 1, exp: 0, res: c.resStart, resMax: c.resMax, potions: 1 + meta.upg.trank, bombs: 1,
-    crit: 0.05, pow: 1, vamp: 0, thorns: 0, soulMul: 1, dir: [1, 0], perks: [], relics: [], hits: 0,
+    crit: 0.05, pow: 1, vamp: 0, thorns: 0, soulMul: 1, dir: [1, 0], perks: [], relics: [], hits: 0, gold: 0, gear: [null, null, null],
   };
   const run: Run = {
     seed, rng: new RNG(seed), floor: 0,
     tiles: new Uint8Array(W * H), seen: new Uint8Array(W * H), vis: new Uint8Array(W * H),
-    p, mobs: [], traps: [], fire: new Map(), fuses: new Map(), cracks: new Map(), puzzle: null, willUsed: false, log: [], fx: [], mode: 'play', perkChoices: [],
+    p, mobs: [], traps: [], fire: new Map(), fuses: new Map(), cracks: new Map(), puzzle: null, willUsed: false, shop: [], target: 0, daily: false, log: [], fx: [], mode: 'play', perkChoices: [],
     souls: 0, kills: 0, turn: 0, nextId: 1,
   };
   nextFloor(run);
@@ -106,6 +110,61 @@ function freeInRoom(run: Run, r: Room): [number, number] | null {
 }
 
 const DIRS4 = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+
+// ---------- Ausrüstung, Gold und Händler ----------
+
+const ITEM_NAMES: Record<ClassId, string> = { krieger: 'Klinge', magier: 'Stab', waldlaeufer: 'Bogen' };
+
+export function genItem(run: Run, cursed = false): Item {
+  const rng = run.rng, slot = rng.int(0, 2) as 0 | 1 | 2;
+  const r = rng.next() + run.floor * 0.012;
+  let rar = r < 0.55 ? 0 : r < 0.85 ? 1 : r < 0.97 ? 2 : 3;
+  if (cursed) rar = Math.min(3, rar + 1);
+  const it: Item = { slot, name: [ITEM_NAMES[run.p.cls], 'Rüstung', 'Amulett'][slot], rar, atk: 0, def: 0, hp: 0, crit: 0, cursed };
+  if (slot === 0) it.atk = 1 + rar;
+  else if (slot === 1) { it.def = 1 + (rar >= 2 ? 1 : 0); it.hp = rar * 3; }
+  else { it.crit = 0.04 * (rar + 1); it.hp = 2 * rar; }
+  if (cursed) it.hp -= 6;
+  return it;
+}
+
+const itemScore = (it: Item) => it.atk * 3 + it.def * 3 + it.hp * 0.5 + it.crit * 40;
+export const itemText = (it: Item) =>
+  [it.atk ? `+${it.atk} Angriff` : '', it.def ? `+${it.def} Vert.` : '', it.hp ? `${it.hp > 0 ? '+' : ''}${it.hp} Leben` : '', it.crit ? `+${Math.round(it.crit * 100)} % Krit` : ''].filter(Boolean).join(', ');
+
+function wear(p: Player, it: Item, sign: 1 | -1) {
+  p.atk += sign * it.atk; p.def += sign * it.def; p.crit += sign * it.crit;
+  p.maxHp = Math.max(5, p.maxHp + sign * it.hp);
+  if (sign > 0 && it.hp > 0) p.hp += it.hp;
+  p.hp = Math.min(p.hp, p.maxHp);
+}
+
+// Legt bessere Ausrüstung an, schlechtere wird zu Gold.
+function takeItem(run: Run, it: Item, from: string) {
+  const p = run.p, cur = p.gear[it.slot], label = `${it.name} (${RARITY[it.rar]}${it.cursed ? ', verflucht' : ''}: ${itemText(it)})`;
+  if (cur && itemScore(cur) >= itemScore(it)) {
+    const g = 5 * (it.rar + 1);
+    p.gold += g;
+    say(run, `${from}: ${label} – schwächer, für ${g} Gold verkauft.`);
+    return;
+  }
+  if (cur) wear(p, cur, -1);
+  wear(p, it, 1);
+  p.gear[it.slot] = it;
+  say(run, `${from}: ${label} angelegt.`);
+}
+
+function stock(run: Run): Offer[] {
+  const f = run.floor, offers: Offer[] = [
+    { kind: 'potion', name: 'Heiltrank', desc: 'Heilt einen großen Teil deines Lebens', price: 12 + f, sold: false },
+    { kind: 'bomb', name: 'Bombe', desc: 'Sprengt Gegner, Wände und Säulen', price: 10 + f, sold: false },
+  ];
+  for (let k = 0; k < 2; k++) {
+    const it = genItem(run);
+    offers.push({ kind: 'item', name: `${it.name} (${RARITY[it.rar]})`, desc: itemText(it), price: 18 + it.rar * 22 + f * 2, sold: false, item: it });
+  }
+  return offers;
+}
 
 // ---------- Rätselkammern ----------
 
@@ -146,7 +205,7 @@ function addVault(run: Run, rooms: Room[]): boolean {
     }
     t[dy * W + dx] = T.FLOOR;
     const ix = x0 + 1, iy = y0 + 1;
-    const pz: Puzzle = { kind: rng.pick(['crates', 'runes', 'ice'] as const), x: ix, y: iy, solved: false, dead: false, entered: false, layout: [], order: [], runes: {}, pressed: [], fails: 0 };
+    const pz: Puzzle = { kind: rng.pick(['crates', 'runes', 'ice', 'arena'] as const), started: false, timer: 0, x: ix, y: iy, solved: false, dead: false, entered: false, layout: [], order: [], runes: {}, pressed: [], fails: 0 };
     const put = (x: number, y: number, tile: number) => { t[(iy + y) * W + ix + x] = tile; };
     if (pz.kind === 'crates') {
       let tpl = rng.pick(CRATE_TEMPLATES);
@@ -156,6 +215,9 @@ function addVault(run: Run, rooms: Room[]): boolean {
     } else if (pz.kind === 'ice') {
       const grid = genIce(rng);
       for (let y = 0; y < VS; y++) for (let x = 0; x < VS; x++) put(x, y, grid[y][x] === '#' ? T.WALL : grid[y][x] === 'g' ? T.GOAL : T.ICE);
+    } else if (pz.kind === 'arena') {
+      for (let y = 0; y < VS; y++) for (let x = 0; x < VS; x++) put(x, y, T.FLOOR);
+      put(3, 3, T.GOAL);
     } else {
       for (let y = 0; y < VS; y++) for (let x = 0; x < VS; x++) put(x, y, T.FLOOR);
       const kinds = rng.shuffle([0, 1, 2, 3]);
@@ -200,10 +262,25 @@ function afterStep(run: Run) {
     z.entered = true;
     say(run, z.kind === 'crates' ? 'Rätsel: Schiebe jede Kiste auf eine Platte. Der Hebel setzt zurück.'
       : z.kind === 'ice' ? 'Rätsel: Auf dem Eis rutschst du. Erreiche die leuchtende Platte.'
+      : z.kind === 'arena' ? 'Prüfung: Betritt die Platte in der Mitte – und besiege alle in kurzer Zeit.'
       : 'Rätsel: Betritt die Runen in der richtigen Reihenfolge. Eine Tafel kennt sie.');
   }
   if (z.solved || z.dead) return;
-  if (t === T.GOAL) solve(run);
+  if (t === T.GOAL && z.kind === 'arena') {
+    if (z.started) return;
+    z.started = true;
+    z.timer = 22;
+    const table = spawnTable(run.floor);
+    const spots = run.rng.shuffle([[0, 0], [6, 0], [0, 6], [6, 6], [3, 0], [0, 3], [6, 3]]);
+    for (let k = 0; k < 3 + Math.floor(run.floor / 4); k++) {
+      const [sx, sy] = spots[k];
+      if (!isFree(run, z.x + sx, z.y + sy)) continue;
+      const m = spawnMob(run, run.rng.pick(table), z.x + sx, z.y + sy);
+      m.awake = true; m.arena = true;
+    }
+    run.fx.push({ k: 'shake', n: 5 });
+    say(run, 'Die Prüfung beginnt! Besiege alle in 22 Zügen.');
+  } else if (t === T.GOAL) solve(run);
   else if (t === T.RUNE) {
     const k = z.runes[i];
     if (z.pressed.includes(k)) return;
@@ -318,7 +395,8 @@ function nextFloor(run: Run) {
     }
     if (rng.chance(0.4)) {
       const cx = rng.chance(0.5) ? r.x : r.x + r.w - 1, cy = rng.chance(0.5) ? r.y : r.y + r.h - 1;
-      tryBlock(run, cx, cy, rng.chance(0.25) ? T.ALTAR : T.CHEST);
+      const roll = rng.next();
+      tryBlock(run, cx, cy, roll < 0.22 ? T.ALTAR : roll < 0.34 ? T.CURSED : T.CHEST);
     }
     // Säulen in großen Räumen, Fässer verstreut
     if (r.w >= 6 && r.h >= 5 && rng.chance(0.5)) {
@@ -333,6 +411,12 @@ function nextFloor(run: Run) {
     // nur dort, wo man auch außen herum käme
     const f = freeInRoom(run, rng.pick(rooms.slice(1)));
     if (f && tryBlock(run, f[0], f[1], T.BARREL)) run.tiles[f[1] * W + f[0]] = T.FRAGILE;
+  }
+  run.shop = [];
+  run.target = 0;
+  if (!bossFloor && rng.chance(0.5)) {
+    const r = rng.pick(rooms.slice(1));
+    if (tryBlock(run, r.x + (r.w >> 1) - 1, r.y, T.TRADER) || tryBlock(run, r.x + 1, r.y + r.h - 1, T.TRADER)) run.shop = stock(run);
   }
   if (rng.chance(0.65)) addSecret(run, rooms);
   computeFov(run.tiles, run.p.x, run.p.y, fovR(run), run.vis, run.seen);
@@ -457,6 +541,8 @@ function kill(run: Run, m: Actor) {
   run.kills++;
   p.exp += m.xp;
   run.souls += Math.max(1, Math.round((m.xp / 3) * p.soulMul));
+  p.gold += Math.ceil(m.xp / 3);
+  if (run.target === m.id) run.target = 0;
   if (p.vamp) p.hp = Math.min(p.maxHp, p.hp + p.vamp);
   if (p.cls === 'waldlaeufer') gain(p, 1);
   if (m.boss) {
@@ -516,6 +602,8 @@ function applyPerk(run: Run, id: string) {
 // ---------- Spieleraktionen ----------
 
 function nearestMob(run: Run, range: number): Actor | undefined {
+  const tg = run.target ? run.mobs.find(m => m.id === run.target) : undefined;
+  if (tg && run.vis[tg.y * W + tg.x] && cheb(tg, run.p) <= range) return tg;
   let best: Actor | undefined, bd = 99;
   for (const m of run.mobs) {
     if (!run.vis[m.y * W + m.x]) continue;
@@ -528,14 +616,15 @@ function nearestMob(run: Run, range: number): Actor | undefined {
 function gain(p: Player, n: number) { p.res = Math.max(0, Math.min(p.resMax, p.res + n)); }
 
 function openChest(run: Run, i: number) {
-  const p = run.p;
+  const p = run.p, cursed = run.tiles[i] === T.CURSED;
   run.tiles[i] = T.CHEST_OPEN;
+  if (cursed) { takeItem(run, genItem(run, true), 'Verfluchte Truhe'); return; }
   for (let k = has(p, 'muenze') ? 2 : 1; k > 0; k--) {
     const r = run.rng.next();
-    if (r < 0.3) { p.potions++; say(run, 'Truhe: ein Heiltrank.'); }
-    else if (r < 0.5) { p.bombs += 2; say(run, 'Truhe: zwei Bomben.'); }
-    else if (r < 0.7) { p.atk++; say(run, 'Truhe: bessere Waffe (+1 Angriff).'); }
-    else if (r < 0.87) { p.def++; say(run, 'Truhe: bessere Rüstung (+1 Verteidigung).'); }
+    if (r < 0.22) { p.potions++; say(run, 'Truhe: ein Heiltrank.'); }
+    else if (r < 0.38) { p.bombs += 2; say(run, 'Truhe: zwei Bomben.'); }
+    else if (r < 0.76) takeItem(run, genItem(run), 'Truhe');
+    else if (r < 0.92) { const g = 12 + run.floor * 3; p.gold += g; say(run, `Truhe: ${g} Gold.`); }
     else { const n = Math.round(10 * p.soulMul); run.souls += n; say(run, `Truhe: ${n} Seelensplitter.`); }
   }
 }
@@ -635,7 +724,25 @@ export function act(run: Run, a: Action): void {
     }
     return;
   }
+  if (run.mode === 'shop') {
+    if (a.t === 'leave') run.mode = 'play';
+    else if (a.t === 'buy') {
+      const o = run.shop[a.i];
+      if (!o || o.sold) return;
+      if (p.gold < o.price) { say(run, 'Dafür reicht dein Gold nicht.'); return; }
+      p.gold -= o.price;
+      if (o.kind === 'potion') p.potions++;
+      else if (o.kind === 'bomb') p.bombs++;
+      else { o.sold = true; takeItem(run, o.item!, 'Händler'); }
+    }
+    return;
+  }
   if (run.mode !== 'play') return;
+  if (a.t === 'target') {
+    const m = mobAt(run, a.x, a.y);
+    run.target = m && run.vis[m.y * W + m.x] ? m.id : 0;
+    return;
+  }
   let used = false;
   switch (a.t) {
     case 'move': {
@@ -648,7 +755,8 @@ export function act(run: Run, a: Action): void {
         playerHit(run, m, playerAtk(p) * (CLASSES[p.cls].range ? 0.6 : 1));
         if (p.cls === 'krieger') gain(p, 2);
         used = true;
-      } else if (t === T.CHEST) { openChest(run, i); used = true; }
+      } else if (t === T.CHEST || t === T.CURSED) { openChest(run, i); used = true; }
+      else if (t === T.TRADER) { if (run.shop.length) { run.mode = 'shop'; say(run, 'Händler: "Sieh dich um, Wanderer."'); } }
       else if (t === T.CRACKED) {
         const n = (run.cracks.get(i) ?? 0) + 1;
         run.fx.push({ k: 'lunge', id: 0, dx: a.dx, dy: a.dy }, { k: 'shake', n: 2 });
@@ -861,5 +969,37 @@ function endTurn(run: Run) {
   }
   if (p.st.stark) p.st.stark--;
   if (p.st.dodge) p.st.dodge--;
+  const z = run.puzzle;
+  if (z && z.kind === 'arena' && z.started && !z.solved && !z.dead && run.mode !== 'dead') {
+    if (!run.mobs.some(m => m.arena)) { if (run.mode === 'play') solve(run); }
+    else if (--z.timer <= 0) { z.dead = true; say(run, 'Die Zeit ist um – die Prüfung ist gescheitert.'); }
+  }
   fatal(run);
+}
+
+// ---------- Speichern eines laufenden Abstiegs ----------
+
+const SAVE_VERSION = 1;
+
+export function serialize(run: Run): string {
+  return JSON.stringify({
+    ...run, v: SAVE_VERSION, rng: run.rng.s, fx: [],
+    tiles: [...run.tiles], seen: [...run.seen], vis: [...run.vis],
+    fire: [...run.fire], fuses: [...run.fuses], cracks: [...run.cracks],
+  });
+}
+
+export function deserialize(json: string): Run | null {
+  try {
+    const o = JSON.parse(json);
+    if (o.v !== SAVE_VERSION) return null;
+    delete o.v;
+    return {
+      ...o, rng: new RNG(o.rng), fx: [],
+      tiles: Uint8Array.from(o.tiles), seen: Uint8Array.from(o.seen), vis: Uint8Array.from(o.vis),
+      fire: new Map(o.fire), fuses: new Map(o.fuses), cracks: new Map(o.cracks),
+    } as Run;
+  } catch {
+    return null;
+  }
 }

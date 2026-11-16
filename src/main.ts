@@ -1,8 +1,8 @@
 import { VW, VH, bake, sprites, text, panel, wrap } from './render/gfx';
-import { drawRun, resetView, setMouse, toggleMap, setTutorial } from './render/draw';
+import { drawRun, resetView, setMouse, toggleMap, setTutorial, tileAt } from './render/draw';
 import { sfx, soundOn, toggleSound, wakeAudio } from './core/audio';
 import { loadMeta, saveMeta } from './core/save';
-import { newRun, act, Run, Action } from './game/run';
+import { newRun, act, serialize, deserialize, Run, Action } from './game/run';
 import { CLASSES, CLASS_ORDER, UPGRADES, RANGER_COST, upgCost, LAST_FLOOR } from './game/content';
 
 const cv = document.getElementById('c') as HTMLCanvasElement;
@@ -24,7 +24,19 @@ let scene: 'title' | 'lager' | 'run' = 'title';
 const meta = loadMeta();
 let run: Run | null = null;
 let row = 0, clsIdx = 0, note = '', noteT = 0;
-const ROWS = 2 + UPGRADES.length; // Klasse, Upgrades..., Start
+const ROWS = 3 + UPGRADES.length; // Klasse, Upgrades..., Tageslauf, Start
+const RUN_KEY = 'glutgruft.lauf';
+const today = () => { const d = new Date(); return d.getFullYear() * 10000 + (d.getMonth() + 1) * 100 + d.getDate(); };
+
+// Ein unterbrochener Abstieg wird nach jedem Zug gesichert und im Lager wieder angeboten.
+let saved: Run | null = null;
+try { const raw = localStorage.getItem(RUN_KEY); if (raw) saved = deserialize(raw); } catch { /* kein Speicher */ }
+function storeRun() {
+  try {
+    if (run && run.mode !== 'dead' && run.mode !== 'win') localStorage.setItem(RUN_KEY, serialize(run));
+    else localStorage.removeItem(RUN_KEY);
+  } catch { /* egal */ }
+}
 
 const MOVES: Record<string, [number, number]> = {
   arrowup: [0, -1], w: [0, -1], arrowdown: [0, 1], s: [0, 1], arrowleft: [-1, 0], a: [-1, 0], arrowright: [1, 0], d: [1, 0],
@@ -33,20 +45,27 @@ const MOVES: Record<string, [number, number]> = {
 function flash(s: string) { note = s; noteT = 2; }
 const locked = () => CLASS_ORDER[clsIdx] === 'waldlaeufer' && !meta.ranger;
 
-function startRun() {
-  if (locked()) { flash('Diese Klasse ist noch gesperrt.'); return; }
+function startRun(daily = false) {
   resetView();
+  if (saved && !daily) { run = saved; saved = null; setTutorial(false); scene = 'run'; return; }
+  if (locked()) { flash('Diese Klasse ist noch gesperrt.'); return; }
+  saved = null;
   setTutorial(meta.best === 0);
-  run = newRun((Math.random() * 2 ** 31) | 0, CLASS_ORDER[clsIdx], meta);
+  run = newRun(daily ? today() : (Math.random() * 2 ** 31) | 0, CLASS_ORDER[clsIdx], meta);
+  run.daily = daily;
   scene = 'run';
+  storeRun();
 }
 
 function endRun() {
   if (!run) return;
   meta.souls += run.souls;
-  meta.best = Math.max(meta.best, run.mode === 'win' ? LAST_FLOOR + 1 : run.floor);
+  const depth = run.mode === 'win' ? LAST_FLOOR + 1 : run.floor;
+  meta.best = Math.max(meta.best, depth);
+  if (run.daily) meta.daily = { date: today(), best: Math.max(meta.daily.date === today() ? meta.daily.best : 0, depth) };
   saveMeta(meta);
   run = null;
+  storeRun();
   scene = 'lager';
   row = ROWS - 1;
 }
@@ -72,6 +91,7 @@ function onKey(k: string): boolean {
       return true;
     }
     if (k === ' ') { startRun(); return true; }
+    if (k === 'x' && saved) { meta.souls += saved.souls; saveMeta(meta); saved = null; run = null; storeRun(); flash('Lauf beendet – Splitter gutgeschrieben.'); return true; }
     if (k === 'enter') {
       if (row === 0) {
         if (locked()) {
@@ -79,6 +99,7 @@ function onKey(k: string): boolean {
           else flash('Nicht genug Seelensplitter.');
         }
       } else if (row === ROWS - 1) startRun();
+      else if (row === ROWS - 2) startRun(true);
       else {
         const u = UPGRADES[row - 1], lvl = meta.upg[u.id];
         if (lvl >= u.max) flash('Bereits auf höchster Stufe.');
@@ -96,6 +117,17 @@ function onKey(k: string): boolean {
   }
   let a: Action | null = null;
   if (run.mode === 'perk') { if (k >= '1' && k <= '3') a = { t: 'perk', i: +k - 1 }; }
+  else if (run.mode === 'shop') {
+    if (k >= '1' && k <= '9') a = { t: 'buy', i: +k - 1 };
+    else if (k === ' ' || k === 'escape' || k === 'enter') a = { t: 'leave' };
+  }
+  else if (k === 'tab') {
+    // nächstes sichtbares Ziel anwählen
+    const r = run, vis = r.mobs.filter(m => r.vis[m.y * 52 + m.x]);
+    if (!vis.length) return true;
+    const n = vis[(vis.findIndex(m => m.id === r.target) + 1) % vis.length];
+    a = { t: 'target', x: n.x, y: n.y };
+  }
   else if (MOVES[k]) a = { t: 'move', dx: MOVES[k][0], dy: MOVES[k][1] };
   else if (k === ' ' || k === '.') a = { t: 'wait' };
   else if (k === 'f') a = { t: 'shoot' };
@@ -112,6 +144,7 @@ function onKey(k: string): boolean {
     else if (mode === 'win' || (mode === 'perk' && !solved && run.puzzle?.solved)) sfx('solve');
     else if (mode === 'perk') sfx('level');
   } else if (run.p.potions + run.p.bombs > items) sfx('pick');
+  storeRun();
   return true;
 }
 
@@ -120,6 +153,12 @@ cv.addEventListener('mousemove', e => {
   setMouse(((e.clientX - r.left) * VW) / r.width, ((e.clientY - r.top) * VH) / r.height);
 });
 cv.addEventListener('mouseleave', () => setMouse(-1, -1));
+cv.addEventListener('click', e => {
+  if (scene !== 'run' || !run) return;
+  const r = cv.getBoundingClientRect();
+  const [x, y] = tileAt(((e.clientX - r.left) * VW) / r.width, ((e.clientY - r.top) * VH) / r.height);
+  act(run, { t: 'target', x, y });
+});
 
 addEventListener('keydown', e => {
   if (e.ctrlKey || e.metaKey || e.altKey) return;
@@ -154,7 +193,7 @@ function drawTitle(time: number, dt: number) {
     ctx.drawImage(sprites[f], VW / 2 - 128 + i * 96, 172, 64, 64);
   });
   if (Math.floor(time * 2) % 2) text(ctx, '[LEERTASTE] Start', VW / 2, 270, '#f4f4f4', 10, 'center');
-  text(ctx, 'Pfeile/WASD bewegen · Leertaste warten · 1-3 Fähigkeiten · F schießen · Q Trank · B Bombe · E Treppe', VW / 2, 322, '#566c86', 8, 'center');
+  text(ctx, 'Pfeile/WASD bewegen · Leertaste warten · 1-3 Fähigkeiten · F schießen · Q Trank · B Bombe · E Treppe · Klick/Tab Ziel', VW / 2, 322, '#566c86', 8, 'center');
   text(ctx, `V: Vollbild · M: Ton ${soundOn() ? 'an' : 'aus'} · N: Karte`, VW / 2, 336, '#566c86', 8, 'center');
 }
 
@@ -171,7 +210,7 @@ function drawLager(time: number, dt: number) {
   ctx.drawImage(sprites[Math.floor(time * 2.5) % 2 ? id + '_b' : id], 36, 66, 96, 96);
   ctx.globalAlpha = 1;
   text(ctx, `< ${c.name} >`, 146, 74, '#ffcd75', 16);
-  text(ctx, `Leben ${c.hp + 3 * meta.upg.vit}`, 146, 100, '#b13e53', 8);
+  text(ctx, `Leben ${c.hp + 2 * meta.upg.vit}`, 146, 100, '#b13e53', 8);
   text(ctx, `Angriff ${c.atk + meta.upg.atk}   Verteidigung ${c.def}`, 146, 112, '#94b0c2', 8);
   text(ctx, `${c.resName} ${c.resMax}`, 146, 124, c.resCol, 8);
   if (c.range) text(ctx, `Fernkampf ${c.range} Felder`, 146, 136, '#94b0c2', 8);
@@ -200,9 +239,15 @@ function drawLager(time: number, dt: number) {
     for (let k = 0; k < u.max; k++) { ctx.fillStyle = k < lvl ? '#73eff7' : '#333c57'; ctx.fillRect(ux + 150 + k * 10, y + 9, 7, 7); }
     text(ctx, max ? 'MAX' : `${upgCost(u, lvl)}`, ux + uw - 10, y + 8, max ? '#566c86' : meta.souls >= upgCost(u, lvl) ? '#73eff7' : '#b13e53', 10, 'right');
   });
-  const sy = 72 + UPGRADES.length * 46 + 10, sel = row === ROWS - 1;
+  const dy = 72 + UPGRADES.length * 46 + 4, dsel = row === ROWS - 2, dbest = meta.daily.date === today() ? meta.daily.best : 0;
+  panel(ctx, ux, dy, uw, 30, dsel ? '#ffcd75' : '#566c86');
+  text(ctx, 'Tageslauf', ux + 10, dy + 6, dsel ? '#ffcd75' : '#f4f4f4', 10);
+  text(ctx, 'Heute für alle dieselbe Gruft', ux + 10, dy + 18, '#94b0c2', 8);
+  text(ctx, dbest ? (dbest > LAST_FLOOR ? 'bezwungen' : `Ebene ${dbest}`) : 'offen', ux + uw - 10, dy + 6, dbest ? '#73eff7' : '#566c86', 10, 'right');
+  const sy = dy + 38, sel = row === ROWS - 1;
   panel(ctx, ux, sy, uw, 36, sel ? '#ffcd75' : '#566c86', sel ? 'rgba(177,62,83,0.5)' : 'rgba(13,14,23,0.88)');
-  text(ctx, 'ABSTIEG BEGINNEN', ux + uw / 2, sy + 11, sel ? '#ffcd75' : '#f4f4f4', 16, 'center');
+  text(ctx, saved ? `FORTSETZEN · EBENE ${saved.floor}` : 'ABSTIEG BEGINNEN', ux + uw / 2, sy + 11, sel ? '#ffcd75' : '#f4f4f4', 16, 'center');
+  if (saved) text(ctx, 'X: gespeicherten Lauf beenden', ux + uw / 2, sy + 58, '#566c86', 8, 'center');
 
   if (noteT > 0) { noteT -= dt; text(ctx, note, ux + uw / 2, sy + 46, '#ffcd75', 8, 'center'); }
   text(ctx, 'Pfeile: wählen · ENTER: kaufen/bestätigen · LEERTASTE: Abstieg · V: Vollbild · M: Ton', VW / 2, 336, '#566c86', 8, 'center');

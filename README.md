@@ -17,4 +17,15 @@ Build-Befehl `npm run build`, Ausgabeverzeichnis `dist`.
 
 ## Steuerung
 
-Pfeile/WASD bewegen und angreifen · Leertaste warten · 1–3 Fähigkeiten · F Fernangriff · Q Heiltrank · E Treppe
+Pfeile/WASD bewegen und angreifen · Leertaste warten · 1–3 Fähigkeiten · F Fernangriff · Q Heiltrank · B Bombe · E Treppe
+Klick oder Tab wählt ein Ziel · N Minikarte · M Ton · V Vollbild
+
+## Inhalt
+
+- 15 Ebenen in drei Biomen, Boss auf jeder fünften Ebene, drei Klassen
+- zerstörbare Umgebung: rissige Wände, Fässer, Säulen, brüchiger Boden, Feuer
+- Rätselkammern (Kisten, Runen, Eishalle, Kampfprüfung) mit Reliquien als Lohn
+- Händler, Gold, Ausrüstung in vier Seltenheiten, verfluchte Truhen
+- dauerhafte Verbesserungen im Lager, Tageslauf, automatisches Speichern
+
+`tests/bot.ts` enthält einen Autospieler; `npm test` gibt aus, wie weit er je Klasse kommt.

@@ -559,6 +559,25 @@ export const SPR: Record<string, string[]> = {
     '..DDDDDDDDDDDD..',
     '................',
   ],
+  trader: [
+    '................',
+    '.....pppppp.....',
+    '....pppppppp....',
+    '....ppvvvvpp....',
+    '....pvhhhhvp....',
+    '....pvhkhkvp....',
+    '.....vhhhhv.....',
+    '....pppyyppp....',
+    '...pppppppppp...',
+    '...ppvppppvpp..y',
+    '...ppvppppvpphyy',
+    '...ppvppppvpp.y.',
+    '...pppppppppp...',
+    '....pppppppp....',
+    '....pp....pp....',
+    '...NNN....NNN...',
+  ],
+  coin: ['............', '....yyyy....', '...yYYYYy...', '..yYyyyyYy..', '..yYyYYyYy..', '..yYyYYyYy..', '..yYyYYyYy..', '..yYyyyyYy..', '...yYYYYy...', '....yyyy....', '............', '............'],
   // ---- Symbole 12x12 ----
   potion: ['............', '....nnnn....', '.....gg.....', '.....gg.....', '....gggg....', '...grrrrg...', '..grrwwrrg..', '..grwrrrrg..', '..grrrrrrg..', '..grrrrrrg..', '...gggggg...', '............'],
   soul: ['............', '.....ss.....', '....sccs....', '...sccccs...', '..sccwwccs..', '..scwwcccs..', '..sccccccs..', '...sccccs...', '....sccs....', '.....ss.....', '............', '............'],
@@ -590,3 +609,6 @@ RUNES.forEach(([col, pat], k) => {
   SPR[`rune${k}`] = base;
   SPR[`rune${k}_on`] = base.map(r => r.replace(/g/g, col));
 });
+
+// Verfluchte Truhe: gleiche Form, violett statt braun
+SPR.cursed = SPR.chest.map(r => r.replace(/n/g, 'p').replace(/N/g, 'k').replace(/Y/g, 'v').replace(/y/g, 'v'));

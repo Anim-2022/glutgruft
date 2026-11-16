@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { RNG } from '../src/core/rng';
 import { defaultMeta } from '../src/core/save';
 import { W, H, T, genDungeon, distMap, center, los, walkable } from '../src/game/dungeon';
-import { newRun, act, Action } from '../src/game/run';
+import { newRun, act, serialize, deserialize, Action } from '../src/game/run';
 import { CLASS_ORDER } from '../src/game/content';
 
 describe('rng', () => {
@@ -53,6 +53,18 @@ describe('run', () => {
     expect(play()).toEqual(play());
   });
 
+  it('ein gespeicherter Lauf geht exakt gleich weiter', () => {
+    const a = newRun(11, 'waldlaeufer', defaultMeta());
+    const r1 = new RNG(3);
+    for (let i = 0; i < 200; i++) act(a, randomAction(r1));
+    const b = deserialize(serialize(a))!;
+    expect(b).not.toBeNull();
+    const r2 = new RNG(9), r3 = new RNG(9);
+    for (let i = 0; i < 300; i++) { act(a, randomAction(r2)); act(b, randomAction(r3)); }
+    a.fx = []; b.fx = [];
+    expect(serialize(b)).toBe(serialize(a));
+  });
+
   it('zufällige Aktionen brechen keine Invarianten', () => {
     for (const cls of CLASS_ORDER) for (let seed = 1; seed <= 8; seed++) {
       const run = newRun(seed, cls, defaultMeta());
@@ -78,7 +90,7 @@ describe('run', () => {
 });
 
 function randomAction(r: RNG): Action {
-  const n = r.int(0, 14);
+  const n = r.int(0, 17);
   if (n < 8) { const d = [[1, 0], [-1, 0], [0, 1], [0, -1]][n % 4]; return { t: 'move', dx: d[0], dy: d[1] }; }
   if (n === 8) return { t: 'wait' };
   if (n === 9) return { t: 'shoot' };
@@ -86,6 +98,9 @@ function randomAction(r: RNG): Action {
   if (n === 11) return { t: 'descend' };
   if (n === 12) return { t: 'skill', i: r.int(0, 2) };
   if (n === 13) return { t: 'bomb' };
+  if (n === 14) return { t: 'buy', i: r.int(0, 3) };
+  if (n === 15) return { t: 'leave' };
+  if (n === 16) return { t: 'target', x: r.int(0, 51), y: r.int(0, 33) };
   return { t: 'perk', i: r.int(0, 2) };
 }
 

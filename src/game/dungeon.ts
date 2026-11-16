@@ -4,7 +4,7 @@ export const W = 52, H = 34;
 export const T = {
   WALL: 0, FLOOR: 1, STAIRS: 2, CHEST: 3, CHEST_OPEN: 4, ALTAR: 5, ALTAR_USED: 6,
   CRACKED: 7, BARREL: 8, PILLAR: 9, GRASS: 10, BURNT: 11, FRAGILE: 12, FRAGILE2: 13, RUBBLE: 14,
-  CRATE: 15, CRATE_ON: 16, PLATE: 17, LEVER: 18, ICE: 19, RUNE: 20, TABLET: 21, GOAL: 22,
+  CRATE: 15, CRATE_ON: 16, PLATE: 17, LEVER: 18, ICE: 19, RUNE: 20, TABLET: 21, GOAL: 22, CURSED: 23, TRADER: 24,
 } as const;
 
 export interface Room { x: number; y: number; w: number; h: number; }

@@ -1,8 +1,8 @@
 import { VW, VH, TS, sprites, masks, tilesets, text, panel, bar } from './gfx';
 import { W, H, T, wallLike, walkable, los } from '../game/dungeon';
 import { sfx } from '../core/audio';
-import { Run, Actor, xpNeed, skillCost, RUNE_NAMES } from '../game/run';
-import { CLASSES, MOBS, PERKS, RELICS, BIOME_NAMES, biomeOf } from '../game/content';
+import { Run, Actor, xpNeed, skillCost, itemText, RUNE_NAMES } from '../game/run';
+import { CLASSES, MOBS, PERKS, RELICS, RARITY_COL, BIOME_NAMES, biomeOf } from '../game/content';
 
 const pos = new Map<number, { x: number; y: number }>();
 const lunges = new Map<number, { dx: number; dy: number; t: number }>();
@@ -13,6 +13,9 @@ const booms: { x: number; y: number; r: number; t: number }[] = [];
 const bits: { x: number; y: number; vx: number; vy: number; col: string; t: number }[] = [];
 let shake = 0;
 const cam = { x: 0, y: 0 };
+const view = { ox: 0, oy: 0 };
+// Bildschirmpunkt -> Kartenfeld (für Mausklicks)
+export const tileAt = (mx: number, my: number): [number, number] => [Math.floor((mx - view.ox) / TS), Math.floor((my - view.oy) / TS)];
 
 const LUNGE_T = 0.16, FLASH_T = 0.12;
 
@@ -79,6 +82,7 @@ function shatter(kind: string, tx: number, ty: number) {
 const TILE_SPR: Record<number, string> = {
   [T.STAIRS]: 'stairs', [T.CHEST]: 'chest', [T.CHEST_OPEN]: 'chest_open', [T.ALTAR]: 'altar', [T.ALTAR_USED]: 'altar_used',
   [T.CRATE]: 'crate', [T.CRATE_ON]: 'crate', [T.PLATE]: 'plate', [T.LEVER]: 'lever', [T.TABLET]: 'tablet', [T.GOAL]: 'goal',
+  [T.CURSED]: 'cursed', [T.TRADER]: 'trader',
   [T.BARREL]: 'barrel', [T.PILLAR]: 'pillar', [T.RUBBLE]: 'rubble', [T.FRAGILE]: 'crack', [T.FRAGILE2]: 'crack2',
 };
 
@@ -113,6 +117,7 @@ export function drawRun(ctx: CanvasRenderingContext2D, run: Run, dt: number, tim
   const sx = shake ? Math.round((Math.random() - 0.5) * shake) : 0, sy = shake ? Math.round((Math.random() - 0.5) * shake) : 0;
   const ox = -Math.round(cam.x) + sx, oy = -Math.round(cam.y) + sy;
 
+  view.ox = ox - sx; view.oy = oy - sy;
   ctx.fillStyle = '#08090f'; ctx.fillRect(0, 0, VW, VH);
   const ts = tilesets[biomeOf(run.floor)];
   buildLight(run);
@@ -184,6 +189,10 @@ export function drawRun(ctx: CanvasRenderingContext2D, run: Run, dt: number, tim
     if (a.st.stun) text(ctx, 'z', dx + img.width - 4, dy - 5, '#73eff7', 8);
     if (a.st.brand) { ctx.fillStyle = '#ef7d57'; ctx.fillRect(dx + 1, dy - 2, 2, 2); }
     if (a.st.gift) { ctx.fillStyle = '#38b764'; ctx.fillRect(dx + 4, dy - 2, 2, 2); }
+    if (run.target && a.id === run.target) {
+      ctx.fillStyle = '#ffcd75';
+      for (const [cx, cy] of [[0, 0], [13, 0], [0, 13], [13, 13]]) { ctx.fillRect(bx + cx, by + cy, 3, 1); ctx.fillRect(bx + (cx ? 15 : 0), by + cy - (cy ? 2 : 0), 1, 3); }
+    }
     if (a !== p && a.hp < a.maxHp) {
       const w = a.boss ? 24 : 12, hx = bx + 8 - w / 2, hy = dy - 4;
       ctx.fillStyle = '#0d0e17'; ctx.fillRect(hx - 1, hy - 1, w + 2, 4);
@@ -253,6 +262,7 @@ export function drawRun(ctx: CanvasRenderingContext2D, run: Run, dt: number, tim
   hud(ctx, run);
   if (showMap) minimap(ctx, run, time);
   if (run.mode === 'perk') perkOverlay(ctx, run);
+  if (run.mode === 'shop') shopOverlay(ctx, run);
   if (run.mode === 'dead' || run.mode === 'win') endOverlay(ctx, run);
 }
 
@@ -267,7 +277,11 @@ function hud(ctx: CanvasRenderingContext2D, run: Run) {
   text(ctx, `${c.resName} ${p.res}/${p.resMax}`, 114, 35, '#f4f4f4', 8, 'center');
   bar(ctx, 50, 47, 128, 2, p.exp / xpNeed(p.lvl), '#ffcd75');
 
-  p.relics.forEach((id, k) => text(ctx, RELICS[id].name, 8, 62 + k * 10, '#73eff7', 8));
+  let ly = 62;
+  for (const it of p.gear) if (it) { text(ctx, `${it.name}: ${itemText(it)}`, 8, ly, RARITY_COL[it.rar], 8); ly += 10; }
+  for (const id of p.relics) { text(ctx, RELICS[id].name, 8, ly, '#73eff7', 8); ly += 10; }
+  const z = run.puzzle;
+  if (z && z.kind === 'arena' && z.started && !z.solved && !z.dead) text(ctx, `Prüfung: noch ${z.timer} Züge`, VW / 2, 84, '#b13e53', 10, 'center');
 
   const rx = VW - 176;
   panel(ctx, rx, 6, 170, 50);
@@ -275,6 +289,8 @@ function hud(ctx: CanvasRenderingContext2D, run: Run) {
   text(ctx, BIOME_NAMES[biomeOf(run.floor)], VW - 12, 23, '#94b0c2', 8, 'right');
   ctx.drawImage(sprites.soul, rx + 5, 9);
   text(ctx, `${run.souls}`, rx + 21, 12, '#73eff7');
+  ctx.drawImage(sprites.coin, rx + 46, 9);
+  text(ctx, `${p.gold}`, rx + 61, 12, '#ffcd75');
   ctx.drawImage(sprites.potion, rx + 5, 38);
   text(ctx, `${p.potions} [Q]`, rx + 20, 41, p.potions ? '#f4f4f4' : '#566c86', 8);
   ctx.drawImage(sprites.bomb, rx + 52, 38);
@@ -316,7 +332,7 @@ function hud(ctx: CanvasRenderingContext2D, run: Run) {
 }
 
 const TILE_NAMES: Record<number, string> = {
-  [T.STAIRS]: 'Treppe nach unten [E]', [T.CHEST]: 'Truhe', [T.ALTAR]: 'Altar: Leben gegen eine Gabe', [T.CRACKED]: 'Rissige Wand – 3 Schläge oder Bombe',
+  [T.STAIRS]: 'Treppe nach unten [E]', [T.CHEST]: 'Truhe', [T.CURSED]: 'Verfluchte Truhe – stark, aber kostet Leben', [T.TRADER]: 'Händler – hineinlaufen zum Handeln', [T.ALTAR]: 'Altar: Leben gegen eine Gabe', [T.CRACKED]: 'Rissige Wand – 3 Schläge oder Bombe',
   [T.BARREL]: 'Fass – anstoßen zündet die Lunte', [T.PILLAR]: 'Säule – stürzt bei Explosion ein', [T.GRASS]: 'Bewuchs – brennbar',
   [T.FRAGILE]: 'Brüchiger Boden', [T.FRAGILE2]: 'Brüchiger Boden – bricht beim nächsten Tritt', [T.CRATE]: 'Kiste – schiebbar', [T.CRATE_ON]: 'Kiste auf Platte',
   [T.PLATE]: 'Druckplatte', [T.LEVER]: 'Hebel – setzt die Kisten zurück', [T.ICE]: 'Eis – du rutschst', [T.TABLET]: 'Steintafel', [T.GOAL]: 'Zielplatte',
@@ -403,6 +419,24 @@ function perkOverlay(ctx: CanvasRenderingContext2D, run: Run) {
     wrapText(pk.desc, 22).forEach((l, k) => text(ctx, l, x + 77, y + 54 + k * 11, '#94b0c2', 8, 'center'));
   });
   text(ctx, ids.length === 2 ? 'Taste 1 oder 2' : 'Taste 1, 2 oder 3', VW / 2, 242, '#94b0c2', 8, 'center');
+}
+
+function shopOverlay(ctx: CanvasRenderingContext2D, run: Run) {
+  const p = run.p, w = 330, h = 62 + run.shop.length * 30, x = (VW - w) >> 1, y = (VH - h) >> 1;
+  ctx.fillStyle = 'rgba(13,14,23,0.75)'; ctx.fillRect(0, 0, VW, VH);
+  panel(ctx, x, y, w, h, '#ffcd75');
+  ctx.drawImage(sprites.trader, x + 10, y + 8, 32, 32);
+  text(ctx, 'HÄNDLER', x + 52, y + 12, '#ffcd75', 16);
+  ctx.drawImage(sprites.coin, x + w - 60, y + 14);
+  text(ctx, `${p.gold}`, x + w - 12, y + 17, '#ffcd75', 10, 'right');
+  run.shop.forEach((o, i) => {
+    const oy = y + 46 + i * 30, ok = !o.sold && p.gold >= o.price;
+    text(ctx, `[${i + 1}]`, x + 12, oy + 4, o.sold ? '#333c57' : '#ffcd75');
+    text(ctx, o.sold ? `${o.name} – verkauft` : o.name, x + 36, oy, o.sold ? '#566c86' : o.item ? RARITY_COL[o.item.rar] : '#f4f4f4');
+    text(ctx, o.desc, x + 36, oy + 11, '#94b0c2', 8);
+    if (!o.sold) text(ctx, `${o.price} Gold`, x + w - 12, oy + 4, ok ? '#ffcd75' : '#b13e53', 10, 'right');
+  });
+  text(ctx, '[LEERTASTE] weiterziehen', VW / 2, y + h - 14, '#94b0c2', 8, 'center');
 }
 
 function endOverlay(ctx: CanvasRenderingContext2D, run: Run) {

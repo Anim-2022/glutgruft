@@ -7,7 +7,7 @@ import { botRun } from './bot';
 describe('bot', () => {
   it('spielt Läufe ohne Absturz und kommt voran', () => {
     const N = 10;
-    for (const meta of [defaultMeta(), { ...defaultMeta(), upg: { vit: 5, atk: 3, trank: 3 } }]) {
+    for (const meta of [defaultMeta(), { ...defaultMeta(), upg: { vit: 5, atk: 2, trank: 3 } }]) {
       for (const cls of CLASS_ORDER) {
         const floors: number[] = [];
         let wins = 0, stuck = 0;

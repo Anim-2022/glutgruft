@@ -93,8 +93,8 @@ export const PERKS: Record<string, PerkDef> = {
 export interface UpgDef { id: 'vit' | 'atk' | 'trank'; name: string; desc: string; max: number; cost: number; }
 
 export const UPGRADES: UpgDef[] = [
-  { id: 'vit', name: 'Vitalität', desc: '+3 Leben pro Stufe', max: 5, cost: 20 },
-  { id: 'atk', name: 'Schleifstein', desc: '+1 Angriff pro Stufe', max: 3, cost: 40 },
+  { id: 'vit', name: 'Vitalität', desc: '+2 Leben pro Stufe', max: 5, cost: 20 },
+  { id: 'atk', name: 'Schleifstein', desc: '+1 Angriff pro Stufe', max: 2, cost: 60 },
   { id: 'trank', name: 'Proviant', desc: '+1 Heiltrank zum Start', max: 3, cost: 25 },
 ];
 export const RANGER_COST = 60;
@@ -117,3 +117,8 @@ export const RELICS: Record<string, PerkDef> = {
   jaeger: { name: 'Riesentöter', desc: '+50 % Schaden gegen Bosse' },
   echo: { name: 'Echo', desc: 'Fähigkeiten kosten 1 weniger' },
 };
+
+export const RARITY = ['Gewöhnlich', 'Selten', 'Episch', 'Legendär'];
+export const RARITY_COL = ['#94b0c2', '#41a6f6', '#9a4fc0', '#ffcd75'];
+export interface Item { slot: 0 | 1 | 2; name: string; rar: number; atk: number; def: number; hp: number; crit: number; cursed?: boolean; }
+export interface Offer { kind: 'potion' | 'bomb' | 'item'; name: string; desc: string; price: number; sold: boolean; item?: Item; }

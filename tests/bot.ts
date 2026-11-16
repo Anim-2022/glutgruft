@@ -32,12 +32,36 @@ function stepTo(run: Run, goal: (x: number, y: number, i: number) => boolean, av
   return null;
 }
 
+const shopped = new Set<number>();
+const trail: number[] = [];
+let visitFloor = 0, wander = 0;
+
 export function botAction(run: Run): Action {
+  if (run.mode === 'shop') shopped.add(run.floor);
+  if (run.turn === 0) shopped.clear();
+  if (run.turn === 0 || visitFloor !== run.floor) { trail.length = 0; wander = 0; visitFloor = run.floor; }
+  if (wander > 0 && run.mode === 'play') { wander--; const d = DIRS[(wander * 7 + run.turn) % 4]; return { t: 'move', dx: d[0], dy: d[1] }; }
+  const a = decide(run);
+  // Gegen Pendeln: wechselt der Bot nur noch zwischen zwei Feldern, läuft er kurz ziellos
+  if (a.t === 'move' && run.mode === 'play') {
+    trail.push(run.p.y * W + run.p.x);
+    if (trail.length > 14) trail.shift();
+    if (trail.length === 14 && new Set(trail).size <= 2) { trail.length = 0; wander = 8; }
+  } else trail.length = 0;
+  return a;
+}
+
+function decide(run: Run): Action {
   const p = run.p, c = CLASSES[p.cls];
   if (run.mode === 'perk') return { t: 'perk', i: 0 };
+  if (run.mode === 'shop') {
+    const i = run.shop.findIndex(o => !o.sold && o.price <= p.gold && (o.kind !== 'bomb'));
+    return i >= 0 ? { t: 'buy', i } : { t: 'leave' };
+  }
   if (p.hp < p.maxHp * 0.4 && p.potions > 0) return { t: 'potion' };
-  const vis = run.mobs.filter(m => run.vis[m.y * W + m.x]);
   const dist = (m: { x: number; y: number }) => Math.max(Math.abs(m.x - p.x), Math.abs(m.y - p.y));
+  // weit entfernte Gegner ignoriert der Bot zunächst und erkundet weiter
+  const vis = run.mobs.filter(m => run.vis[m.y * W + m.x] && dist(m) <= 7);
   if (vis.length) {
     const near = vis.reduce((a, b) => (dist(a) <= dist(b) ? a : b));
     const d = dist(near), adj = Math.abs(near.x - p.x) + Math.abs(near.y - p.y) === 1;
@@ -63,7 +87,7 @@ export function botAction(run: Run): Action {
   if (run.tiles[p.y * W + p.x] === T.STAIRS) return { t: 'descend' };
   // Truhen mitnehmen, dann Treppe, sonst erkunden
   const s =
-    stepTo(run, (_x, _y, i) => run.seen[i] === 1 && run.tiles[i] === T.CHEST) ??
+    stepTo(run, (_x, _y, i) => run.seen[i] === 1 && (run.tiles[i] === T.CHEST || (run.tiles[i] === T.TRADER && p.gold >= 25 && !shopped.has(run.floor)))) ??
     stepTo(run, (_x, _y, i) => run.seen[i] === 1 && run.tiles[i] === T.STAIRS) ??
     stepTo(run, (_x, _y, i) => walkable(run.tiles[i]) && !run.seen[i]) ??
     stepTo(run, (_x, _y, i) => run.mobs.some(m => m.y * W + m.x === i), false);
