@@ -19,13 +19,13 @@ export function hex(col: string): [number, number, number] {
   return [n >> 16, (n >> 8) & 255, n & 255];
 }
 
-export interface TileSet { floor: HTMLCanvasElement[]; wall: HTMLCanvasElement; top: HTMLCanvasElement; grass: HTMLCanvasElement[]; burnt: HTMLCanvasElement; decals: HTMLCanvasElement[]; }
+export interface TileSet { floor: HTMLCanvasElement[]; wall: HTMLCanvasElement; top: HTMLCanvasElement; cap: HTMLCanvasElement; hi: string; grass: HTMLCanvasElement[]; burnt: HTMLCanvasElement; decals: HTMLCanvasElement[]; }
 export const tilesets: TileSet[] = [];
 
 const BIOMES = [
-  { floor: '#343a5c', speck: '#434a70', brick: '#6b82a0', hi: '#8ea4bf', mortar: '#333c5c', top: '#20243a', g1: '#3f7a5c', g2: '#5fa06a' },
-  { floor: '#22443f', speck: '#2f6a55', brick: '#2f8f85', hi: '#55b89c', mortar: '#174a4c', top: '#16302f', g1: '#38b764', g2: '#a7f070' },
-  { floor: '#40262b', speck: '#6a3530', brick: '#9a4a3c', hi: '#c96f45', mortar: '#47222b', top: '#2a171d', g1: '#1f1418', g2: '#6b4a3a' },
+  { floor: '#343a5c', speck: '#434a70', brick: '#6b82a0', hi: '#8ea4bf', mortar: '#333c5c', top: '#14172a', cap: '#4b5a7c', capHi: '#a9bdd6', g1: '#3f7a5c', g2: '#5fa06a' },
+  { floor: '#22443f', speck: '#2f6a55', brick: '#2f8f85', hi: '#55b89c', mortar: '#174a4c', top: '#0d2222', cap: '#1e6a62', capHi: '#7fd6b4', g1: '#38b764', g2: '#a7f070' },
+  { floor: '#40262b', speck: '#6a3530', brick: '#9a4a3c', hi: '#c96f45', mortar: '#47222b', top: '#1c0f14', cap: '#6e3a36', capHi: '#e08a55', g1: '#1f1418', g2: '#6b4a3a' },
 ];
 
 function drawRows(rows: string[], line: boolean, pal: Record<string, string> = PAL): HTMLCanvasElement {
@@ -122,19 +122,53 @@ export function bake(): void {
       if (v === 3) { g.fillRect(3, 9, 5, 1); g.fillRect(7, 10, 3, 1); }
       floor.push(c);
     }
+    const bi = BIOMES.indexOf(b);
     const [wall, wg] = mk(TS, TS);
     wg.fillStyle = b.mortar; wg.fillRect(0, 0, TS, TS);
-    for (let r = 0; r < 4; r++) {
-      const off = r % 2 ? -4 : 0;
-      for (let x = off; x < TS; x += 8) {
-        wg.fillStyle = b.brick; wg.fillRect(x, r * 4, 7, 3);
-        wg.fillStyle = b.hi; wg.fillRect(x, r * 4, 7, 1);
+    if (bi === 0) {
+      // behauene Steinquader
+      for (let r = 0; r < 4; r++) {
+        const off = r % 2 ? -4 : 0;
+        for (let x = off; x < TS; x += 8) {
+          wg.fillStyle = b.brick; wg.fillRect(x, r * 4, 7, 3);
+          wg.fillStyle = b.hi; wg.fillRect(x, r * 4, 7, 1);
+        }
       }
+    } else if (bi === 1) {
+      // unebener Fels mit Moos
+      wg.fillStyle = b.brick; wg.fillRect(0, 0, TS, TS);
+      wg.fillStyle = b.mortar;
+      for (let i = 0; i < 9; i++) wg.fillRect((rnd() * 14) | 0, 3 + ((rnd() * 11) | 0), 2 + ((rnd() * 3) | 0), 1);
+      wg.fillRect(5, 4, 1, 9); wg.fillRect(11, 2, 1, 8); wg.fillRect(6, 9, 3, 1);
+      wg.fillStyle = b.hi; wg.fillRect(1, 4, 3, 1); wg.fillRect(7, 6, 3, 1); wg.fillRect(13, 5, 2, 1); wg.fillRect(2, 10, 2, 1);
+      wg.fillStyle = b.g1; wg.fillRect(0, 0, TS, 3); wg.fillRect(2, 3, 2, 2); wg.fillRect(9, 3, 3, 1); wg.fillRect(13, 3, 1, 3);
+      wg.fillStyle = b.g2; wg.fillRect(0, 0, TS, 1); wg.fillRect(3, 1, 2, 1); wg.fillRect(10, 1, 3, 1);
+    } else {
+      // dunkler Basalt mit glühenden Rissen
+      for (let r = 0; r < 2; r++) for (let x = r ? -4 : 0; x < TS; x += 8) {
+        wg.fillStyle = b.brick; wg.fillRect(x, r * 8, 7, 7);
+        wg.fillStyle = b.hi; wg.fillRect(x, r * 8, 7, 1);
+        wg.fillStyle = b.mortar; wg.fillRect(x + 1, r * 8 + 5, 5, 1);
+      }
+      wg.fillStyle = '#ef7d57'; wg.fillRect(3, 3, 1, 3); wg.fillRect(4, 5, 2, 1); wg.fillRect(11, 10, 1, 3); wg.fillRect(10, 12, 1, 2);
+      wg.fillStyle = '#ffcd75'; wg.fillRect(3, 4, 1, 1); wg.fillRect(11, 11, 1, 1);
     }
-    wg.fillStyle = 'rgba(0,0,0,0.35)'; wg.fillRect(0, 13, TS, 3);
+    if (bi !== 1) { wg.fillStyle = b.capHi; wg.fillRect(0, 0, TS, 2); }
+    wg.fillStyle = 'rgba(0,0,0,0.4)'; wg.fillRect(0, 13, TS, 3);
+    // Mauerkrone: von oben gesehene Wand, deutlich heller als das Dunkel dahinter
+    const [cap, cg] = mk(TS, TS);
+    cg.fillStyle = b.cap; cg.fillRect(0, 0, TS, TS);
+    cg.fillStyle = 'rgba(0,0,0,0.28)';
+    if (bi === 1) { for (let i = 0; i < 7; i++) cg.fillRect((rnd() * 13) | 0, (rnd() * 14) | 0, 2 + ((rnd() * 2) | 0), 1 + ((rnd() * 2) | 0)); }
+    else { cg.fillRect(0, 7, TS, 1); cg.fillRect(0, 15, TS, 1); cg.fillRect(7, 0, 1, 7); cg.fillRect(3, 8, 1, 7); cg.fillRect(11, 8, 1, 7); cg.fillRect(15, 0, 1, 7); }
+    cg.fillStyle = 'rgba(255,255,255,0.10)';
+    if (bi === 1) { cg.fillRect(2, 2, 3, 1); cg.fillRect(9, 6, 3, 1); cg.fillRect(4, 11, 2, 1); }
+    else { cg.fillRect(0, 0, 7, 1); cg.fillRect(8, 0, 7, 1); cg.fillRect(4, 8, 7, 1); cg.fillRect(12, 8, 4, 1); cg.fillRect(0, 8, 3, 1); }
+    if (bi === 2) { cg.fillStyle = '#ef7d57'; cg.fillRect(5, 3, 1, 2); cg.fillRect(12, 11, 2, 1); }
+    // Felsinneres ohne angrenzenden Boden
     const [top, tg] = mk(TS, TS);
     tg.fillStyle = b.top; tg.fillRect(0, 0, TS, TS);
-    tg.fillStyle = b.mortar; tg.fillRect(2, 3, 3, 1); tg.fillRect(9, 10, 4, 1);
+    tg.fillStyle = 'rgba(255,255,255,0.05)'; tg.fillRect(2, 3, 3, 1); tg.fillRect(9, 10, 4, 1);
     const grass: HTMLCanvasElement[] = [];
     for (let v = 0; v < 3; v++) {
       const [c, g] = mk(TS, TS);
@@ -157,7 +191,7 @@ export function bake(): void {
     decal(g => { g.fillStyle = b.top; g.fillRect(4, 4, 1, 3); g.fillRect(5, 6, 3, 1); g.fillRect(7, 7, 1, 3); g.fillRect(8, 9, 3, 1); g.fillRect(10, 10, 1, 2); });
     decal(g => { g.fillStyle = b.mortar; g.fillRect(4, 7, 8, 4); g.fillRect(5, 6, 6, 6); g.fillStyle = b.hi; g.fillRect(6, 7, 3, 1); });
     decal(g => { g.fillStyle = b.g1; g.fillRect(2, 11, 4, 2); g.fillRect(10, 3, 3, 2); g.fillStyle = b.g2; g.fillRect(3, 11, 2, 1); g.fillRect(11, 3, 1, 1); });
-    tilesets.push({ floor, wall, top, grass, burnt, decals });
+    tilesets.push({ floor, wall, top, cap, hi: b.capHi, grass, burnt, decals });
   }
 }
 

@@ -23,9 +23,9 @@ const LUNGE_T = 0.16, FLASH_T = 0.12;
 
 // ---- Anzeigeoptionen ----
 const mouse = { x: -1, y: -1 };
-let showMap = true, tutorial = false;
+let mapMode = 1, tutorial = false; // 0 aus, 1 klein, 2 groß
 export const setMouse = (x: number, y: number) => { mouse.x = x; mouse.y = y; };
-export const toggleMap = () => { showMap = !showMap; };
+export const toggleMap = () => { mapMode = (mapMode + 1) % 3; };
 export const setTutorial = (on: boolean) => { tutorial = on; };
 
 // ---- Fackeln: Positionen werden einmal pro Ebene bestimmt ----
@@ -50,7 +50,7 @@ function buildLight(run: Run) {
 interface Light { x: number; y: number; r: number; col?: string; a?: number; }
 const LW = VW >> 1, LH = VH >> 1;
 let lcv: HTMLCanvasElement | null = null, lg: CanvasRenderingContext2D;
-const AMBIENT = 0.84, MEMORY = 0.7;
+const AMBIENT = 0.84, MEMORY = 0.62;
 
 function applyLight(ctx: CanvasRenderingContext2D, run: Run, lights: Light[], ox: number, oy: number, x0: number, y0: number, x1: number, y1: number) {
   if (!lcv) { lcv = document.createElement('canvas'); lcv.width = LW; lcv.height = LH; lg = lcv.getContext('2d')!; }
@@ -69,6 +69,12 @@ function applyLight(ctx: CanvasRenderingContext2D, run: Run, lights: Light[], ox
     gr.addColorStop(1, 'rgba(0,0,0,0)');
     g.fillStyle = gr;
     g.fillRect(x - r, y - r, r * 2, r * 2);
+  }
+  // Wände im Sichtfeld bleiben auch fern vom Licht erkennbar
+  g.fillStyle = 'rgba(0,0,0,0.42)';
+  for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
+    const i = y * W + x;
+    if (run.vis[i] && wallLike(run.tiles[i])) g.fillRect((x * TS + ox) / 2, (y * TS + oy) / 2, TS / 2, TS / 2);
   }
   // Bekannte, aber gerade nicht einsehbare Felder: gleichmäßig gedimmt, unabhängig vom Licht
   g.globalCompositeOperation = 'source-over';
@@ -154,8 +160,8 @@ export function drawRun(ctx: CanvasRenderingContext2D, run: Run, dt: number, tim
   for (const [id, t] of flashes) { if (t - dt <= 0) flashes.delete(id); else flashes.set(id, t - dt); }
 
   const p = run.p, pp = smooth(p, dt);
-  const tx = Math.max(0, Math.min(W * TS - VW, pp.x * TS + 8 - VW / 2));
-  const ty = Math.max(0, Math.min(H * TS - VH, pp.y * TS + 8 - VH / 2));
+  // Held bleibt immer in der Bildmitte; jenseits des Kartenrands ist es einfach dunkel
+  const tx = pp.x * TS + 8 - VW / 2, ty = pp.y * TS + 8 - VH / 2;
   if (Math.abs(tx - cam.x) > 220 || Math.abs(ty - cam.y) > 220) { cam.x = tx; cam.y = ty; }
   cam.x += (tx - cam.x) * Math.min(1, dt * 10); cam.y += (ty - cam.y) * Math.min(1, dt * 10);
   shake = Math.max(0, shake - dt * 30);
@@ -176,7 +182,23 @@ export function drawRun(ctx: CanvasRenderingContext2D, run: Run, dt: number, tim
     const t = run.tiles[i], dx = x * TS + ox, dy = y * TS + oy;
     if (wallLike(t)) {
       const front = y + 1 < H && !wallLike(run.tiles[i + W]);
-      ctx.drawImage(front ? ts.wall : ts.top, dx, dy);
+      const open = (ox2: number, oy2: number) => x + ox2 >= 0 && x + ox2 < W && y + oy2 >= 0 && y + oy2 < H && !wallLike(run.tiles[i + oy2 * W + ox2]);
+      const l = open(-1, 0), r = open(1, 0), u = open(0, -1);
+      if (front) ctx.drawImage(ts.wall, dx, dy);
+      else {
+        const c = [open(-1, -1), open(1, -1), open(-1, 1), open(1, 1)];
+        ctx.drawImage(l || r || u || c.some(Boolean) ? ts.cap : ts.top, dx, dy);
+        ctx.fillStyle = ts.hi;
+        if (u) ctx.fillRect(dx, dy, TS, 2);
+        if (c[0] && !l && !u) ctx.fillRect(dx, dy, 2, 2);
+        if (c[1] && !r && !u) ctx.fillRect(dx + TS - 2, dy, 2, 2);
+        if (c[2] && !l) ctx.fillRect(dx, dy + TS - 2, 2, 2);
+        if (c[3] && !r) ctx.fillRect(dx + TS - 2, dy + TS - 2, 2, 2);
+      }
+      // helle Kante zur offenen Seite: der Raumumriss ist rundum lesbar
+      ctx.fillStyle = ts.hi;
+      if (l) ctx.fillRect(dx, dy, 2, front ? 13 : TS);
+      if (r) ctx.fillRect(dx + TS - 2, dy, 2, front ? 13 : TS);
       if (t === T.CRACKED) ctx.drawImage(sprites[(run.cracks.get(i) ?? 0) >= 2 ? 'crack2' : 'crack'], dx, dy);
       if (front && torches.has(i)) {
         ctx.drawImage(sprites[`torch${Math.floor(time * 7 + x) % 2}`], dx, dy);
@@ -184,7 +206,7 @@ export function drawRun(ctx: CanvasRenderingContext2D, run: Run, dt: number, tim
       }
     } else {
       ctx.drawImage(t === T.ICE ? sprites.ice : ts.floor[(x * 7 + y * 13 + ((x * y) % 5)) % 4], dx, dy);
-      if (y > 0 && wallLike(run.tiles[i - W])) { ctx.fillStyle = 'rgba(0,0,0,0.3)'; ctx.fillRect(dx, dy, TS, 3); }
+      if (y > 0 && wallLike(run.tiles[i - W])) { ctx.fillStyle = 'rgba(0,0,0,0.38)'; ctx.fillRect(dx, dy, TS, 4); }
       if (t === T.FLOOR) { const h = hash(x, y, run.seed + run.floor * 7); if (h % 9 === 0) ctx.drawImage(ts.decals[(h >>> 8) % ts.decals.length], dx, dy); }
       if (t === T.GRASS) ctx.drawImage(ts.grass[(x * 5 + y * 3) % 3], dx, dy);
       else if (t === T.BURNT) ctx.drawImage(ts.burnt, dx, dy);
@@ -323,8 +345,8 @@ export function drawRun(ctx: CanvasRenderingContext2D, run: Run, dt: number, tim
   }
 
   tooltip(ctx, run, ox - sx, oy - sy);
-  hud(ctx, run);
-  if (showMap) minimap(ctx, run, time);
+  hud(ctx, run, time);
+  if (mapMode) minimap(ctx, run, time);
   if (overlay === 'char') charSheet(ctx, run);
   else if (overlay === 'help') helpSheet(ctx);
   else if (overlay === 'inv') invSheet(ctx, run, time);
@@ -351,63 +373,65 @@ function slots(run: Run): Slot[] {
 
 const STATUS: [string, string, string][] = [['brand', 'Brand', '#ef7d57'], ['gift', 'Gift', '#38b764'], ['stark', 'Kriegsschrei', '#b13e53'], ['dodge', 'Ausweichen', '#94b0c2']];
 
-function hud(ctx: CanvasRenderingContext2D, run: Run) {
+let logSeen = '', logAt = 0;
+
+function hud(ctx: CanvasRenderingContext2D, run: Run, time: number) {
   const p = run.p, c = CLASSES[p.cls];
-  // Spieler
-  panel(ctx, 6, 6, 196, 54);
-  panel(ctx, 11, 11, 36, 36, '#333c57', '#1c2033');
-  ctx.drawImage(sprites[lookOf(p)], 0, 1, 16, 16, 13, 13, 32, 32);
-  text(ctx, c.name, 53, 11, '#ffcd75');
-  text(ctx, `Stufe ${p.lvl}`, 196, 11, '#94b0c2', 8, 'right');
-  ctx.fillStyle = '#b13e53'; ctx.fillRect(53, 24, 3, 2); ctx.fillRect(57, 24, 3, 2); ctx.fillRect(53, 26, 7, 2); ctx.fillRect(54, 28, 5, 1); ctx.fillRect(55, 29, 3, 1); ctx.fillRect(56, 30, 1, 1);
-  bar(ctx, 64, 23, 132, 9, p.hp / p.maxHp, p.hp / p.maxHp < 0.3 ? '#ef7d57' : '#b13e53');
-  text(ctx, `${p.hp} / ${p.maxHp}`, 130, 24, '#f4f4f4', 8, 'center');
-  ctx.fillStyle = c.resCol; ctx.fillRect(56, 35, 1, 1); ctx.fillRect(55, 36, 3, 1); ctx.fillRect(54, 37, 5, 2); ctx.fillRect(55, 39, 3, 1); ctx.fillRect(56, 40, 1, 1);
-  bar(ctx, 64, 34, 132, 9, p.res / p.resMax, c.resCol);
-  text(ctx, `${c.resName} ${p.res} / ${p.resMax}`, 130, 35, '#f4f4f4', 8, 'center');
-  bar(ctx, 53, 49, 143, 3, p.exp / xpNeed(p.lvl), '#ffcd75');
+  // Spieler: eine schmale Zeile oben links
+  ctx.globalAlpha = under(0, 0, 206, 22) ? 0.25 : 1;
+  ctx.fillStyle = 'rgba(8,9,15,0.6)'; ctx.fillRect(2, 2, 202, 18);
+  ctx.fillStyle = '#1c2033'; ctx.fillRect(3, 3, 16, 16);
+  ctx.drawImage(sprites[lookOf(p)], 0, 1, 16, 16, 3, 3, 16, 16);
+  bar(ctx, 23, 4, 82, 9, p.hp / p.maxHp, p.hp / p.maxHp < 0.3 ? '#ef7d57' : '#b13e53');
+  text(ctx, `${p.hp}/${p.maxHp}`, 64, 5, '#f4f4f4', 8, 'center');
+  bar(ctx, 109, 4, 62, 9, p.res / p.resMax, c.resCol);
+  text(ctx, `${p.res}/${p.resMax}`, 140, 5, '#f4f4f4', 8, 'center');
+  bar(ctx, 23, 16, 148, 2, p.exp / xpNeed(p.lvl), '#ffcd75');
+  text(ctx, `St.${p.lvl}`, 201, 7, '#ffcd75', 8, 'right');
+  ctx.globalAlpha = 1;
   // Zustände als kleine Marken
-  let sx = 8;
+  let sx = 3;
   for (const [id, name, col] of STATUS) {
     if (!p.st[id]) continue;
     const label = tr(`${name} ${p.st[id]}`), w = label.length * 6 + 8;
-    panel(ctx, sx, 64, w, 13, col);
-    text(ctx, label, sx + 4, 67, col, 8);
+    panel(ctx, sx, 24, w, 13, col);
+    text(ctx, label, sx + 4, 27, col, 8);
     sx += w + 3;
   }
   const z = run.puzzle;
-  if (z && z.kind === 'arena' && z.started && !z.solved && !z.dead) text(ctx, `Prüfung: noch ${z.timer} Züge`, VW / 2, 84, '#b13e53', 10, 'center');
+  if (z && z.kind === 'arena' && z.started && !z.solved && !z.dead) text(ctx, `Prüfung: noch ${z.timer} Züge`, VW / 2, 60, '#b13e53', 10, 'center');
 
-  // Ebene und Vorräte
-  const rx = VW - 176;
-  panel(ctx, rx, 6, 170, 50);
-  text(ctx, `Ebene ${run.floor} / 15`, VW - 12, 11, '#f4f4f4', 10, 'right');
-  text(ctx, BIOME_NAMES[biomeOf(run.floor)], VW - 12, 23, '#94b0c2', 8, 'right');
-  ctx.drawImage(sprites.soul, rx + 5, 9);
-  text(ctx, `${run.souls}`, rx + 20, 12, '#73eff7');
-  ctx.drawImage(sprites.coin, rx + 5, 24);
-  text(ctx, `${p.gold}`, rx + 20, 27, '#ffcd75');
-  if (p.keys) { ctx.drawImage(sprites.key, rx + 48, 24); text(ctx, `${p.keys}`, rx + 62, 27, '#ffcd75'); }
-  text(ctx, `Angriff ${p.atk}${p.st.stark ? '+3' : ''}   Vert. ${p.def}`, rx + 6, 42, '#94b0c2', 8);
-  text(ctx, `[I] ${p.bag.length}`, VW - 12, 42, p.bag.length ? '#ffcd75' : '#566c86', 8, 'right');
+  // Ebene und Vorräte: eine Zeile oben rechts
+  const parts: [string | null, string, string][] = [[null, `[I] ${p.bag.length}/${BAG_MAX}`, p.bag.length >= BAG_MAX ? '#ef7d57' : p.bag.length ? '#ffcd75' : '#566c86']];
+  if (p.keys) parts.push(['key', `${p.keys}`, '#ffcd75']);
+  parts.push(['coin', `${p.gold}`, '#ffcd75'], ['soul', `${run.souls}`, '#73eff7'], [null, `Ebene ${run.floor}/15`, '#f4f4f4']);
+  const widths = parts.map(([ic, s]) => (ic ? 13 : 0) + tr(s).length * 6), total = widths.reduce((a, b) => a + b + 9, 0);
+  ctx.globalAlpha = under(VW - total - 4, 0, total + 4, 20) ? 0.25 : 1;
+  ctx.fillStyle = 'rgba(8,9,15,0.6)'; ctx.fillRect(VW - total - 2, 2, total, 15);
+  let rx = VW - 6;
+  parts.forEach(([ic, s, col], k) => {
+    rx -= widths[k];
+    if (ic) ctx.drawImage(sprites[ic], rx, 3);
+    text(ctx, s, rx + (ic ? 13 : 0), 6, col, 8);
+    rx -= 9;
+  });
+  ctx.globalAlpha = 1;
 
   // Schnellleiste
-  const sl = slots(run), S = 30, gap = 4, x0 = (VW - sl.length * S - (sl.length - 1) * gap) >> 1, y0 = VH - S - 8;
+  const sl = slots(run), S = 22, gap = 3, x0 = (VW - sl.length * S - (sl.length - 1) * gap) >> 1, y0 = VH - S - 4;
   let hover: Slot | null = null;
   sl.forEach((s, i) => {
-    const x = x0 + i * (S + gap) + (s.key === 'Q' ? 6 : s.key === 'B' ? 6 : 0);
+    const x = x0 + i * (S + gap) + (s.key === 'Q' ? 5 : s.key === 'B' ? 5 : 0);
     const over = mouse.x >= x && mouse.x < x + S && mouse.y >= y0 && mouse.y < y0 + S;
     if (over) hover = s;
     panel(ctx, x, y0, S, S, over ? '#ffcd75' : s.ok ? '#566c86' : '#333c57', s.ok ? 'rgba(28,32,51,0.92)' : 'rgba(13,14,23,0.92)');
     ctx.globalAlpha = s.ok ? 1 : 0.3;
-    ctx.drawImage(sprites[s.icon], x + 3, y0 + 3, 24, 24);
+    ctx.drawImage(sprites[s.icon], x + 5, y0 + 5);
     ctx.globalAlpha = 1;
-    ctx.fillStyle = '#0d0e17'; ctx.fillRect(x + 1, y0 + 1, 9, 10);
-    text(ctx, s.key, x + 3, y0 + 2, s.ok ? '#ffcd75' : '#566c86', 8, 'left', false);
+    text(ctx, s.key, x + 2, y0 + 1, s.ok ? '#ffcd75' : '#566c86', 8, 'left', false);
     const tag = s.cost || s.count;
     if (tag) {
-      ctx.fillStyle = '#0d0e17'; ctx.fillRect(x + S - 3 - tag.length * 6 - 1, y0 + S - 11, tag.length * 6 + 3, 10);
-      text(ctx, tag, x + S - 2, y0 + S - 10, !s.ok ? '#566c86' : s.cost ? c.resCol : '#f4f4f4', 8, 'right', false);
+      text(ctx, tag, x + S - 1, y0 + S - 8, !s.ok ? '#566c86' : s.cost ? c.resCol : '#f4f4f4', 8, 'right', false);
     }
   });
   if (hover) {
@@ -418,23 +442,28 @@ function hud(ctx: CanvasRenderingContext2D, run: Run) {
     lines.forEach((l, k) => text(ctx, l, x + 6, y0 - hh + 13 + k * 10, '#94b0c2', 8));
   }
 
-  // Meldungen
-  const lines = run.log.slice(-4).map(tr);
-  if (lines.length) {
-    const w = Math.min(x0 - 12, Math.max(...lines.map(l => l.length)) * 6 + 10), yy = VH - 12 - lines.length * 10;
-    ctx.fillStyle = 'rgba(8,9,15,0.6)'; ctx.fillRect(4, yy - 3, Math.max(w, 60), lines.length * 10 + 5);
-    lines.forEach((l, k) => text(ctx, l.length * 6 > x0 - 16 ? l.slice(0, Math.floor((x0 - 34) / 6)) + '...' : l, 8, yy + k * 10, k === lines.length - 1 ? '#f4f4f4' : '#94b0c2', 8));
+  // Meldungen: höchstens zwei Zeilen, blenden nach ein paar Sekunden aus
+  const lines = run.log.slice(-2).map(tr), sig = `${run.log.length}:${lines[lines.length - 1] ?? ''}`;
+  if (sig !== logSeen) { logSeen = sig; logAt = time; }
+  const age = time - logAt, la = age < 4 ? 1 : Math.max(0, 1 - (age - 4));
+  if (lines.length && la > 0) {
+    const max = Math.floor((x0 - 20) / 6), cut = lines.map(l => l.length > max ? l.slice(0, max - 3) + '...' : l);
+    const w = Math.max(...cut.map(l => l.length)) * 6 + 10, yy = VH - 6 - cut.length * 10;
+    ctx.globalAlpha = la * (under(0, yy - 4, w + 6, 40) ? 0.25 : 1);
+    ctx.fillStyle = 'rgba(8,9,15,0.6)'; ctx.fillRect(2, yy - 3, w, cut.length * 10 + 5);
+    cut.forEach((l, k) => text(ctx, l, 6, yy + k * 10, k === cut.length - 1 ? '#f4f4f4' : '#94b0c2', 8));
+    ctx.globalAlpha = 1;
   }
 
   if (tutorial && run.mode === 'play') {
     const h0 = hint(run), h = h0 && tr(h0);
-    if (h) { const w = h.length * 6 + 16; panel(ctx, (VW - w) >> 1, 62, w, 16, '#ffcd75'); text(ctx, h, VW / 2, 67, '#ffcd75', 8, 'center'); }
+    if (h) { const w = h.length * 6 + 16; panel(ctx, (VW - w) >> 1, 38, w, 16, '#ffcd75'); text(ctx, h, VW / 2, 43, '#ffcd75', 8, 'center'); }
   }
   const boss = run.mobs.find(m => m.boss && m.awake);
   if (boss) {
-    panel(ctx, VW / 2 - 110, 6, 220, 26, '#b13e53');
-    text(ctx, boss.name, VW / 2, 10, '#ffcd75', 10, 'center');
-    bar(ctx, VW / 2 - 100, 22, 200, 5, boss.hp / boss.maxHp, '#b13e53');
+    panel(ctx, VW / 2 - 90, 4, 180, 22, '#b13e53', 'rgba(13,14,23,0.75)');
+    text(ctx, boss.name, VW / 2, 7, '#ffcd75', 8, 'center');
+    bar(ctx, VW / 2 - 82, 18, 164, 4, boss.hp / boss.maxHp, '#b13e53');
   }
 }
 
@@ -502,7 +531,7 @@ function charSheet(ctx: CanvasRenderingContext2D, run: Run) {
   panel(ctx, x + 12, y + 12, 68, 68, '#333c57', '#1c2033');
   figure(ctx, lookOf(p), x + 14, y + 14, 64, 64);
   text(ctx, c.name, x + 90, y + 14, '#ffcd75', 16);
-  text(ctx, `Stufe ${p.lvl}   Ebene ${run.floor}   Zug ${run.turn}`, x + 90, y + 34, '#94b0c2', 8);
+  text(ctx, `Stufe ${p.lvl}   Ebene ${run.floor} ${BIOME_NAMES[biomeOf(run.floor)]}   Zug ${run.turn}`, x + 90, y + 34, '#94b0c2', 8);
   const stats: [string, string, string][] = [
     ['Leben', `${p.hp} / ${p.maxHp}`, '#b13e53'], [c.resName, `${p.res} / ${p.resMax}`, c.resCol], ['Angriff', `${p.atk}`, '#f4f4f4'], ['Verteidigung', `${p.def}`, '#f4f4f4'],
     ['Kritisch', `${Math.round(p.crit * 100)} %`, '#f4f4f4'], ['Fähigkeiten', `${Math.round(p.pow * 100)} %`, '#f4f4f4'], ['Besiegt', `${run.kills}`, '#94b0c2'], ['Seelensplitter', `${run.souls}`, '#73eff7'],
@@ -544,7 +573,7 @@ function charSheet(ctx: CanvasRenderingContext2D, run: Run) {
 const HELP: [string, string][] = [
   ['Pfeile / WASD', 'bewegen, in Gegner laufen greift an'], ['Leertaste', 'einen Zug warten'], ['1  2  3', 'Fähigkeiten'], ['F', 'Fernangriff (Magier, Waldläufer)'],
   ['Q', 'Heiltrank trinken'], ['B', 'Bombe werfen'], ['E', 'Treppe hinabsteigen'], ['Klick / Tab', 'Ziel wählen'], ['Maus', 'über etwas halten zeigt Details'],
-  ['I', 'Rucksack: Ausrüstung wechseln, verkaufen'], ['C', 'Charakter, Reliquien, Gaben'], ['N', 'Minikarte ein/aus'], ['M', 'Ton ein/aus'], ['V', 'Vollbild'], ['H', 'diese Hilfe'],
+  ['I', 'Rucksack: Ausrüstung wechseln, verkaufen'], ['C', 'Charakter, Reliquien, Gaben'], ['N', 'Karte: klein, groß, aus'], ['M', 'Ton ein/aus'], ['V', 'Vollbild'], ['H', 'diese Hilfe'],
 ];
 
 function helpSheet(ctx: CanvasRenderingContext2D) {
@@ -588,24 +617,51 @@ function tooltip(ctx: CanvasRenderingContext2D, run: Run, ox: number, oy: number
   if (!lines.length) return;
   ctx.strokeStyle = '#ffcd75'; ctx.lineWidth = 1; ctx.strokeRect(tx * TS + ox + 0.5, ty * TS + oy + 0.5, TS - 1, TS - 1);
   const w = Math.max(...lines.map(l => tr(l).length)) * 6 + 12, h = lines.length * 10 + 8;
-  const x = Math.min(VW - w - 4, mouse.x + 10), y = Math.max(4, Math.min(VH - h - 44, mouse.y + 10));
+  const x = Math.min(VW - w - 4, mouse.x + 10), y = Math.max(4, Math.min(VH - h - 32, mouse.y + 10));
   panel(ctx, x, y, w, h, '#ffcd75');
   lines.forEach((l, k) => text(ctx, l, x + 6, y + 5 + k * 10, k ? '#94b0c2' : '#f4f4f4', 8));
 }
 
 function minimap(ctx: CanvasRenderingContext2D, run: Run, time: number) {
-  const x0 = VW - W * 2 - 8, y0 = 62;
-  panel(ctx, x0 - 2, y0 - 2, W * 2 + 4, H * 2 + 4, '#566c86', 'rgba(13,14,23,0.78)');
+  const big = mapMode === 2, s = big ? 6 : 1;
+  const x0 = big ? (VW - W * s) >> 1 : VW - W - 4, y0 = big ? ((VH - H * s) >> 1) - 6 : 20;
+  if (big) {
+    ctx.fillStyle = 'rgba(5,6,12,0.72)'; ctx.fillRect(0, 0, VW, VH);
+    panel(ctx, x0 - 4, y0 - 16, W * s + 8, H * s + 36, '#566c86', 'rgba(13,14,23,0.9)');
+    text(ctx, `Ebene ${run.floor} / 15 - ${BIOME_NAMES[biomeOf(run.floor)]}`, x0, y0 - 12, '#ffcd75', 8);
+    text(ctx, '[N] schließen', x0 + W * s, y0 - 12, '#566c86', 8, 'right');
+  } else {
+    ctx.globalAlpha = under(x0 - 2, y0 - 2, W + 4, H + 4) ? 0.25 : 1;
+    ctx.fillStyle = 'rgba(8,9,15,0.55)'; ctx.fillRect(x0 - 1, y0 - 1, W + 2, H + 2);
+  }
   for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
     const i = y * W + x, t = run.tiles[i];
-    if (!run.seen[i] || t === T.WALL) continue;
-    ctx.fillStyle = t === T.STAIRS || t === T.GATE ? '#ffcd75' : t === T.CHEST ? '#c98a3a' : t === T.FOUNTAIN ? '#73eff7' : t === T.CRACKED ? '#b13e53'
+    if (!run.seen[i]) continue;
+    if (t === T.WALL) {
+      if (!big) continue;
+      ctx.fillStyle = '#262b44';
+    } else ctx.fillStyle = t === T.STAIRS || t === T.GATE ? '#ffcd75' : t === T.CHEST || t === T.CURSED ? '#c98a3a' : t === T.FOUNTAIN ? '#73eff7' : t === T.TRADER ? '#38b764' : t === T.CRACKED ? '#b13e53'
       : (t >= T.CRATE && t <= T.GOAL) ? '#41a6f6' : run.fire.has(i) ? '#ef7d57' : run.vis[i] ? '#94b0c2' : '#566c86';
-    ctx.fillRect(x0 + x * 2, y0 + y * 2, 2, 2);
+    ctx.fillRect(x0 + x * s, y0 + y * s, s, s);
   }
-  for (const m of run.mobs) if (run.vis[m.y * W + m.x]) { ctx.fillStyle = m.elite ? '#ffcd75' : '#b13e53'; ctx.fillRect(x0 + m.x * 2, y0 + m.y * 2, 2, 2); }
-  if (Math.floor(time * 4) % 2) { ctx.fillStyle = '#f4f4f4'; ctx.fillRect(x0 + run.p.x * 2 - 1, y0 + run.p.y * 2 - 1, 4, 4); }
+  for (const m of run.mobs) if (run.vis[m.y * W + m.x]) { ctx.fillStyle = m.elite ? '#ffcd75' : '#b13e53'; ctx.fillRect(x0 + m.x * s, y0 + m.y * s, s, s); }
+  if (big || Math.floor(time * 4) % 2) {
+    ctx.fillStyle = '#f4f4f4';
+    if (big) ctx.fillRect(x0 + run.p.x * s - 1, y0 + run.p.y * s - 1, s + 2, s + 2); else ctx.fillRect(x0 + run.p.x - 1, y0 + run.p.y - 1, 3, 3);
+  }
+  ctx.globalAlpha = 1;
+  if (big) {
+    const leg: [string, string][] = [['#f4f4f4', 'Du'], ['#ffcd75', 'Treppe'], ['#c98a3a', 'Truhe'], ['#38b764', 'Händler'], ['#73eff7', 'Brunnen'], ['#41a6f6', 'Rätsel'], ['#b13e53', 'Gegner']];
+    let lx = x0;
+    for (const [col, name] of leg) {
+      ctx.fillStyle = col; ctx.fillRect(lx, y0 + H * s + 7, 5, 5);
+      lx += 8 + text(ctx, name, lx + 8, y0 + H * s + 6, '#94b0c2', 8) + 10;
+    }
+  }
 }
+
+// Liegt der Mauszeiger über einem HUD-Teil, wird dieser durchsichtig
+const under = (x: number, y: number, w: number, h: number) => mouse.x >= x && mouse.x < x + w && mouse.y >= y && mouse.y < y + h;
 
 // Einsteigerhinweise im ersten Lauf
 function hint(run: Run): string | null {

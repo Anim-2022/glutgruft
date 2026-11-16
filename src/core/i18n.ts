@@ -137,7 +137,7 @@ const EN: Record<string, string> = {
   'Heiltrank trinken': 'drink a healing potion', 'Bombe werfen': 'throw a bomb', 'Treppe hinabsteigen': 'descend the stairs',
   'Klick / Tab': 'Click / Tab', 'Ziel wählen': 'choose a target', 'Maus': 'Mouse', 'über etwas halten zeigt Details': 'hover over things for details',
   'Rucksack: Ausrüstung wechseln, verkaufen': 'backpack: swap and sell equipment', 'Charakter, Reliquien, Gaben': 'character, relics, boons',
-  'Minikarte ein/aus': 'toggle minimap', 'Ton ein/aus': 'toggle sound', 'Vollbild': 'Fullscreen', 'diese Hilfe': 'this help',
+  'Minikarte ein/aus': 'toggle minimap', 'Karte: klein, groß, aus': 'map: small, large, off', '[N] schließen': '[N] close', 'Du': 'You', 'Treppe': 'Stairs', 'Rätsel': 'Puzzle', 'St.': 'Lv.', 'Ton ein/aus': 'toggle sound', 'Vollbild': 'Fullscreen', 'diese Hilfe': 'this help',
   'STEUERUNG': 'CONTROLS',
   'Treppe nach unten [E]': 'Stairs down [E]', 'Verfluchte Truhe – stark, aber kostet Leben': 'Cursed chest – strong, but costs health',
   'Händler – hineinlaufen zum Handeln': 'Trader – walk into him to trade', 'Brunnen – heilt einmal': 'Fountain – heals once',
