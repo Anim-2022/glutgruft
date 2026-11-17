@@ -2,6 +2,7 @@ import { VW, VH, TS, sprites, masks, tilesets, text, panel, bar, heroLook, figur
 import { GLOW } from './sprites';
 import { W, H, T, wallLike, walkable } from '../game/dungeon';
 import { threatOf } from './warn';
+import { drawItemIcon, drawIcon, PERK_ICON } from './icons';
 import { sfx } from '../core/audio';
 import { tr } from '../core/i18n';
 import { Run, Actor, xpNeed, skillCost, itemText, itemValue, itemScore, perkInfo, skillModName, shotRange, RANKS, SORT_NAMES, BAG_MAX, RUNE_NAMES } from '../game/run';
@@ -770,7 +771,7 @@ function lootCard(ctx: CanvasRenderingContext2D, run: Run) {
   const h = 22 + itemDetail(ctx, it, 0, 0, chars, worn, true) + 14;
   ctx.globalAlpha = (L.t > 6 ? 7 - L.t : Math.min(1, L.t * 6)) * (under(x, y, w, h) ? 0.3 : 1);
   panel(ctx, x, y, w, h, RARITY_COL[it.rar], 'rgba(13,14,23,0.88)');
-  slotIcon(ctx, it.slot, x + 6, y + 5, RARITY_COL[it.rar]);
+  if (it.use) ctx.drawImage(sprites[`i_${it.use}`], x + 4, y + 3); else drawItemIcon(ctx, it, p.cls, x + 6, y + 5, RARITY_COL[it.rar]);
   text(ctx, 'FUND', x + 20, y + 6, '#94b0c2', 8);
   const v = L.how === 'bag' ? verdict(run, it) : 0;
   if (v) { arrow(ctx, x + w - 12, y + 7, v > 0); text(ctx, v > 0 ? 'besser' : 'schlechter', x + w - 16, y + 6, v > 0 ? '#a7f070' : '#b13e53', 8, 'right'); }
@@ -816,7 +817,7 @@ function invSheet(ctx: CanvasRenderingContext2D, run: Run, time: number) {
   for (let i = 0; i < 4; i++) {
     const it = p.gear[i], gy = y + 139 + i * 25, sel = inv.col === 0 && inv.row === i, col = it ? RARITY_COL[it.rar] : '#566c86';
     panel(ctx, x + 14, gy, 200, 22, sel ? '#ffcd75' : it ? col : '#333c57', sel ? 'rgba(60,50,40,0.9)' : 'rgba(13,14,23,0.9)');
-    slotIcon(ctx, i, x + 20, gy + 6, col);
+    if (it) drawItemIcon(ctx, it, p.cls, x + 20, gy + 6, col); else slotIcon(ctx, i, x + 20, gy + 6, col);
     text(ctx, it ? cut(it.name, 20) : SLOT_NAMES[i], x + 34, gy + 3, col, 8);
     text(ctx, it ? cut(itemText(it), 29) : 'leer', x + 34, gy + 12, it ? '#94b0c2' : '#333c57', 8);
   }
@@ -828,7 +829,7 @@ function invSheet(ctx: CanvasRenderingContext2D, run: Run, time: number) {
   p.bag.forEach((it, i) => {
     const gy = y + 46 + i * 19, sel = inv.col === 1 && inv.row === i, v = verdict(run, it);
     panel(ctx, bx, gy, bw, 16, sel ? '#ffcd75' : '#333c57', sel ? 'rgba(60,50,40,0.9)' : 'rgba(13,14,23,0.9)');
-    if (it.use) ctx.drawImage(sprites[`i_${it.use}`], bx + 3, gy + 2); else slotIcon(ctx, it.slot, bx + 5, gy + 4, RARITY_COL[it.rar]);
+    if (it.use) ctx.drawImage(sprites[`i_${it.use}`], bx + 3, gy + 2); else drawItemIcon(ctx, it, p.cls, bx + 5, gy + 4, RARITY_COL[it.rar]);
     text(ctx, cut(it.name, it.neu ? 19 : 23), bx + 19, gy + 4, RARITY_COL[it.rar], 8);
     if (v) arrow(ctx, bx + bw - 10, gy + 5, v > 0);
     if (it.neu) text(ctx, 'NEU', bx + bw - (v ? 14 : 5), gy + 4, '#ffcd75', 8, 'right');
@@ -1054,6 +1055,7 @@ function perkOverlay(ctx: CanvasRenderingContext2D, run: Run) {
     text(ctx, `[${i + 1}]`, x + cw / 2, y + 8, kc, 10, 'center');
     text(ctx, KIND_NAME[pk.kind], x + cw / 2, y + 22, '#566c86', 8, 'center');
     if (pk.kind === 'skill') ctx.drawImage(sprites[`i_${run.p.cls}${id[5]}`], x + 6, y + 6);
+    else drawIcon(ctx, PERK_ICON[id], x + 6, y + 6, kc, 2);
     wrapText(pk.name, 22).forEach((l, k) => text(ctx, l, x + cw / 2, y + 38 + k * 11, '#f4f4f4', 8, 'center'));
     wrapText(pk.desc, 22).forEach((l, k) => text(ctx, l, x + cw / 2, y + 62 + k * 10, '#94b0c2', 8, 'center'));
     const have = run.p.perks.filter(q => q === id).length;
@@ -1074,7 +1076,8 @@ function shopOverlay(ctx: CanvasRenderingContext2D, run: Run) {
   run.shop.forEach((o, i) => {
     const oy = y + 46 + i * 30, ok = !o.sold && p.gold >= o.price;
     text(ctx, `[${i + 1}]`, x + 12, oy + 4, o.sold ? '#333c57' : '#ffcd75');
-    text(ctx, o.sold ? `${o.name} – verkauft` : o.left !== undefined ? `${o.name} ×${o.left}` : o.name, x + 36, oy, o.sold ? '#566c86' : o.item ? RARITY_COL[o.item.rar] : '#f4f4f4');
+    if (o.item && !o.sold) drawItemIcon(ctx, o.item, p.cls, x + 36, oy, RARITY_COL[o.item.rar]);
+    text(ctx, o.sold ? `${o.name} – verkauft` : o.left !== undefined ? `${o.name} ×${o.left}` : o.name, x + (o.item && !o.sold ? 48 : 36), oy, o.sold ? '#566c86' : o.item ? RARITY_COL[o.item.rar] : '#f4f4f4');
     text(ctx, cut(o.desc, 46), x + 36, oy + 11, '#94b0c2', 8);
     if (!o.sold) text(ctx, `${o.price} Gold`, x + w - 12, oy + 4, ok ? '#ffcd75' : '#b13e53', 10, 'right');
   });

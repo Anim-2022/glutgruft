@@ -1,3 +1,4 @@
+import { drawIcon, UPG_ICON } from './render/icons';
 import { VW, VH, bake, sprites, tilesets, text, panel, wrap, figure } from './render/gfx';
 import { getLang, setLang } from './core/i18n';
 import { drawRun, resetView, setMouse, toggleMap, setTutorial, tileAt, getOverlay, setOverlay, invMove, invAction, invDrop, lootIndex, lootDone } from './render/draw';
@@ -337,7 +338,8 @@ function drawLager(time: number, dt: number) {
   UPGRADES.forEach((u, i) => {
     const y = 70 + i * 19, sel = row === i + 1, lvl = meta.upg[u.id] ?? 0, max = lvl >= u.max;
     panel(ctx, ux, y, uw, 16, sel ? '#ffcd75' : '#566c86', sel ? 'rgba(60,50,40,0.9)' : 'rgba(13,14,23,0.88)');
-    text(ctx, u.name, ux + 8, y + 4, sel ? '#ffcd75' : '#f4f4f4', 8);
+    drawIcon(ctx, UPG_ICON[u.id], ux + 5, y + 4, sel ? '#ffcd75' : '#94b0c2');
+    text(ctx, u.name, ux + 18, y + 4, sel ? '#ffcd75' : '#f4f4f4', 8);
     for (let k = 0; k < u.max; k++) { ctx.fillStyle = k < lvl ? '#73eff7' : '#333c57'; ctx.fillRect(ux + 100 + k * 9, y + 5, 6, 6); }
     text(ctx, max ? 'MAX' : `${upgCost(u, lvl)}`, ux + uw - 8, y + 4, max ? '#566c86' : meta.souls >= upgCost(u, lvl) ? '#73eff7' : '#b13e53', 8, 'right');
     if (!max) ctx.drawImage(sprites.soul, ux + uw - 24 - `${upgCost(u, lvl)}`.length * 6, y + 2);

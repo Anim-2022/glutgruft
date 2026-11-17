@@ -1276,3 +1276,45 @@ ATTACK.fuerst2 = { f: [
 ATTACK.fuerst2.s = ATTACK.fuerst2.f;
 ACTORS.push('fuerst2');
 GLOW.fuerst2 = GLOW.fuerst;
+
+// ---------- Symbole 9x9 (Phase 2) ----------
+// '#' wird beim Zeichnen in der Farbe der Seltenheit bzw. der Art eingefärbt, alle anderen Zeichen aus PAL.
+export const ICONS: Record<string, string[]> = {
+  sword: ['.......#w', '......#w#', '.....#w#.', '....#w#..', '.y.#w#...', '..y##....', '..ny.....', '.n..y....', 'n........'],
+  axe: ['..##.....', '.###w....', '####wn...', '.###.n...', '..#...n..', '.......n.', '........n', '.........', '.........'],
+  spear: ['......#w.', '.....###.', '......#..', '.....n...', '....n....', '...n.....', '..n......', '.n.......', 'n........'],
+  staff: ['.....ooo.', '....oyyo.', '....oyyo.', '.....oo..', '....#....', '...#.....', '..#......', '.#.......', '#........'],
+  bow: ['.##......', '...#.....', '...g#....', '...g.#...', 'wiigii#i.', '...g.#...', '...g#....', '...#.....', '.##......'],
+  crossbow: ['...g#g...', '..g.#.g..', '.g.wiw.g.', 'g...#...g', '....#....', '....n....', '....n....', '...nnn...', '.........'],
+  knife: ['......w..', '.....ww..', '....w#...', '...w#....', '..y#.....', '.ny......', 'nn.......', 'n........', '.........'],
+  leather: ['.##...##.', '##n###n##', '#.#nnn#.#', '..#nnn#..', '..#nnn#..', '..#####..', '..#nNn#..', '..#nnn#..', '...###...'],
+  chain: ['.##...##.', '###i#i###', '#.#i#i#.#', '..#i#i#..', '..##i##..', '..#i#i#..', '..##i##..', '..#i#i#..', '...###...'],
+  plate: ['.##...##.', '####y####', '#.#yyy#.#', '..#.y.#..', '..#yyy#..', '..##y##..', '..#.y.#..', '..#####..', '...#.#...'],
+  amulet: ['.#.....#.', '#.......#', '#.......#', '.#.....#.', '..#...#..', '...###...', '..##r##..', '..#rwr#..', '...###...'],
+  ring: ['...#r#...', '..#rwr#..', '...###...', '..#...#..', '.#.....#.', '.#.....#.', '.#.....#.', '..#...#..', '...###...'],
+  heart: ['.........', '.rr...rr.', 'rrwrrrrrr', 'rwrrrrrrr', 'rrrrrrrrr', '.rrrrrrr.', '..rrrrr..', '...rrr...', '....r....'],
+  drop: ['....r....', '....r....', '...rrr...', '..rrwrr..', '..rwrrr..', '.rrrrrrr.', '.rrrrrrR.', '..rrrRR..', '...RRR...'],
+  shield: ['.#######.', '#ddddddd#', '#dd#d#dd#', '#d#####d#', '#dd#d#dd#', '.#ddddd#.', '.#ddddd#.', '..#ddd#..', '...###...'],
+  skull: ['..wwwww..', '.wwwwwww.', 'wwkkwkkww', 'wwkkwkkww', 'wwwwkwwww', '.wwwwwww.', '..wkwkw..', '..wwwww..', '.........'],
+  axeblood: ['..mm.....', '.mmmi....', 'mmmmin...', '.mmm.n...', '..m...n..', '...r...n.', '..rr....n', '...r.....', '.........'],
+  flame: ['....o....', '...oo....', '...oyo.o.', '..oyyoo..', '.oyywyyo.', '.oywwwyo.', '.oyywyyo.', '..oyyyo..', '...ooo...'],
+  poison: ['...#.#...', '....#....', '...GGG...', '..GlGGG..', '.GlGGGGG.', '.GGGGGGG.', '.GGGGGGG.', '..GGGGG..', '...GGG...'],
+  snow: ['....s....', '.s..s..s.', '..s.s.s..', '...sss...', 'ssssssss.', '...sss...', '..s.s.s..', '.s..s..s.', '....s....'],
+  eye: ['.........', '...www...', '.wwsssww.', 'wwsskssww', 'wwsskssww', '.wwsssww.', '...www...', '.........', '.........'],
+  coin: ['..yyyyy..', '.yYYYYYy.', 'yYyyyyyYy', 'yYyYYYyYy', 'yYyYyyyYy', 'yYyYYYyYy', 'yYyyyyyYy', '.yYYYYYy.', '..yyyyy..'],
+  boot: ['...nnn...', '...nNn...', '...nnn...', '...nnn...', '...nNn...', '..nnnn...', '.nnnnnnn.', '.nNNNNNn.', '.........'],
+  bomb: ['......y..', '.....o...', '....n....', '..DDDD...', '.DDDDDD..', 'DDgDDDDD.', 'DDDDDDDD.', '.DDDDDD..', '..DDDD...'],
+  whetstone: ['.........', '......w..', '.....wi..', '....wi...', '...wi....', '.DddddddD', 'DdgddddgD', 'DdddddddD', '.DDDDDDD.'],
+  lightning: ['.....yy..', '....yy...', '...yy....', '..yyyyy..', '....yy...', '...yy....', '..yy.....', '.yy......', '.y.......'],
+  hourglass: ['.nnnnnnn.', '.syyyyys.', '..syyys..', '...sys...', '....s....', '...sys...', '..ss.ss..', '.syyyyys.', '.nnnnnnn.'],
+  fist: ['.........', '..hhhh...', '.hHhHhh..', '.hhhhhhh.', '.hhhhhhh.', '.Hhhhhhh.', '..hhhhh..', '..yyyyy..', '..yyyyy..'],
+  chalice: ['.yyyyyyy.', '.yvvvvvy.', '.yvwvvvy.', '..yvvvy..', '...yyy...', '....y....', '....y....', '...yyy...', '..yyyyy..'],
+  book: ['..nnnnn..', '.nwwwwwn.', '.nwkkkwn.', '.nwwwwwn.', '.nwkkwwn.', '.nwwwwwn.', '.nyyyyyn.', '..nnnnn..', '.........'],
+  key: ['.........', '.yyy.....', 'y...y....', 'y...yyyyy', 'y...y.y.y', '.yyy..y..', '.........', '.........', '.........'],
+  mushroom: ['...rrr...', '.rrwrrrr.', 'rrrrrwrrr', 'rwrrrrrrw', '.eeeeeee.', '...yyy...', '...yyy...', '...yyy...', '..YYYYY..'],
+  arrows: ['.w.....w.', '.ww...ww.', '..n...n..', '...n.n...', '....n....', '...n.n...', '..n...n..', '.l.....l.', 'll.....ll'],
+  potion: ['...nnn...', '....g....', '...ggg...', '..grrrg..', '.grrwrrg.', '.grrrrrg.', '.grrrrrg.', '..ggggg..', '.........'],
+  thorns: ['#...#...#', '.#.###.#.', '..##G##..', '.##GGG##.', '###GlG###', '.##GGG##.', '..##G##..', '.#.###.#.', '#...#...#'],
+  soul: ['.........', '....s....', '...scs...', '..sccws..', '.sccccws.', '..scccs..', '...scs...', '....s....', '.........'],
+  crown: ['.........', '.........', 'y..y..y..', 'yy.yyy.yy', 'yyyyyyyyy', 'yryyyyyry', 'yyyyyyyyy', '.........', '.........'],
+};
