@@ -70,7 +70,7 @@ export type Action =
 
 const FOV_R = 8;
 const cheb = (a: { x: number; y: number }, b: { x: number; y: number }) => Math.max(Math.abs(a.x - b.x), Math.abs(a.y - b.y));
-export const xpNeed = (lvl: number) => 8 + lvl * 6;
+export const xpNeed = (lvl: number) => 10 + lvl * 9;
 export const playerAtk = (p: Player) => p.atk + (p.st.stark ? 3 : 0);
 
 function say(run: Run, s: string) { run.log.push(s); if (run.log.length > 40) run.log.shift(); }
@@ -102,11 +102,12 @@ export function newRun(seed: number, cls: ClassId, meta: Meta): Run {
 
 function spawnMob(run: Run, kind: string, x: number, y: number): Actor {
   const d = MOBS[kind];
-  const s = 1 + 0.34 * (run.floor - 1);
-  const hp = d.boss ? Math.round(d.hp * 1.6) : Math.round(d.hp * s);
+  // Bosse wachsen mit der Tiefe mit, normale Gegner etwas langsamer als früher
+  const s = 1 + 0.26 * (run.floor - 1);
+  const hp = d.boss ? Math.round(d.hp * (1.2 + 0.12 * run.floor)) : Math.round(d.hp * s);
   const m: Actor = {
     id: run.nextId++, kind, name: d.name, x, y, hp, maxHp: hp,
-    atk: d.boss ? d.atk + 3 : d.atk + Math.round(run.floor * 1.0), def: d.def,
+    atk: d.atk + Math.round(run.floor * 0.8), def: d.def,
     st: {}, xp: d.xp, cd: 0, awake: false, boss: d.boss,
   };
   run.mobs.push(m);
@@ -327,12 +328,12 @@ function manage(run: Run, a: Action): boolean {
 
 function stock(run: Run): Offer[] {
   const f = run.floor, offers: Offer[] = [
-    { kind: 'potion', name: 'Heiltrank', desc: 'Heilt einen großen Teil deines Lebens', price: 12 + f, sold: false, left: 3 },
+    { kind: 'potion', name: 'Heiltrank', desc: 'Heilt einen großen Teil deines Lebens', price: 15 + 3 * f, sold: false, left: 3 },
     { kind: 'bomb', name: 'Bombe', desc: 'Sprengt Gegner, Wände und Säulen', price: 10 + f, sold: false, left: 2 },
   ];
   for (let k = 0; k < 2; k++) {
     const it = genItem(run);
-    offers.push({ kind: 'item', name: it.name, desc: itemText(it), price: 18 + it.rar * 22 + f * 2, sold: false, item: it });
+    offers.push({ kind: 'item', name: it.name, desc: itemText(it), price: Math.round((18 + it.rar * 22 + f * 2) * (it.rar ? 1.2 : 1)), sold: false, item: it });
   }
   const c = genConsumable(run);
   offers.push({ kind: 'item', name: c.name, desc: itemText(c), price: 14 + f, sold: false, item: c });
@@ -819,7 +820,7 @@ function checkLevel(run: Run) {
   if (run.mode !== 'play' || p.exp < xpNeed(p.lvl)) return;
   p.exp -= xpNeed(p.lvl);
   p.lvl++;
-  p.maxHp += 2;
+  p.maxHp += 3;
   p.hp = Math.min(p.maxHp, p.hp + Math.ceil(p.maxHp * 0.2));
   say(run, `Stufe ${p.lvl} erreicht!`);
   offerPerks(run);

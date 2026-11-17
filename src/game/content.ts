@@ -15,9 +15,9 @@ export const CLASS_ORDER: ClassId[] = ['krieger', 'magier', 'waldlaeufer'];
 export const CLASSES: Record<ClassId, ClassDef> = {
   krieger: {
     id: 'krieger', name: 'Krieger', desc: 'Zäher Nahkämpfer. Wut entsteht durch Treffer und Schmerz.',
-    hp: 36, atk: 5, def: 2, resName: 'Wut', resMax: 10, resStart: 0, resCol: '#ef7d57', range: 0, shot: '',
+    hp: 40, atk: 5, def: 2, resName: 'Wut', resMax: 10, resStart: 0, resCol: '#ef7d57', range: 0, shot: '',
     skills: [
-      { name: 'Schildstoß', cost: 3, desc: 'Schaden + betäubt 2 Züge' },
+      { name: 'Schildstoß', cost: 2, desc: 'Schaden + betäubt 2 Züge' },
       { name: 'Wirbelschlag', cost: 5, desc: 'Trifft alle Gegner ringsum' },
       { name: 'Kriegsschrei', cost: 4, desc: '+3 Angriff für 6 Züge' },
     ],
@@ -71,8 +71,9 @@ export const biomeOf = (floor: number) => Math.min(2, Math.floor((floor - 1) / F
 export function spawnTable(floor: number): string[] {
   const b = biomeOf(floor);
   if (b === 0) return floor >= 3 ? ['ratte', 'skelett', 'skelett', 'fledermaus', 'schuetze'] : ['ratte', 'ratte', 'skelett', 'fledermaus'];
-  if (b === 1) return floor >= 9 ? ['sporling', 'sporling', 'schuetze', 'skelett', 'golem'] : ['sporling', 'sporling', 'fledermaus', 'schuetze', 'skelett'];
-  return ['golem', 'glutgeist', 'glutgeist', 'schuetze', 'sporling'];
+  // Golems erst ab der Glutschmiede (Ebene 11), damit der Übergang 9–11 nicht springt
+  if (b === 1) return floor >= 9 ? ['sporling', 'sporling', 'schuetze', 'skelett', 'skelett'] : ['sporling', 'sporling', 'fledermaus', 'schuetze', 'skelett'];
+  return ['golem', 'glutgeist', 'schuetze', 'sporling', 'skelett'];
 }
 
 export interface PerkDef { name: string; desc: string; cls?: ClassId; }

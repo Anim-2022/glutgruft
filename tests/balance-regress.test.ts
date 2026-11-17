@@ -3,7 +3,7 @@ import { describe, it, expect } from 'vitest';
 import { defaultMeta } from '../src/core/save';
 import { newRun, act, genItem, Run, Actor, MAX_TRAPS } from '../src/game/run';
 import { W, H, T, computeFov } from '../src/game/dungeon';
-import { MOBS } from '../src/game/content';
+import { MOBS, spawnTable } from '../src/game/content';
 import type { ClassId } from '../src/game/content';
 
 // Leerer Gang 3x58 ohne Gegner, Spieler in der Mitte
@@ -84,5 +84,19 @@ describe('Balance-Regressionen', () => {
     r.floor++; // nächste Ebene
     act(r, { t: 'unequip', slot });
     expect(r.p.gear[slot]).toBeNull();
+  });
+
+  it('Kein Golem vor der Glutschmiede, höchstens ein Glutgeist-Eintrag', () => {
+    for (let f = 1; f <= 10; f++) expect(spawnTable(f)).not.toContain('golem');
+    expect(spawnTable(11).filter(k => k === 'glutgeist').length).toBe(1);
+  });
+
+  it('Bosse wachsen mit der Tiefe', () => {
+    const r = arena('krieger', 15);
+    r.mobs = [];
+    act(r, { t: 'wait' });
+    const hp = (kind: string, f: number) => Math.round(MOBS[kind].hp * (1.2 + 0.12 * f));
+    expect(hp('fuerst', 15)).toBeGreaterThanOrEqual(500);
+    expect(hp('koenig', 5)).toBeLessThanOrEqual(110);
   });
 });
