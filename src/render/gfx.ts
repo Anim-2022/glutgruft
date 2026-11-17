@@ -3,6 +3,7 @@ export const VW = 640, VH = 360, TS = 16;
 
 import { PAL, SPR, ACTORS, NO_OUTLINE, VIEWS, FLOATERS, WEAPON_ART, WeaponArt } from './sprites';
 import { tr } from '../core/i18n';
+import { poseFrames } from './poses';
 export { PAL };
 
 export const sprites: Record<string, HTMLCanvasElement> = {};
@@ -60,6 +61,8 @@ function bakeActor(name: string, prefix: string, pal: Record<string, string> = P
     const frames = FLOATERS.has(name) ? [rows, alt, alt, rows] : [rows, breath, lift(true), lift(false)];
     frames.forEach((f, i) => { const key = `${prefix}:${v}${i}`; sprites[key] = drawRows(f, true, pal); makeMask(key); });
   }
+  // Zusatzbilder: Angriff (a), Zauber (c), Tod (d0..d2)
+  for (const [suf, rows] of Object.entries(poseFrames(name, views))) { const key = `${prefix}:${suf}`; sprites[key] = drawRows(rows, true, pal); makeMask(key); }
   sprites[prefix] = sprites[`${prefix}:f0`];
   sprites[prefix + '_b'] = sprites[`${prefix}:f1`];
 }

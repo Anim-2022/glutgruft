@@ -24,6 +24,9 @@ const bashes: { x: number; y: number; dx: number; dy: number; t: number }[] = []
 const swipes: { x: number; y: number; dx: number; dy: number; big: boolean; t: number }[] = [];
 let deathT = -1; // Zeit seit dem Tod des Helden, -1 = lebt
 const SWIPE_T = 0.2, DEATH_T = 1.3;
+// Posen der Figuren: a Angriff, c Zauber (Bild aus poses.ts), Restdauer in Sekunden
+const poses = new Map<number, { k: string; t: number }>();
+const pose = (id: number, k: string, t = 0.22) => poses.set(id, { k, t });
 const RING_T = 0.38, SPARK_T = 0.18, BASH_T = 0.22;
 const burstBits = (x: number, y: number, n: number, cols: string[], v0: number, v1: number, up = 30, g?: number) => {
   for (let k = 0; k < n; k++) {
@@ -122,7 +125,7 @@ function applyLight(ctx: CanvasRenderingContext2D, run: Run, lights: Light[], ox
 export function resetView() {
   pos.clear(); lunges.clear(); flashes.clear();
   nums.length = 0; bolts.length = 0; bits.length = 0; booms.length = 0; shake = 0;
-  shots.length = 0; rings.length = 0; sparks.length = 0; bashes.length = 0; swipes.length = 0; deathT = -1;
+  shots.length = 0; rings.length = 0; sparks.length = 0; bashes.length = 0; swipes.length = 0; deathT = -1; poses.clear();
 }
 
 function smooth(a: Actor, dt: number) {
@@ -160,13 +163,16 @@ export function drawRun(ctx: CanvasRenderingContext2D, run: Run, dt: number, tim
     switch (f.k) {
       case 'num': nums.push({ x: f.x * TS + 8, y: f.y * TS - nums.filter(n => n.t < 0.1).length * 8, s: f.s, col: f.col, t: 0 }); break;
       case 'shake': shake = Math.max(shake, f.n); break;
-      case 'bolt': bolts.push({ ...f, t: 0 }); sfx('zap'); break;
-      case 'lunge': lunges.set(f.id, { dx: f.dx, dy: f.dy, t: 0 }); sfx('hit'); break;
+      case 'bolt': bolts.push({ ...f, t: 0 }); sfx('zap'); if (f.x0 === run.p.x && f.y0 === run.p.y) pose(0, 'a'); break;
+      case 'lunge': lunges.set(f.id, { dx: f.dx, dy: f.dy, t: 0 }); sfx('hit'); pose(f.id, 'a'); break;
       case 'flash': flashes.set(f.id, FLASH_T); if (f.id === 0) sfx('hurt'); break;
       case 'die': shatter(f.kind, f.x, f.y); sfx('kill'); break;
       case 'loot': loot = { item: f.item, how: f.how, t: 0 }; sfx('pick'); break;
       case 'boom': booms.push({ x: f.x, y: f.y, r: f.r, t: 0 }); sfx('boom'); break;
       case 'fireball': case 'arrow': {
+        // Schütze: Held oder Gegner auf dem Startfeld zeigt seine Angriffs- bzw. Zauberpose
+        if (f.x0 === run.p.x && f.y0 === run.p.y) pose(0, f.k === 'fireball' ? 'c' : 'a', 0.26);
+        else { const m = run.mobs.find(o => o.x === f.x0 && o.y === f.y0); if (m) pose(m.id, 'a', 0.26); }
         const fire = f.k === 'fireball', d = Math.hypot(f.x1 - f.x0, f.y1 - f.y0);
         shots.push({ x0: f.x0, y0: f.y0, x1: f.x1, y1: f.y1, t: 0, col: fire ? '#ef7d57' : f.col, r: fire ? f.r : 0,
           kind: fire ? 'fire' : f.heavy ? 'heavy' : 'arrow', dur: Math.min(fire ? 0.3 : 0.18, (fire ? 0.06 : 0.03) + d * (fire ? 0.03 : 0.018)) });
@@ -174,6 +180,7 @@ export function drawRun(ctx: CanvasRenderingContext2D, run: Run, dt: number, tim
         break;
       }
       case 'nova':
+        pose(0, 'c', 0.32);
         rings.push({ x: f.x, y: f.y, r: f.r, t: 0 });
         burstBits(f.x * TS + 8, f.y * TS + 8, 26, ['#73eff7', '#c9d4dc', '#f4f4f4', '#41a6f6'], 40, 110, 10, 40);
         shake = Math.max(shake, 3); sfx('zap');
@@ -189,8 +196,6 @@ export function drawRun(ctx: CanvasRenderingContext2D, run: Run, dt: number, tim
         break;
       case 'pdeath': {
         deathT = 0;
-        const v = run.p.dir[1] < 0 ? 'b' : run.p.dir[1] > 0 ? 'f' : 's';
-        shatter(`${lookOf(run.p)}:${v}0`, f.x, f.y);
         burstBits(f.x * TS + 8, f.y * TS + 8, 18, ['#b13e53', '#7d2b45', '#ef7d57'], 30, 90, 40);
         shake = Math.max(shake, 8);
         break;
@@ -205,6 +210,7 @@ export function drawRun(ctx: CanvasRenderingContext2D, run: Run, dt: number, tim
     }
   }
   for (const [id, l] of lunges) { l.t += dt; if (l.t > LUNGE_T) lunges.delete(id); }
+  for (const [id, q] of poses) { q.t -= dt; if (q.t <= 0) poses.delete(id); }
   for (const [id, t] of flashes) { if (t - dt <= 0) flashes.delete(id); else flashes.set(id, t - dt); }
 
   const p = run.p, pp = smooth(p, dt);
@@ -330,13 +336,17 @@ export function drawRun(ctx: CanvasRenderingContext2D, run: Run, dt: number, tim
     ctx.globalAlpha = 1;
   };
   const actor = (a: Actor, q: { x: number; y: number }) => {
-    if (a === p && deathT >= 0) return;
     // Blickrichtung wählt die Ansicht, Bewegung die Schrittbilder
     const f = a === p ? p.dir : a.f ?? [0, 1];
     const v = f[1] < 0 ? 'b' : f[1] > 0 ? 'f' : 's', mirror = v === 's' && f[0] < 0;
     const moving = Math.abs(q.x - a.x) + Math.abs(q.y - a.y) > 0.04;
     const fr = moving ? [2, 0, 3, 0][Math.floor(time * 11) % 4] : Math.floor(time * 2.5 + a.id * 0.37) % 2;
-    const frame = `${a === p ? lookOf(p) : a.kind}:${v}${fr}`, img = sprites[frame];
+    const base = a === p ? lookOf(p) : a.kind, ps = poses.get(a.id);
+    // Tod des Helden: einknicken, kippen, liegen bleiben; sonst Pose (Angriff/Zauber) vor Schrittbild
+    let frame = `${base}:${v}${fr}`;
+    if (a === p && deathT >= 0) frame = `${base}:${v}d${deathT < 0.14 ? 0 : deathT < 0.3 ? 1 : 2}`;
+    else if (ps && sprites[`${base}:${v}${ps.k}`]) frame = `${base}:${v}${ps.k}`;
+    const img = sprites[frame];
     const l = lunges.get(a.id), k = l ? Math.sin((l.t / LUNGE_T) * Math.PI) * 6 : 0;
     const glow = GLOW[a.kind];
     const jx = glow ? Math.round(Math.sin(time * 17 + a.id) * 0.6) : 0;
@@ -346,7 +356,7 @@ export function drawRun(ctx: CanvasRenderingContext2D, run: Run, dt: number, tim
       if (!mirror) { ctx.drawImage(c, dx, dy); return; }
       ctx.save(); ctx.translate(dx + c.width, dy); ctx.scale(-1, 1); ctx.drawImage(c, 0, 0); ctx.restore();
     };
-    if (!glow) { ctx.fillStyle = 'rgba(0,0,0,0.35)'; ctx.fillRect(bx + 8 - img.width / 2 + 3, Math.round(q.y * TS) + oy + 13, img.width - 6, 2); }
+    if (!glow) { ctx.fillStyle = 'rgba(0,0,0,0.35)'; const sw = Math.min(img.width, a.boss ? 24 : 16); ctx.fillRect(bx + 8 - sw / 2 + 3, Math.round(q.y * TS) + oy + 13, sw - 6, 2); }
     // Ausweichen: Held flackert halbdurchsichtig
     if (a.st.dodge) ctx.globalAlpha = 0.55 + 0.25 * Math.sin(time * 18);
     blit(img);

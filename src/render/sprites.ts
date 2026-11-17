@@ -767,6 +767,9 @@ if (SCHUETZE_NEU) {
   VIEWS.schuetze = { b: SCHUETZE_HAND.b, s: SCHUETZE_HAND.s };
 }
 
+// Angriffsbilder der Gegner, von Hand (Phase 2): je Ansicht eine vollständige Matrix; fehlende Ansichten werden abgeleitet.
+export const ATTACK: Record<string, Partial<Record<'f' | 's' | 'b', string[]>>> = {};
+
 // Schwebende Wesen laufen nicht – sie wippen nur
 export const FLOATERS = new Set(['fledermaus', 'glutgeist', 'ratte']);
 // Wesen, die selbst leuchten: Radius in Feldern und Farbe
