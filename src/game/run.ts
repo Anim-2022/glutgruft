@@ -201,7 +201,8 @@ function wear(p: Player, it: Item, sign: 1 | -1) {
   for (const [id, v] of it.aff ?? []) addAff(p, id, sign * v);
 }
 
-export const itemValue = (it: Item) => it.use ? 6 : 5 * (it.rar + 1) * (it.cursed ? 0 : 1) + (it.cursed ? 2 : 0) + (it.aff?.length ?? 0) * 3;
+// Verkaufswert: 60 % des früheren Werts, damit sich kein Goldberg ansammelt
+export const itemValue = (it: Item) => Math.max(1, Math.round(0.6 * (it.use ? 6 : 5 * (it.rar + 1) * (it.cursed ? 0 : 1) + (it.cursed ? 2 : 0) + (it.aff?.length ?? 0) * 3)));
 // Ordnung im Rucksack: nach Platz, nach Seltenheit oder danach, wie viel besser als das Angelegte
 export const SORT_NAMES = ['Platz', 'Seltenheit', 'Verbesserung'];
 function sortBag(p: Player) {
@@ -972,14 +973,14 @@ function useSkill(run: Run, i: number): boolean {
       for (let y = t.y - 1; y <= t.y + 1; y++) for (let x = t.x - 1; x <= t.x + 1; x++) ignite(run, x, y, 2);
       for (const m of run.mobs.filter(m => cheb(m, t) <= (mod === 1 ? 2 : 1))) {
         m.st.brand = 2;
-        damage(run, m, (m === t ? atk * 1.4 + p.lvl * 0.3 : 3) * sp - m.def, '#ef7d57');
+        damage(run, m, (m === t ? atk + p.lvl * 0.3 : 3) * sp - m.def, '#ef7d57');
       }
       if (mod === 2) {
         const o = run.mobs.filter(m => m !== t && run.vis[m.y * W + m.x] && cheb(m, p) <= 7).sort((a, b) => cheb(a, p) - cheb(b, p))[0];
         if (o) {
           run.fx.push({ k: 'bolt', x0: p.x, y0: p.y, x1: o.x, y1: o.y, col: '#ef7d57' });
           o.st.brand = 2;
-          damage(run, o, (atk * 1.4 + p.lvl * 0.3) * sp * 0.6 - o.def, '#ef7d57');
+          damage(run, o, (atk + p.lvl * 0.3) * sp * 0.6 - o.def, '#ef7d57');
         }
       }
       break;
@@ -1304,8 +1305,8 @@ function mobAct(run: Run, m: Actor, dist: Int16Array) {
     }
   }
   if (man === 1) {
-    // Schützen weichen einen Schritt zurück, wenn Platz ist
-    if (d.range) {
+    // Schützen weichen oft einen Schritt zurück, wenn Platz ist
+    if (d.range && run.rng.chance(0.5)) {
       const back = [[1, 0], [-1, 0], [0, 1], [0, -1]].map(([ox, oy]) => [m.x + ox, m.y + oy]).find(([x, y]) => isFree(run, x, y) && Math.abs(p.x - x) + Math.abs(p.y - y) === 2);
       if (back) { moveMob(run, m, back[0], back[1]); return; }
     }

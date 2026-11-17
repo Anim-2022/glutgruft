@@ -100,14 +100,20 @@ describe('Balance-Regressionen', () => {
     expect(hp('koenig', 5)).toBeLessThanOrEqual(110);
   });
 
-  it('Schütze weicht zurück, wenn der Spieler direkt daneben steht', () => {
-    const r = arena('krieger', 5);
-    const m = mob(r, 'schuetze', 31, 6);
-    m.hp = m.maxHp = 999;
-    const hp = r.p.hp;
-    act(r, { t: 'wait' });
-    expect(Math.abs(m.x - r.p.x) + Math.abs(m.y - r.p.y)).toBe(2);
-    expect(r.p.hp).toBe(hp);
+  it('Schütze weicht etwa jedes zweite Mal zurück, wenn der Spieler direkt daneben steht', () => {
+    let back = 0;
+    for (let k = 0; k < 60; k++) {
+      const r = arena('krieger', 5);
+      r.rng.s = 1000 + k * 7919;
+      const m = mob(r, 'schuetze', 31, 6);
+      m.hp = m.maxHp = 999;
+      const hp = r.p.hp;
+      act(r, { t: 'wait' });
+      const dist = Math.abs(m.x - r.p.x) + Math.abs(m.y - r.p.y);
+      if (dist === 2) { back++; expect(r.p.hp).toBe(hp); } else expect(r.p.hp).toBeLessThan(hp);
+    }
+    expect(back).toBeGreaterThan(15);
+    expect(back).toBeLessThan(45);
   });
 
   it('Schütze ohne Ausweg schlägt zu', () => {
