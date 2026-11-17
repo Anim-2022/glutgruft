@@ -699,6 +699,74 @@ export const VIEWS: Record<string, { b: string[]; s: string[]; alt?: string[] }>
   },
 };
 
+// ---------- Knochenschütze: neue Fassung (Phase 2) ----------
+// Umschalter: true = neue, von Hand gezeichnete Figur (Kapuze R/r, Knochenschatten u); false = alte Figur.
+export const SCHUETZE_NEU = true;
+const SCHUETZE_HAND = {
+  f: [
+    '.....eeeeee.....',
+    '....errrrrre..ng',
+    '...errrRRrrre.ng',
+    '...rRwwwwwwRr.n.',
+    '...eRwkwwkwRe.ng',
+    '...eRkkwwkkRen.g',
+    '...ewkkwwkkwen.g',
+    '....uwwkkwwu.n.g',
+    '....Rwkwkwk.nn.g',
+    '...rRuwwwwuRwh.g',
+    '..rr.ugwwgu..n.g',
+    '..w..uwwwwu..n.g',
+    '..w..ugwwgu...ng',
+    '.....uwwwwu...ng',
+    '.....wu..uw...n.',
+    '....wwu..uww....',
+  ],
+  s: [
+    '.....eeeee......',
+    '....errrrree..n.',
+    '...errRRrrre..ng',
+    '...eRRwwwwwe.n.g',
+    '...eRwwwkkwe.n.g',
+    '...eRwwwkkw.n..g',
+    '....Ruwwwwwkn..g',
+    '.....uwkwkw.n..g',
+    '....rRuwww..n..g',
+    '...rRRuwwwwwh..g',
+    '....R.ugwu...n.g',
+    '......uwwg...n.g',
+    '......ugwu....ng',
+    '......uwww....n.',
+    '......w..w......',
+    '.....ww..ww.....',
+  ],
+  b: [
+    '.....eeeeee.....',
+    '.n..errrrrre....',
+    'gn.errrrrrrre...',
+    'gn.rrrrRRrrrr...',
+    'gn.eRrrRRrrRe...',
+    'g.neRRrrrrRRe...',
+    'g.neRRRRRRRRe...',
+    'g.n.RRRRRRRR....',
+    'g.n.eRRRRRRe....',
+    'g.hwRuwwwwuRr...',
+    'g.n..uwuuwu.rr..',
+    'g.n..uwwwwu..w..',
+    'gn...uwuuwu..w..',
+    'gn...uwwwwu.....',
+    '.n...wu..uw.....',
+    '....wwu..uww....',
+  ],
+};
+// Die alte Fassung bleibt als eigene Figur erhalten (zum Vergleich gebacken als 'schuetze_alt').
+SPR.schuetze_alt = SPR.schuetze;
+VIEWS.schuetze_alt = VIEWS.schuetze;
+ACTORS.push('schuetze_alt');
+if (SCHUETZE_NEU) {
+  SPR.schuetze = SCHUETZE_HAND.f;
+  VIEWS.schuetze = { b: SCHUETZE_HAND.b, s: SCHUETZE_HAND.s };
+}
+
 // Schwebende Wesen laufen nicht – sie wippen nur
 export const FLOATERS = new Set(['fledermaus', 'glutgeist', 'ratte']);
 // Wesen, die selbst leuchten: Radius in Feldern und Farbe
