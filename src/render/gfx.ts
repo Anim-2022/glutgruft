@@ -1,8 +1,9 @@
 // Palette, Sprite-Atlas und Pixeltext. Alles wird beim Start im Code erzeugt.
 export const VW = 640, VH = 360, TS = 16;
 
-import { PAL, SPR, ACTORS, NO_OUTLINE, VIEWS, FLOATERS, WEAPON_ART, WeaponArt } from './sprites';
+import { PAL, SPR, ACTORS, NO_OUTLINE, VIEWS, FLOATERS, WEAPON_ART, WeaponArt, DECALS } from './sprites';
 import { tr } from '../core/i18n';
+import { poseFrames } from './poses';
 export { PAL };
 
 export const sprites: Record<string, HTMLCanvasElement> = {};
@@ -19,7 +20,7 @@ export function hex(col: string): [number, number, number] {
   return [n >> 16, (n >> 8) & 255, n & 255];
 }
 
-export interface TileSet { floor: HTMLCanvasElement[]; wall: HTMLCanvasElement; top: HTMLCanvasElement; cap: HTMLCanvasElement; hi: string; grass: HTMLCanvasElement[]; burnt: HTMLCanvasElement; decals: HTMLCanvasElement[]; }
+export interface TileSet { floor: HTMLCanvasElement[]; floorX: HTMLCanvasElement[]; walls: HTMLCanvasElement[]; lava: HTMLCanvasElement[]; wall: HTMLCanvasElement; top: HTMLCanvasElement; cap: HTMLCanvasElement; hi: string; grass: HTMLCanvasElement[]; burnt: HTMLCanvasElement; decals: HTMLCanvasElement[]; }
 export const tilesets: TileSet[] = [];
 
 const BIOMES = [
@@ -60,6 +61,8 @@ function bakeActor(name: string, prefix: string, pal: Record<string, string> = P
     const frames = FLOATERS.has(name) ? [rows, alt, alt, rows] : [rows, breath, lift(true), lift(false)];
     frames.forEach((f, i) => { const key = `${prefix}:${v}${i}`; sprites[key] = drawRows(f, true, pal); makeMask(key); });
   }
+  // Zusatzbilder: Angriff (a), Zauber (c), Tod (d0..d2)
+  for (const [suf, rows] of Object.entries(poseFrames(name, views))) { const key = `${prefix}:${suf}`; sprites[key] = drawRows(rows, true, pal); makeMask(key); }
   sprites[prefix] = sprites[`${prefix}:f0`];
   sprites[prefix + '_b'] = sprites[`${prefix}:f1`];
 }
@@ -103,6 +106,13 @@ export function figure(ctx: CanvasRenderingContext2D, key: string, x: number, y:
 export function bake(): void {
   for (const [name, rows] of Object.entries(SPR)) sprites[name] = drawRows(rows, !NO_OUTLINE.has(name));
   for (const name of ACTORS) bakeActor(name, name);
+  // Bodenspuren: je Spur zwei Spielarten (gespiegelt) und eine gedämpfte Fassung ohne Blutrot
+  const DARK: Record<string, string> = { ...PAL, r: '#333c57', R: '#1a1c2c', e: '#1a1c2c' };
+  for (const [name, rows] of Object.entries(DECALS)) {
+    const fl = rows.map(r => [...r].reverse().join(''));
+    sprites[`dc_${name}_0`] = drawRows(rows, false); sprites[`dc_${name}_1`] = drawRows(fl, false);
+    sprites[`dcr_${name}_0`] = drawRows(rows, false, DARK); sprites[`dcr_${name}_1`] = drawRows(fl, false, DARK);
+  }
   // Fackel (zwei Flackerbilder)
   for (const f of [0, 1]) {
     const [c, g] = mk(TS, TS);
@@ -202,7 +212,48 @@ export function bake(): void {
     decal(g => { g.fillStyle = b.top; g.fillRect(4, 4, 1, 3); g.fillRect(5, 6, 3, 1); g.fillRect(7, 7, 1, 3); g.fillRect(8, 9, 3, 1); g.fillRect(10, 10, 1, 2); });
     decal(g => { g.fillStyle = b.mortar; g.fillRect(4, 7, 8, 4); g.fillRect(5, 6, 6, 6); g.fillStyle = b.hi; g.fillRect(6, 7, 3, 1); });
     decal(g => { g.fillStyle = b.g1; g.fillRect(2, 11, 4, 2); g.fillRect(10, 3, 3, 2); g.fillStyle = b.g2; g.fillRect(3, 11, 2, 1); g.fillRect(11, 3, 1, 1); });
-    tilesets.push({ floor, wall, top, cap, hi: b.capHi, grass, burnt, decals });
+    // Phase 2: Spielarten von Wand und Boden, Lava im Fels der Glutschmiede
+    const copy = (src: HTMLCanvasElement, f: (g: CanvasRenderingContext2D) => void) => { const [c, g] = mk(TS, TS); g.drawImage(src, 0, 0); f(g); return c; };
+    const px = (g: CanvasRenderingContext2D, col: string, pts: number[][]) => { g.fillStyle = col; for (const [x, y, w = 1, h = 1] of pts) g.fillRect(x, y, w, h); };
+    const walls = [wall,
+      // Riss und abgeplatzte Ecke
+      copy(wall, g => { px(g, b.top, [[9, 1, 1, 2], [10, 3, 1, 2], [9, 5, 1, 2], [11, 6, 1, 3], [3, 9, 1, 2], [4, 11, 1, 1]]); px(g, b.mortar, [[0, 4, 3, 3]]); px(g, b.hi, [[0, 7, 3, 1]]); }),
+      bi === 0 // Gruft: Nische mit Schädel
+        ? copy(wall, g => { px(g, b.top, [[4, 3, 8, 8]]); px(g, b.mortar, [[4, 3, 8, 1]]); px(g, '#c9d4dc', [[6, 6, 4, 3]]); px(g, '#1a1c2c', [[6, 7, 1, 1], [9, 7, 1, 1]]); px(g, '#94b0c2', [[7, 9, 2, 1]]); px(g, b.capHi, [[4, 11, 8, 1]]); })
+        : bi === 1 // Höhle: hängendes Moos und Wasserspur
+          ? copy(wall, g => { px(g, b.g1, [[2, 3, 2, 5], [3, 8, 1, 2], [12, 3, 2, 3]]); px(g, b.g2, [[2, 3, 1, 3], [12, 3, 1, 1]]); px(g, '#41a6f6', [[8, 2, 1, 9]]); px(g, '#73eff7', [[8, 4, 1, 1], [8, 8, 1, 1]]); })
+          // Schmiede: breite Glutader
+          : copy(wall, g => { px(g, '#b13e53', [[6, 2, 1, 10], [7, 5, 3, 1], [10, 6, 1, 4]]); px(g, '#ef7d57', [[6, 3, 1, 7], [8, 5, 1, 1], [10, 7, 1, 2]]); px(g, '#ffcd75', [[6, 5, 1, 2]]); }),
+    ];
+    const floorX = bi === 0
+      ? [ // Gruft: Steinplatten mit Fugen, gesprungene Platte
+        copy(floor[0], g => { px(g, b.mortar, [[0, 7, TS, 1], [7, 0, 1, 7], [11, 8, 1, 8]]); px(g, b.speck, [[0, 8, TS, 1]]); }),
+        copy(floor[1], g => { px(g, b.mortar, [[3, 2, 1, 3], [4, 5, 2, 1], [6, 6, 1, 3], [7, 9, 3, 1], [10, 10, 1, 3]]); }),
+      ]
+      : bi === 1
+        ? [ // Höhle: Moosflecken, Kiesel
+          copy(floor[0], g => { px(g, b.g1, [[2, 3, 4, 2], [3, 2, 2, 1], [10, 10, 3, 2]]); px(g, b.g2, [[3, 3, 1, 1], [11, 10, 1, 1]]); }),
+          copy(floor[2], g => { px(g, b.brick, [[4, 4, 2, 2], [9, 7, 2, 1], [6, 11, 3, 2]]); px(g, b.hi, [[4, 4, 1, 1], [6, 11, 1, 1]]); }),
+        ]
+        : [ // Schmiede: Ruß und glimmende Fugen
+          copy(floor[0], g => { px(g, '#1c0f14', [[3, 4, 5, 3], [4, 3, 3, 5]]); px(g, '#7d2b45', [[10, 9, 3, 1], [12, 10, 1, 2]]); }),
+          copy(floor[1], g => { px(g, '#7d2b45', [[2, 8, 5, 1], [6, 9, 1, 2], [7, 11, 4, 1]]); px(g, '#ef7d57', [[4, 8, 1, 1], [8, 11, 1, 1]]); }),
+        ];
+    // Lava: vier Bilder einer fließenden Ader in der Mauerkrone (nur Darstellung, nicht begehbar)
+    const lava: HTMLCanvasElement[] = [];
+    if (bi === 2) for (let f = 0; f < 4; f++) {
+      const [c, g] = mk(TS, TS);
+      g.drawImage(cap, 0, 0);
+      for (let x = 0; x < TS; x++) {
+        const yc = 7 + Math.round(Math.sin((x + f * 2) * 0.55) * 2);
+        g.fillStyle = '#7d2b45'; g.fillRect(x, yc - 2, 1, 5);
+        g.fillStyle = '#b13e53'; g.fillRect(x, yc - 1, 1, 3);
+        g.fillStyle = (x + f * 3) % 7 < 3 ? '#ffcd75' : '#ef7d57'; g.fillRect(x, yc, 1, 1);
+      }
+      g.fillStyle = '#ffcd75'; g.fillRect((f * 4 + 2) % TS, 7 + Math.round(Math.sin(((f * 4 + 2) % TS + f * 2) * 0.55) * 2), 2, 1);
+      lava.push(c);
+    }
+    tilesets.push({ floor, floorX, walls, lava, wall, top, cap, hi: b.capHi, grass, burnt, decals });
   }
 }
 

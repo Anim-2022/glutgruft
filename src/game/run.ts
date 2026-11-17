@@ -44,7 +44,14 @@ export type Fx =
   | { k: 'boom'; x: number; y: number; r: number }
   | { k: 'debris'; x: number; y: number }
   | { k: 'loot'; item: Item; how: 'worn' | 'bag' | 'sold' }
-  | { k: 'bolt'; x0: number; y0: number; x1: number; y1: number; col: string };
+  | { k: 'bolt'; x0: number; y0: number; x1: number; y1: number; col: string }
+  // Rein visuelle Fähigkeitseffekte (werden von der Logik nie gelesen)
+  | { k: 'fireball'; x0: number; y0: number; x1: number; y1: number; r: number }
+  | { k: 'nova'; x: number; y: number; r: number }
+  | { k: 'bash'; x: number; y: number; dx: number; dy: number }
+  | { k: 'arrow'; x0: number; y0: number; x1: number; y1: number; col: string; heavy: boolean }
+  | { k: 'swipe'; x: number; y: number; dx: number; dy: number; big: boolean }
+  | { k: 'pdeath'; x: number; y: number };
 
 export interface Run {
   seed: number; rng: RNG; floor: number;
@@ -781,6 +788,7 @@ function fatal(run: Run) {
   if (has(p, 'eisenwille') && !run.willUsed) { run.willUsed = true; p.hp = 1; say(run, 'Eisenwille hält dich am Leben!'); return; }
   p.hp = 0;
   run.mode = 'dead';
+  run.fx.push({ k: 'pdeath', x: p.x, y: p.y });
   say(run, 'Du bist gefallen.');
 }
 
@@ -942,7 +950,7 @@ function useSkill(run: Run, i: number): boolean {
       const t = nearestMob(run, 1);
       if (!t) return noTarget();
       stun(run, t, L ? 3 : 2);
-      run.fx.push({ k: 'lunge', id: 0, dx: Math.sign(t.x - p.x), dy: Math.sign(t.y - p.y) });
+      run.fx.push({ k: 'lunge', id: 0, dx: Math.sign(t.x - p.x), dy: Math.sign(t.y - p.y) }, { k: 'bash', x: t.x, y: t.y, dx: Math.sign(t.x - p.x), dy: Math.sign(t.y - p.y) });
       playerHit(run, t, atk * 1.3 * sp + 1);
       if (mod === 2 && t.hp > 0) {
         // Rammstoß: bis zu zwei Felder zurück, ein Hindernis tut weh
@@ -970,7 +978,7 @@ function useSkill(run: Run, i: number): boolean {
     case 'magier0': {
       const t = nearestMob(run, 7);
       if (!t) return noTarget();
-      run.fx.push({ k: 'bolt', x0: p.x, y0: p.y, x1: t.x, y1: t.y, col: '#ef7d57' }, { k: 'shake', n: 3 });
+      run.fx.push({ k: 'fireball', x0: p.x, y0: p.y, x1: t.x, y1: t.y, r: mod === 1 ? 2 : 1 }, { k: 'shake', n: 3 });
       for (let y = t.y - 1; y <= t.y + 1; y++) for (let x = t.x - 1; x <= t.x + 1; x++) ignite(run, x, y, 2);
       for (const m of run.mobs.filter(m => cheb(m, t) <= (mod === 1 ? 2 : 1))) {
         m.st.brand = 2;
@@ -979,7 +987,7 @@ function useSkill(run: Run, i: number): boolean {
       if (mod === 2) {
         const o = run.mobs.filter(m => m !== t && run.vis[m.y * W + m.x] && cheb(m, p) <= 7).sort((a, b) => cheb(a, p) - cheb(b, p))[0];
         if (o) {
-          run.fx.push({ k: 'bolt', x0: p.x, y0: p.y, x1: o.x, y1: o.y, col: '#ef7d57' });
+          run.fx.push({ k: 'fireball', x0: p.x, y0: p.y, x1: o.x, y1: o.y, r: 0 });
           o.st.brand = 2;
           damage(run, o, (atk * 0.8 + p.lvl * 0.3) * sp * 0.6 - o.def, '#ef7d57');
         }
@@ -989,6 +997,7 @@ function useSkill(run: Run, i: number): boolean {
     case 'magier1': {
       const ts = around(mod === 1 ? 3 : 2);
       if (!ts.length) return noTarget();
+      run.fx.push({ k: 'nova', x: p.x, y: p.y, r: mod === 1 ? 3 : 2 });
       for (const i of [...run.fire.keys()]) if (cheb({ x: i % W, y: (i / W) | 0 }, p) <= 2) run.fire.delete(i);
       for (const t of ts) { stun(run, t, L ? 2 : 1); delete t.st.brand; damage(run, t, 3 * sp, '#73eff7'); if (mod === 2 && t.hp > 0) t.st.sproede = 4; }
       break;
@@ -1017,7 +1026,7 @@ function useSkill(run: Run, i: number): boolean {
     case 'waldlaeufer0': {
       const t = nearestMob(run, 8);
       if (!t) return noTarget();
-      run.fx.push({ k: 'bolt', x0: p.x, y0: p.y, x1: t.x, y1: t.y, col: '#ffcd75' });
+      run.fx.push({ k: 'arrow', x0: p.x, y0: p.y, x1: t.x, y1: t.y, col: '#ffcd75', heavy: true });
       playerHit(run, t, atk * 1.8 * sp, mod === 2 && t.hp >= t.maxHp);
       if (mod === 1) {
         const b = mobAt(run, t.x + Math.sign(t.x - p.x), t.y + Math.sign(t.y - p.y));
@@ -1047,7 +1056,7 @@ function useSkill(run: Run, i: number): boolean {
       p.st.dodge = mod === 1 ? 2 : 1;
       if (mod === 2) {
         const t = nearestMob(run, shotRange(p));
-        if (t) { run.fx.push({ k: 'bolt', x0: p.x, y0: p.y, x1: t.x, y1: t.y, col: '#ffcd75' }); playerHit(run, t, atk * 0.75); }
+        if (t) { run.fx.push({ k: 'arrow', x0: p.x, y0: p.y, x1: t.x, y1: t.y, col: '#ffcd75', heavy: false }); playerHit(run, t, atk * 0.75); }
       }
       break;
     }
@@ -1267,7 +1276,7 @@ export function act(run: Run, a: Action): void {
 function hitPlayer(run: Run, m: Actor, melee: boolean) {
   const p = run.p, d = MOBS[m.kind];
   m.f = Math.abs(p.x - m.x) >= Math.abs(p.y - m.y) ? [Math.sign(p.x - m.x), 0] : [0, Math.sign(p.y - m.y)];
-  if (melee) run.fx.push({ k: 'lunge', id: m.id, dx: Math.sign(p.x - m.x), dy: Math.sign(p.y - m.y) });
+  if (melee) run.fx.push({ k: 'lunge', id: m.id, dx: Math.sign(p.x - m.x), dy: Math.sign(p.y - m.y) }, { k: 'swipe', x: p.x, y: p.y, dx: Math.sign(p.x - m.x), dy: Math.sign(p.y - m.y), big: !!m.boss });
   if (p.st.dodge || (p.aff.flink && run.rng.chance(Math.min(40, p.aff.flink) / 100))) { run.fx.push({ k: 'num', x: p.x, y: p.y, s: 'verfehlt', col: '#94b0c2' }); if (p.aff.konter) p.st.konter = 1; return; }
   const atk = melee ? m.atk : Math.round(m.atk * 0.7); // Fernschüsse treffen schwächer
   damage(run, p, Math.max(Math.ceil(atk * 0.3), atk - p.def - (p.st.wall ? 3 : 0)) - (has(p, 'steinhaut') ? 1 : 0), '#b13e53');
@@ -1317,7 +1326,7 @@ function mobAct(run: Run, m: Actor, dist: Int16Array) {
     return;
   }
   if (d.range && cheb(m, p) <= d.range && los(run.tiles, m.x, m.y, p.x, p.y)) {
-    run.fx.push({ k: 'bolt', x0: m.x, y0: m.y, x1: p.x, y1: p.y, col: '#f4f4f4' });
+    run.fx.push({ k: 'arrow', x0: m.x, y0: m.y, x1: p.x, y1: p.y, col: '#c9d4dc', heavy: false });
     hitPlayer(run, m, false);
     return;
   }

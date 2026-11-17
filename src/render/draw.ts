@@ -1,6 +1,9 @@
 import { VW, VH, TS, sprites, masks, tilesets, text, panel, bar, heroLook, figure } from './gfx';
 import { GLOW } from './sprites';
 import { W, H, T, wallLike, walkable } from '../game/dungeon';
+import { threatOf, statusMarks } from './warn';
+import { onDeath, drawDecals, drawDying, resetDeaths, reducedFx } from './deaths';
+import { drawItemIcon, drawIcon, PERK_ICON } from './icons';
 import { sfx } from '../core/audio';
 import { tr } from '../core/i18n';
 import { Run, Actor, xpNeed, skillCost, itemText, itemValue, itemScore, perkInfo, skillModName, shotRange, RANKS, SORT_NAMES, BAG_MAX, RUNE_NAMES } from '../game/run';
@@ -14,6 +17,25 @@ const bolts: { x0: number; y0: number; x1: number; y1: number; col: string; t: n
 const booms: { x: number; y: number; r: number; t: number }[] = [];
 const bits: { x: number; y: number; vx: number; vy: number; col: string; t: number; g?: number }[] = [];
 let shake = 0;
+// Fähigkeitseffekte (nur Darstellung)
+type Shot = { x0: number; y0: number; x1: number; y1: number; col: string; kind: 'fire' | 'arrow' | 'heavy'; r: number; t: number; dur: number };
+const shots: Shot[] = [];
+const rings: { x: number; y: number; r: number; t: number }[] = [];
+const sparks: { x: number; y: number; col: string; big: boolean; t: number }[] = [];
+const bashes: { x: number; y: number; dx: number; dy: number; t: number }[] = [];
+const swipes: { x: number; y: number; dx: number; dy: number; big: boolean; t: number }[] = [];
+let deathT = -1; // Zeit seit dem Tod des Helden, -1 = lebt
+const SWIPE_T = 0.2, DEATH_T = 1.3;
+// Posen der Figuren: a Angriff, c Zauber (Bild aus poses.ts), Restdauer in Sekunden
+const poses = new Map<number, { k: string; t: number }>();
+const pose = (id: number, k: string, t = 0.22) => poses.set(id, { k, t });
+const RING_T = 0.38, SPARK_T = 0.18, BASH_T = 0.22;
+const burstBits = (x: number, y: number, n: number, cols: string[], v0: number, v1: number, up = 30, g?: number) => {
+  for (let k = 0; k < n; k++) {
+    const ang = Math.random() * Math.PI * 2, v = v0 + Math.random() * (v1 - v0);
+    bits.push({ x, y, vx: Math.cos(ang) * v, vy: Math.sin(ang) * v - up, col: cols[k % cols.length], t: 0, g });
+  }
+};
 const cam = { x: 0, y: 0 };
 const view = { ox: 0, oy: 0 };
 // Bildschirmpunkt -> Kartenfeld (für Mausklicks)
@@ -105,6 +127,8 @@ function applyLight(ctx: CanvasRenderingContext2D, run: Run, lights: Light[], ox
 export function resetView() {
   pos.clear(); lunges.clear(); flashes.clear();
   nums.length = 0; bolts.length = 0; bits.length = 0; booms.length = 0; shake = 0;
+  shots.length = 0; rings.length = 0; sparks.length = 0; bashes.length = 0; swipes.length = 0; deathT = -1; poses.clear();
+  resetDeaths();
 }
 
 function smooth(a: Actor, dt: number) {
@@ -115,20 +139,6 @@ function smooth(a: Actor, dt: number) {
   return p;
 }
 
-// Gegner zerfällt in seine eigenen Pixel
-function shatter(kind: string, tx: number, ty: number) {
-  const s = sprites[kind];
-  if (!s) return;
-  const d = s.getContext('2d')!.getImageData(0, 0, s.width, s.height).data;
-  const ox = tx * TS + 8 - s.width / 2, oy = ty * TS + 14 - s.height;
-  for (let y = 0; y < s.height; y += 2) for (let x = 0; x < s.width; x += 2) {
-    const i = (y * s.width + x) * 4;
-    if (d[i + 3] === 0) continue;
-    const ang = Math.atan2(y - s.height / 2, x - s.width / 2) + (Math.random() - 0.5);
-    const v = 20 + Math.random() * 50;
-    bits.push({ x: ox + x, y: oy + y, vx: Math.cos(ang) * v, vy: Math.sin(ang) * v - 30, col: `rgb(${d[i]},${d[i + 1]},${d[i + 2]})`, t: 0 });
-  }
-}
 
 const TILE_SPR: Record<number, string> = {
   [T.STAIRS]: 'stairs', [T.CHEST]: 'chest', [T.CHEST_OPEN]: 'chest_open', [T.ALTAR]: 'altar', [T.ALTAR_USED]: 'altar_used',
@@ -142,12 +152,43 @@ export function drawRun(ctx: CanvasRenderingContext2D, run: Run, dt: number, tim
     switch (f.k) {
       case 'num': nums.push({ x: f.x * TS + 8, y: f.y * TS - nums.filter(n => n.t < 0.1).length * 8, s: f.s, col: f.col, t: 0 }); break;
       case 'shake': shake = Math.max(shake, f.n); break;
-      case 'bolt': bolts.push({ ...f, t: 0 }); sfx('zap'); break;
-      case 'lunge': lunges.set(f.id, { dx: f.dx, dy: f.dy, t: 0 }); sfx('hit'); break;
+      case 'bolt': bolts.push({ ...f, t: 0 }); sfx('zap'); if (f.x0 === run.p.x && f.y0 === run.p.y) pose(0, 'a'); break;
+      case 'lunge': lunges.set(f.id, { dx: f.dx, dy: f.dy, t: 0 }); sfx('hit'); pose(f.id, 'a'); break;
       case 'flash': flashes.set(f.id, FLASH_T); if (f.id === 0) sfx('hurt'); break;
-      case 'die': shatter(f.kind, f.x, f.y); sfx('kill'); break;
+      case 'die': shake = Math.max(shake, onDeath(run, f.kind, f.x, f.y)); sfx('kill'); break;
       case 'loot': loot = { item: f.item, how: f.how, t: 0 }; sfx('pick'); break;
       case 'boom': booms.push({ x: f.x, y: f.y, r: f.r, t: 0 }); sfx('boom'); break;
+      case 'fireball': case 'arrow': {
+        // Schütze: Held oder Gegner auf dem Startfeld zeigt seine Angriffs- bzw. Zauberpose
+        if (f.x0 === run.p.x && f.y0 === run.p.y) pose(0, f.k === 'fireball' ? 'c' : 'a', 0.26);
+        else { const m = run.mobs.find(o => o.x === f.x0 && o.y === f.y0); if (m) pose(m.id, 'a', 0.26); }
+        const fire = f.k === 'fireball', d = Math.hypot(f.x1 - f.x0, f.y1 - f.y0);
+        shots.push({ x0: f.x0, y0: f.y0, x1: f.x1, y1: f.y1, t: 0, col: fire ? '#ef7d57' : f.col, r: fire ? f.r : 0,
+          kind: fire ? 'fire' : f.heavy ? 'heavy' : 'arrow', dur: Math.min(fire ? 0.3 : 0.18, (fire ? 0.06 : 0.03) + d * (fire ? 0.03 : 0.018)) });
+        sfx('zap');
+        break;
+      }
+      case 'nova':
+        pose(0, 'c', 0.32);
+        rings.push({ x: f.x, y: f.y, r: f.r, t: 0 });
+        burstBits(f.x * TS + 8, f.y * TS + 8, 26, ['#73eff7', '#c9d4dc', '#f4f4f4', '#41a6f6'], 40, 110, 10, 40);
+        shake = Math.max(shake, 3); sfx('zap');
+        break;
+      case 'bash':
+        bashes.push({ x: f.x, y: f.y, dx: f.dx, dy: f.dy, t: 0 });
+        burstBits(f.x * TS + 8 - f.dx * 6, f.y * TS + 10 - f.dy * 6, 10, ['#94b0c2', '#c9d4dc', '#566c86'], 20, 60, 25);
+        shake = Math.max(shake, 4);
+        break;
+      case 'swipe':
+        swipes.push({ x: f.x, y: f.y, dx: f.dx, dy: f.dy, big: f.big, t: 0 });
+        if (f.big) shake = Math.max(shake, 6);
+        break;
+      case 'pdeath': {
+        deathT = 0;
+        burstBits(f.x * TS + 8, f.y * TS + 8, 18, ['#b13e53', '#7d2b45', '#ef7d57'], 30, 90, 40);
+        shake = Math.max(shake, 8);
+        break;
+      }
       case 'debris':
         sfx('crack');
         for (let k = 0; k < 14; k++) {
@@ -158,6 +199,7 @@ export function drawRun(ctx: CanvasRenderingContext2D, run: Run, dt: number, tim
     }
   }
   for (const [id, l] of lunges) { l.t += dt; if (l.t > LUNGE_T) lunges.delete(id); }
+  for (const [id, q] of poses) { q.t -= dt; if (q.t <= 0) poses.delete(id); }
   for (const [id, t] of flashes) { if (t - dt <= 0) flashes.delete(id); else flashes.set(id, t - dt); }
 
   const p = run.p, pp = smooth(p, dt);
@@ -165,7 +207,7 @@ export function drawRun(ctx: CanvasRenderingContext2D, run: Run, dt: number, tim
   const tx = pp.x * TS + 8 - VW / 2, ty = pp.y * TS + 8 - VH / 2;
   if (Math.abs(tx - cam.x) > 220 || Math.abs(ty - cam.y) > 220) { cam.x = tx; cam.y = ty; }
   cam.x += (tx - cam.x) * Math.min(1, dt * 10); cam.y += (ty - cam.y) * Math.min(1, dt * 10);
-  shake = Math.max(0, shake - dt * 30);
+  shake = reducedFx() ? 0 : Math.max(0, shake - dt * 30);
   const sx = shake ? Math.round((Math.random() - 0.5) * shake) : 0, sy = shake ? Math.round((Math.random() - 0.5) * shake) : 0;
   const ox = -Math.round(cam.x) + sx, oy = -Math.round(cam.y) + sy;
 
@@ -173,7 +215,7 @@ export function drawRun(ctx: CanvasRenderingContext2D, run: Run, dt: number, tim
   ctx.fillStyle = '#08090f'; ctx.fillRect(0, 0, VW, VH);
   const ts = tilesets[biomeOf(run.floor)];
   buildLight(run);
-  const lights: Light[] = [];
+  const lights: Light[] = [], floorTiles: number[] = [];
   const flick = (n: number) => 0.92 + 0.08 * Math.sin(time * 9 + n) + 0.04 * Math.sin(time * 23 + n * 1.7);
   const x0 = Math.max(0, Math.floor(cam.x / TS) - 1), x1 = Math.min(W - 1, x0 + VW / TS + 2);
   const y0 = Math.max(0, Math.floor(cam.y / TS) - 1), y1 = Math.min(H - 1, y0 + Math.ceil(VH / TS) + 2);
@@ -185,10 +227,16 @@ export function drawRun(ctx: CanvasRenderingContext2D, run: Run, dt: number, tim
       const front = y + 1 < H && !wallLike(run.tiles[i + W]);
       const open = (ox2: number, oy2: number) => x + ox2 >= 0 && x + ox2 < W && y + oy2 >= 0 && y + oy2 < H && !wallLike(run.tiles[i + oy2 * W + ox2]);
       const l = open(-1, 0), r = open(1, 0), u = open(0, -1);
-      if (front) ctx.drawImage(ts.wall, dx, dy);
+      // Wandspielart fest am Feld (Hash der Koordinaten, kein Zufall): meist die Grundwand
+      if (front) { const hv = hash(x, y, 101) % 7; ctx.drawImage(ts.walls[hv < 5 ? 0 : hv - 4], dx, dy); }
       else {
         const c = [open(-1, -1), open(1, -1), open(-1, 1), open(1, 1)];
-        ctx.drawImage(l || r || u || c.some(Boolean) ? ts.cap : ts.top, dx, dy);
+        const inner = !(l || r || u || c.some(Boolean));
+        // Glutschmiede: in der Mauerkrone fließt hier und da Lava (vier Bilder, Phase je Feld versetzt)
+        if (!inner && ts.lava.length && hash(x, y, 202) % 5 === 0) {
+          ctx.drawImage(ts.lava[(Math.floor(time * 5) + x) % 4], dx, dy);
+          lights.push({ x, y, r: 1.8 * flick(i), col: '#ef7d57', a: 0.6 });
+        } else ctx.drawImage(inner ? ts.top : ts.cap, dx, dy);
         ctx.fillStyle = ts.hi;
         if (u) ctx.fillRect(dx, dy, TS, 2);
         if (c[0] && !l && !u) ctx.fillRect(dx, dy, 2, 2);
@@ -206,45 +254,105 @@ export function drawRun(ctx: CanvasRenderingContext2D, run: Run, dt: number, tim
         lights.push({ x, y: y + 0.6, r: 5 * flick(i), col: '#ef7d57' });
       }
     } else {
-      ctx.drawImage(t === T.ICE ? sprites.ice : ts.floor[(x * 7 + y * 13 + ((x * y) % 5)) % 4], dx, dy);
+      const hf = hash(x, y, 303);
+      ctx.drawImage(t === T.ICE ? sprites.ice : hf % 6 === 0 ? ts.floorX[(hf >>> 4) % ts.floorX.length] : ts.floor[(x * 7 + y * 13 + ((x * y) % 5)) % 4], dx, dy);
       if (y > 0 && wallLike(run.tiles[i - W])) { ctx.fillStyle = 'rgba(0,0,0,0.38)'; ctx.fillRect(dx, dy, TS, 4); }
       if (t === T.FLOOR) { const h = hash(x, y, run.seed + run.floor * 7); if (h % 9 === 0) ctx.drawImage(ts.decals[(h >>> 8) % ts.decals.length], dx, dy); }
       if (t === T.GRASS) ctx.drawImage(ts.grass[(x * 5 + y * 3) % 3], dx, dy);
       else if (t === T.BURNT) ctx.drawImage(ts.burnt, dx, dy);
-      const s = TILE_SPR[t];
-      if (t === T.CRATE_ON) ctx.drawImage(sprites.plate, dx, dy);
-      if (s) ctx.drawImage(sprites[s], dx, dy);
-      if (t === T.CRATE_ON) { ctx.fillStyle = 'rgba(255,205,117,0.3)'; ctx.fillRect(dx + 1, dy + 1, 14, 14); }
-      if (t === T.GOAL) { ctx.fillStyle = `rgba(115,239,247,${0.15 + 0.1 * Math.sin(time * 4)})`; ctx.fillRect(dx, dy, TS, TS); lights.push({ x, y, r: 2.2, col: '#73eff7', a: 0.8 }); }
-      if (t === T.FOUNTAIN) lights.push({ x, y, r: 2.4, col: '#41a6f6', a: 0.7 });
-      if (t === T.RUNE && run.puzzle) {
-        const z = run.puzzle, k = z.runes[i];
-        ctx.globalAlpha = z.dead ? 0.3 : 1;
-        ctx.drawImage(sprites[`rune${k}${z.pressed.includes(k) || z.solved ? '_on' : ''}`], dx, dy);
-        ctx.globalAlpha = 1;
-      }
-      if (t === T.BARREL && run.fuses.has(i) && Math.floor(time * 10) % 2) {
-        ctx.fillStyle = '#ffcd75'; ctx.fillRect(dx + 7, dy - 1, 2, 2);
-        ctx.fillStyle = '#ef7d57'; ctx.fillRect(dx + 6, dy, 1, 1); ctx.fillRect(dx + 9, dy - 2, 1, 1);
-      }
-      if (run.fire.has(i) && run.vis[i]) {
-        ctx.drawImage(sprites[Math.floor(time * 8 + x + y) % 2 ? 'fire_a' : 'fire_b'], dx, dy - 2);
-        lights.push({ x, y, r: 3 * flick(i), col: '#ef7d57' });
-      }
-      if (t === T.ALTAR) lights.push({ x, y, r: 2.6 + 0.3 * Math.sin(time * 3), col: '#73eff7', a: 0.8 });
+      floorTiles.push(i);
     }
   }
+  // Spuren am Boden liegen über dem Boden, aber unter Gegenständen, Fallen und Figuren
+  drawDecals(ctx, run, ox, oy, lights, time, dt);
+  for (const i of floorTiles) {
+    const x = i % W, y = (i / W) | 0, t = run.tiles[i], dx = x * TS + ox, dy = y * TS + oy;
+    const s = TILE_SPR[t];
+    if (t === T.CRATE_ON) ctx.drawImage(sprites.plate, dx, dy);
+    if (s) ctx.drawImage(sprites[s], dx, dy);
+    if (t === T.CRATE_ON) { ctx.fillStyle = 'rgba(255,205,117,0.3)'; ctx.fillRect(dx + 1, dy + 1, 14, 14); }
+    if (t === T.GOAL) { ctx.fillStyle = `rgba(115,239,247,${0.15 + 0.1 * Math.sin(time * 4)})`; ctx.fillRect(dx, dy, TS, TS); lights.push({ x, y, r: 2.2, col: '#73eff7', a: 0.8 }); }
+    if (t === T.FOUNTAIN) lights.push({ x, y, r: 2.4, col: '#41a6f6', a: 0.7 });
+    if (t === T.RUNE && run.puzzle) {
+      const z = run.puzzle, k = z.runes[i];
+      ctx.globalAlpha = z.dead ? 0.3 : 1;
+      ctx.drawImage(sprites[`rune${k}${z.pressed.includes(k) || z.solved ? '_on' : ''}`], dx, dy);
+      ctx.globalAlpha = 1;
+    }
+    if (t === T.BARREL && run.fuses.has(i) && Math.floor(time * 10) % 2) {
+      ctx.fillStyle = '#ffcd75'; ctx.fillRect(dx + 7, dy - 1, 2, 2);
+      ctx.fillStyle = '#ef7d57'; ctx.fillRect(dx + 6, dy, 1, 1); ctx.fillRect(dx + 9, dy - 2, 1, 1);
+    }
+    if (run.fire.has(i) && run.vis[i]) {
+      ctx.drawImage(sprites[Math.floor(time * 8 + x + y) % 2 ? 'fire_a' : 'fire_b'], dx, dy - 2);
+      lights.push({ x, y, r: 3 * flick(i), col: '#ef7d57' });
+    }
+    if (t === T.ALTAR) lights.push({ x, y, r: 2.6 + 0.3 * Math.sin(time * 3), col: '#73eff7', a: 0.8 });
+  }
   for (const t of run.traps) ctx.drawImage(sprites.trap, t.x * TS + ox, t.y * TS + oy);
+  drawDying(ctx, run, ox, oy, lights, dt);
 
+  // Status auf dem Sprite: Betäubung, Brand, Gift, Spröde, Schutzwall
+  const statusFx = (a: Actor, isP: boolean, dx: number, dy: number, w: number, h: number, q: { x: number; y: number }) => {
+    const cx = dx + w / 2, mk = new Set(statusMarks(a, isP));
+    if (mk.has('stun')) {
+      for (let k = 0; k < 3; k++) {
+        const ang = time * 5 + (k * Math.PI * 2) / 3, sx2 = Math.round(cx + Math.cos(ang) * 6) - 1, sy2 = Math.round(dy - 3 + Math.sin(ang) * 2);
+        ctx.fillStyle = Math.sin(ang) > 0 ? '#ffcd75' : '#c98a3a';
+        ctx.fillRect(sx2, sy2, 3, 1); ctx.fillRect(sx2 + 1, sy2 - 1, 1, 3);
+      }
+    }
+    if (mk.has('brand')) {
+      if (Math.random() < dt * 14) bits.push({ x: q.x * TS + 3 + Math.random() * 10, y: q.y * TS + 14 - h + Math.random() * h * 0.8, vx: (Math.random() - 0.5) * 6, vy: -14 - Math.random() * 10, col: Math.random() < 0.6 ? '#ef7d57' : '#ffcd75', t: 0, g: -25 });
+      lights.push({ x: q.x, y: q.y, r: 1.4, col: '#ef7d57', a: 0.5 });
+    }
+    if (mk.has('gift') && Math.random() < dt * 7) bits.push({ x: q.x * TS + 4 + Math.random() * 8, y: q.y * TS + 12 - Math.random() * h * 0.6, vx: (Math.random() - 0.5) * 4, vy: -8 - Math.random() * 6, col: Math.random() < 0.5 ? '#38b764' : '#a7f070', t: 0, g: -6 });
+    if (mk.has('sproede')) {
+      ctx.fillStyle = '#73eff7';
+      ctx.fillRect(dx + 1, dy + 3, 1, 3); ctx.fillRect(dx, dy + 4, 3, 1);
+      ctx.fillRect(dx + w - 2, dy + h - 6, 1, 3); ctx.fillRect(dx + w - 3, dy + h - 5, 3, 1);
+    }
+    if (mk.has('wall')) {
+      ctx.globalAlpha = 0.45 + 0.2 * Math.sin(time * 6);
+      ctx.fillStyle = '#94b0c2';
+      for (let k = 0; k < 20; k++) { const ang = (k / 20) * Math.PI * 2; ctx.fillRect(Math.round(cx + Math.cos(ang) * 10), Math.round(dy + h / 2 + 1 + Math.sin(ang) * 9), 1, 1); }
+      ctx.globalAlpha = 1;
+    }
+  };
+  // Warnung: dieser Gegner kann im nächsten Gegnerzug zuschlagen oder schießen
+  const warn = (m: Actor, q: { x: number; y: number }, dx: number, dy: number, w: number) => {
+    const th = threatOf(run, m);
+    if (!th) return;
+    const shot = th === 'shot';
+    const blink = 0.55 + 0.45 * Math.sin(time * 8 + m.id);
+    if (shot) {
+      // gestrichelte Ziellinie vom Schützen zum Helden
+      const x0 = q.x * TS + 8, y0 = q.y * TS + 6, x1 = pp.x * TS + 8, y1 = pp.y * TS + 7, n = Math.hypot(x1 - x0, y1 - y0);
+      ctx.globalAlpha = 0.45 * blink + 0.3; ctx.fillStyle = '#b13e53';
+      for (let k = 6; k < n - 4; k += 4) { if (((k / 4) | 0) % 2) continue; ctx.fillRect(Math.round(x0 + ((x1 - x0) * k) / n) + ox, Math.round(y0 + ((y1 - y0) * k) / n) + oy, 2, 1); }
+      ctx.globalAlpha = 1;
+    }
+    const wx = dx + w / 2 - 1, wy = dy - 12 + (m.hp < m.maxHp ? -3 : 0) + (m.st.stun ? -3 : 0);
+    ctx.globalAlpha = blink;
+    ctx.fillStyle = '#1a1c2c'; ctx.fillRect(wx - 1, wy - 1, 4, 9);
+    ctx.fillStyle = shot ? '#ef7d57' : '#b13e53'; ctx.fillRect(wx, wy, 2, 5); ctx.fillRect(wx, wy + 6, 2, 2);
+    ctx.globalAlpha = 1;
+  };
   const actor = (a: Actor, q: { x: number; y: number }) => {
     // Blickrichtung wählt die Ansicht, Bewegung die Schrittbilder
     const f = a === p ? p.dir : a.f ?? [0, 1];
     const v = f[1] < 0 ? 'b' : f[1] > 0 ? 'f' : 's', mirror = v === 's' && f[0] < 0;
     const moving = Math.abs(q.x - a.x) + Math.abs(q.y - a.y) > 0.04;
     const fr = moving ? [2, 0, 3, 0][Math.floor(time * 11) % 4] : Math.floor(time * 2.5 + a.id * 0.37) % 2;
-    const frame = `${a === p ? lookOf(p) : a.kind}:${v}${fr}`, img = sprites[frame];
+    // Bosse zeigen ab halber Lebenskraft ihre verwundete Fassung (nur gelesen, keine Logik)
+    const base = a === p ? lookOf(p) : a.boss && a.hp * 2 < a.maxHp && sprites[`${a.kind}2:f0`] ? `${a.kind}2` : a.kind, ps = poses.get(a.id);
+    // Tod des Helden: einknicken, kippen, liegen bleiben; sonst Pose (Angriff/Zauber) vor Schrittbild
+    let frame = `${base}:${v}${fr}`;
+    if (a === p && deathT >= 0) frame = `${base}:${v}d${deathT < 0.14 ? 0 : deathT < 0.3 ? 1 : 2}`;
+    else if (ps && sprites[`${base}:${v}${ps.k}`]) frame = `${base}:${v}${ps.k}`;
+    const img = sprites[frame];
     const l = lunges.get(a.id), k = l ? Math.sin((l.t / LUNGE_T) * Math.PI) * 6 : 0;
-    const glow = GLOW[a.kind];
+    const glow = GLOW[base.split(':')[0]] ?? GLOW[a.kind];
     const jx = glow ? Math.round(Math.sin(time * 17 + a.id) * 0.6) : 0;
     const bx = Math.round(q.x * TS + (l ? l.dx * k : 0)) + ox, by = Math.round(q.y * TS + (l ? l.dy * k : 0)) + oy;
     const dx = bx + 8 - img.width / 2 + jx, dy = by + 14 - img.height;
@@ -252,8 +360,11 @@ export function drawRun(ctx: CanvasRenderingContext2D, run: Run, dt: number, tim
       if (!mirror) { ctx.drawImage(c, dx, dy); return; }
       ctx.save(); ctx.translate(dx + c.width, dy); ctx.scale(-1, 1); ctx.drawImage(c, 0, 0); ctx.restore();
     };
-    if (!glow) { ctx.fillStyle = 'rgba(0,0,0,0.35)'; ctx.fillRect(bx + 8 - img.width / 2 + 3, Math.round(q.y * TS) + oy + 13, img.width - 6, 2); }
+    if (!glow) { ctx.fillStyle = 'rgba(0,0,0,0.35)'; const sw = Math.min(img.width, a.boss ? 24 : 16); ctx.fillRect(bx + 8 - sw / 2 + 3, Math.round(q.y * TS) + oy + 13, sw - 6, 2); }
+    // Ausweichen: Held flackert halbdurchsichtig
+    if (statusMarks(a, a === p).includes('dodge')) ctx.globalAlpha = 0.55 + 0.25 * Math.sin(time * 18);
     blit(img);
+    ctx.globalAlpha = 1;
     if (glow) {
       // Feuerwesen flimmern, werfen Licht und verlieren Funken
       ctx.globalCompositeOperation = 'lighter';
@@ -261,7 +372,9 @@ export function drawRun(ctx: CanvasRenderingContext2D, run: Run, dt: number, tim
       blit(masks[frame]);
       ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
       lights.push({ x: q.x, y: q.y, r: glow[0] * flick(a.id), col: glow[1] });
-      if (Math.random() < dt * 9) bits.push({ x: (q.x * TS) + 4 + Math.random() * 8, y: q.y * TS + 2 + Math.random() * 6, vx: (Math.random() - 0.5) * 10, vy: -18 - Math.random() * 14, col: Math.random() < 0.5 ? '#ffcd75' : '#ef7d57', t: 0, g: -10 });
+      // zweite Phase des Schmiedefürsten: dichte Feueraura um den ganzen Leib
+      const aura = base === 'fuerst2';
+      for (let n = aura ? 3 : 1; n > 0; n--) if (Math.random() < dt * 9) bits.push({ x: (q.x * TS) + (aura ? -4 + Math.random() * 24 : 4 + Math.random() * 8), y: q.y * TS + (aura ? -8 + Math.random() * 20 : 2 + Math.random() * 6), vx: (Math.random() - 0.5) * 10, vy: -18 - Math.random() * 14, col: Math.random() < 0.5 ? '#ffcd75' : '#ef7d57', t: 0, g: -10 });
     }
     if (a === p && p.gear[2] && v === 'f') { ctx.fillStyle = RARITY_COL[p.gear[2].rar]; ctx.fillRect(dx + 7, dy + 9, 2, 1); ctx.fillRect(dx + 7, dy + 10, 2, 1); }
     if (a.elite) {
@@ -271,9 +384,8 @@ export function drawRun(ctx: CanvasRenderingContext2D, run: Run, dt: number, tim
     }
     const fl = flashes.get(a.id);
     if (fl) { ctx.globalAlpha = Math.min(1, fl / FLASH_T + 0.2); blit(masks[frame]); ctx.globalAlpha = 1; }
-    if (a.st.stun) text(ctx, 'z', dx + img.width - 4, dy - 5, '#73eff7', 8);
-    if (a.st.brand) { ctx.fillStyle = '#ef7d57'; ctx.fillRect(dx + 1, dy - 2, 2, 2); }
-    if (a.st.gift) { ctx.fillStyle = '#38b764'; ctx.fillRect(dx + 4, dy - 2, 2, 2); }
+    statusFx(a, a === p, dx, dy, img.width, img.height, q);
+    if (a !== p) warn(a, q, dx, dy, img.width);
     if (run.target && a.id === run.target) {
       ctx.fillStyle = '#ffcd75';
       for (const [cx, cy] of [[0, 0], [13, 0], [0, 13], [13, 13]]) { ctx.fillRect(bx + cx, by + cy, 3, 1); ctx.fillRect(bx + (cx ? 15 : 0), by + cy - (cy ? 2 : 0), 1, 3); }
@@ -331,6 +443,112 @@ export function drawRun(ctx: CanvasRenderingContext2D, run: Run, dt: number, tim
       ctx.fillRect(Math.round((b.x0 + (b.x1 - b.x0) * f) * TS + 7) + ox, Math.round((b.y0 + (b.y1 - b.y0) * f) * TS + 6) + oy, 2, 2);
     }
   }
+  // Geschosse der Fähigkeiten: Feuerball, Pfeile, Zielschuss
+  for (let i = shots.length - 1; i >= 0; i--) {
+    const s = shots[i];
+    s.t += dt;
+    const done = s.t >= s.dur, f = Math.min(1, s.t / s.dur);
+    const hx = (s.x0 + (s.x1 - s.x0) * f) * TS + 8, hy = (s.y0 + (s.y1 - s.y0) * f) * TS + 7;
+    const len = Math.hypot(s.x1 - s.x0, s.y1 - s.y0) || 1, ux = (s.x1 - s.x0) / len, uy = (s.y1 - s.y0) / len;
+    if (done) {
+      shots.splice(i, 1);
+      if (s.kind === 'fire') {
+        booms.push({ x: s.x1, y: s.y1, r: s.r, t: 0 }); sfx('boom');
+        burstBits(hx, hy, 12 + s.r * 8, ['#ffcd75', '#ef7d57', '#b13e53'], 30, 90, 30);
+      } else {
+        sparks.push({ x: hx, y: hy, col: s.col, big: s.kind === 'heavy', t: 0 });
+        burstBits(hx, hy, s.kind === 'heavy' ? 8 : 3, [s.col, '#f4f4f4'], 30, 70, 10);
+      }
+      continue;
+    }
+    if (s.kind === 'fire') {
+      if (Math.random() < dt * 70) bits.push({ x: hx - ux * 3 + (Math.random() - 0.5) * 3, y: hy - uy * 3 + (Math.random() - 0.5) * 3, vx: -ux * 15 + (Math.random() - 0.5) * 12, vy: -uy * 15 - 8, col: Math.random() < 0.5 ? '#ef7d57' : '#ffcd75', t: 0, g: -20 });
+      ctx.fillStyle = '#b13e53'; ctx.fillRect(Math.round(hx - 3) + ox, Math.round(hy - 3) + oy, 6, 6);
+      ctx.fillStyle = '#ef7d57'; ctx.fillRect(Math.round(hx - 2) + ox, Math.round(hy - 3) + oy, 4, 6); ctx.fillRect(Math.round(hx - 3) + ox, Math.round(hy - 2) + oy, 6, 4);
+      ctx.fillStyle = '#ffcd75'; ctx.fillRect(Math.round(hx - 1) + ox, Math.round(hy - 1) + oy, 3, 3);
+      lights.push({ x: hx / TS - 0.5, y: hy / TS - 0.5, r: 3, col: '#ef7d57' });
+    } else {
+      const tail = s.kind === 'heavy' ? 26 : 10;
+      for (let k = 0; k <= tail; k += 2) {
+        ctx.globalAlpha = s.kind === 'heavy' ? 1 - k / tail : 1;
+        ctx.fillStyle = k < 3 ? '#f4f4f4' : s.col;
+        ctx.fillRect(Math.round(hx - ux * k) + ox, Math.round(hy - uy * k) + oy, s.kind === 'heavy' && k < 6 ? 2 : 1, s.kind === 'heavy' && k < 6 ? 2 : 1);
+      }
+      ctx.globalAlpha = 1;
+      if (s.kind === 'heavy') lights.push({ x: hx / TS - 0.5, y: hy / TS - 0.5, r: 2, col: s.col, a: 0.7 });
+    }
+  }
+  // Trefferblitz: Kreuz mit Strahlen
+  for (let i = sparks.length - 1; i >= 0; i--) {
+    const k = sparks[i];
+    k.t += dt;
+    if (k.t > SPARK_T) { sparks.splice(i, 1); continue; }
+    const f = k.t / SPARK_T, n = Math.round((k.big ? 7 : 4) * (0.5 + f)), cx = Math.round(k.x) + ox, cy = Math.round(k.y) + oy;
+    ctx.globalAlpha = 1 - f;
+    ctx.fillStyle = '#f4f4f4'; ctx.fillRect(cx - n, cy, n * 2 + 1, 1); ctx.fillRect(cx, cy - n, 1, n * 2 + 1);
+    if (k.big) { ctx.fillStyle = k.col; for (let d = 2; d < n; d += 2) for (const [sx2, sy2] of [[1, 1], [1, -1], [-1, 1], [-1, -1]]) ctx.fillRect(cx + sx2 * d, cy + sy2 * d, 1, 1); ctx.fillRect(cx - 1, cy - 1, 3, 3); }
+    ctx.globalAlpha = 1;
+    lights.push({ x: k.x / TS - 0.5, y: k.y / TS - 0.5, r: k.big ? 2.6 : 1.4, col: k.col, a: 0.8 });
+  }
+  // Frostnova: wachsender Eisring
+  for (let i = rings.length - 1; i >= 0; i--) {
+    const g = rings[i];
+    g.t += dt;
+    if (g.t > RING_T) { rings.splice(i, 1); continue; }
+    const f = g.t / RING_T, rad = (g.r + 0.5) * TS * (0.15 + 0.85 * Math.sqrt(f)), cx = g.x * TS + 8 + ox, cy = g.y * TS + 8 + oy;
+    const steps = Math.max(24, Math.round(rad * 1.6));
+    ctx.globalAlpha = 1 - f * f;
+    for (let k = 0; k < steps; k++) {
+      const a = (k / steps) * Math.PI * 2, px = Math.round(cx + Math.cos(a) * rad), py = Math.round(cy + Math.sin(a) * rad);
+      ctx.fillStyle = k % 3 ? '#73eff7' : '#f4f4f4'; ctx.fillRect(px, py, 2, 2);
+      if (k % 4 === 0) { ctx.fillStyle = '#41a6f6'; ctx.fillRect(Math.round(cx + Math.cos(a) * (rad - 3)), Math.round(cy + Math.sin(a) * (rad - 3)), 1, 1); }
+    }
+    ctx.fillStyle = 'rgba(115,239,247,0.12)';
+    ctx.beginPath(); ctx.arc(cx, cy, rad, 0, Math.PI * 2); ctx.fill();
+    ctx.globalAlpha = 1;
+    lights.push({ x: g.x, y: g.y, r: 2 + (g.r + 1) * f * 1.5, col: '#73eff7', a: 0.9 });
+  }
+  // Schildstoß: Aufprall-Halbmond und Schlaglinien
+  for (let i = bashes.length - 1; i >= 0; i--) {
+    const b = bashes[i];
+    b.t += dt;
+    if (b.t > BASH_T) { bashes.splice(i, 1); continue; }
+    const f = b.t / BASH_T, base = Math.atan2(b.dy, b.dx), cx = b.x * TS + 8 - b.dx * 6 + ox, cy = b.y * TS + 8 - b.dy * 6 + oy, rad = 5 + f * 9;
+    ctx.globalAlpha = 1 - f;
+    for (let k = -6; k <= 6; k++) {
+      const a = base + k * 0.22;
+      ctx.fillStyle = Math.abs(k) < 3 ? '#f4f4f4' : '#94b0c2';
+      ctx.fillRect(Math.round(cx + Math.cos(a) * rad), Math.round(cy + Math.sin(a) * rad), 2, 2);
+    }
+    ctx.fillStyle = '#ffcd75';
+    for (const k of [-0.7, 0, 0.7]) {
+      const a = base + k;
+      for (let d = 0; d < 4; d++) ctx.fillRect(Math.round(cx + Math.cos(a) * (rad + 3 + d)), Math.round(cy + Math.sin(a) * (rad + 3 + d)), 1, 1);
+    }
+    ctx.globalAlpha = 1;
+    lights.push({ x: b.x, y: b.y, r: 2, col: '#f4f4f4', a: 0.6 });
+  }
+  // Gegnerangriff: Krallen-/Klingenhieb über dem Helden
+  for (let i = swipes.length - 1; i >= 0; i--) {
+    const w = swipes[i];
+    w.t += dt;
+    if (w.t > SWIPE_T) { swipes.splice(i, 1); continue; }
+    const f = w.t / SWIPE_T, cx = w.x * TS + 8 + ox, cy = w.y * TS + 7 + oy, len = w.big ? 11 : 7;
+    // Hieb quer zur Angriffsrichtung, wandert von einer Seite zur anderen
+    const px = -w.dy || 0.7, py = w.dx || 0.7, nl = Math.hypot(px, py), ux = px / nl, uy = py / nl, fx = w.dx * 0.6, fy = w.dy * 0.6;
+    const head = Math.min(1, f * 2.2);
+    ctx.globalAlpha = f < 0.5 ? 1 : 1 - (f - 0.5) * 2;
+    for (const off of w.big ? [-4, 0, 4] : [-3, 0, 3]) {
+      for (let k = -len; k <= len; k++) {
+        const g = (k + len) / (2 * len);
+        if (g > head) continue;
+        const bend = (1 - (k / len) ** 2) * 2;
+        ctx.fillStyle = Math.abs(k) < len * 0.5 ? '#f4f4f4' : '#b13e53';
+        ctx.fillRect(Math.round(cx + ux * k + fx * off + w.dx * bend), Math.round(cy + uy * k + fy * off + w.dy * bend - (off * (1 - Math.abs(fx)))), 1, 1);
+      }
+    }
+    ctx.globalAlpha = 1;
+  }
   for (const b of booms) lights.push({ x: b.x, y: b.y, r: 6 * (1 - b.t / 0.32) + 1, col: '#ffcd75' });
   for (const b of bolts) lights.push({ x: b.x1, y: b.y1, r: 2, col: b.col === '#1a1c2c' ? undefined : b.col, a: 0.7 });
   applyLight(ctx, run, lights, ox, oy, x0, y0, x1, y1);
@@ -355,7 +573,15 @@ export function drawRun(ctx: CanvasRenderingContext2D, run: Run, dt: number, tim
   else if (overlay === 'inv') invSheet(ctx, run, time);
   if (run.mode === 'perk') perkOverlay(ctx, run);
   if (run.mode === 'shop') shopOverlay(ctx, run);
-  if (run.mode === 'dead' || run.mode === 'win') endOverlay(ctx, run);
+  if (deathT >= 0 && run.mode === 'dead') {
+    deathT += dt;
+    const f = Math.min(1, deathT / DEATH_T);
+    ctx.fillStyle = `rgba(177,62,83,${Math.max(0, 0.45 - deathT * 0.9)})`; ctx.fillRect(0, 0, VW, VH);
+    const g = ctx.createRadialGradient(VW / 2, VH / 2, 40, VW / 2, VH / 2, VW * 0.65);
+    g.addColorStop(0, 'rgba(13,14,23,0)'); g.addColorStop(1, `rgba(13,14,23,${0.85 * f})`);
+    ctx.fillStyle = g; ctx.fillRect(0, 0, VW, VH);
+  }
+  if (run.mode === 'win' || (run.mode === 'dead' && (deathT < 0 || deathT > DEATH_T))) endOverlay(ctx, run);
 }
 
 // ---- Oberfläche ----
@@ -549,7 +775,7 @@ function lootCard(ctx: CanvasRenderingContext2D, run: Run) {
   const h = 22 + itemDetail(ctx, it, 0, 0, chars, worn, true) + 14;
   ctx.globalAlpha = (L.t > 6 ? 7 - L.t : Math.min(1, L.t * 6)) * (under(x, y, w, h) ? 0.3 : 1);
   panel(ctx, x, y, w, h, RARITY_COL[it.rar], 'rgba(13,14,23,0.88)');
-  slotIcon(ctx, it.slot, x + 6, y + 5, RARITY_COL[it.rar]);
+  if (it.use) ctx.drawImage(sprites[`i_${it.use}`], x + 4, y + 3); else drawItemIcon(ctx, it, p.cls, x + 6, y + 5, RARITY_COL[it.rar]);
   text(ctx, 'FUND', x + 20, y + 6, '#94b0c2', 8);
   const v = L.how === 'bag' ? verdict(run, it) : 0;
   if (v) { arrow(ctx, x + w - 12, y + 7, v > 0); text(ctx, v > 0 ? 'besser' : 'schlechter', x + w - 16, y + 6, v > 0 ? '#a7f070' : '#b13e53', 8, 'right'); }
@@ -595,7 +821,7 @@ function invSheet(ctx: CanvasRenderingContext2D, run: Run, time: number) {
   for (let i = 0; i < 4; i++) {
     const it = p.gear[i], gy = y + 139 + i * 25, sel = inv.col === 0 && inv.row === i, col = it ? RARITY_COL[it.rar] : '#566c86';
     panel(ctx, x + 14, gy, 200, 22, sel ? '#ffcd75' : it ? col : '#333c57', sel ? 'rgba(60,50,40,0.9)' : 'rgba(13,14,23,0.9)');
-    slotIcon(ctx, i, x + 20, gy + 6, col);
+    if (it) drawItemIcon(ctx, it, p.cls, x + 20, gy + 6, col); else slotIcon(ctx, i, x + 20, gy + 6, col);
     text(ctx, it ? cut(it.name, 20) : SLOT_NAMES[i], x + 34, gy + 3, col, 8);
     text(ctx, it ? cut(itemText(it), 29) : 'leer', x + 34, gy + 12, it ? '#94b0c2' : '#333c57', 8);
   }
@@ -607,7 +833,7 @@ function invSheet(ctx: CanvasRenderingContext2D, run: Run, time: number) {
   p.bag.forEach((it, i) => {
     const gy = y + 46 + i * 19, sel = inv.col === 1 && inv.row === i, v = verdict(run, it);
     panel(ctx, bx, gy, bw, 16, sel ? '#ffcd75' : '#333c57', sel ? 'rgba(60,50,40,0.9)' : 'rgba(13,14,23,0.9)');
-    if (it.use) ctx.drawImage(sprites[`i_${it.use}`], bx + 3, gy + 2); else slotIcon(ctx, it.slot, bx + 5, gy + 4, RARITY_COL[it.rar]);
+    if (it.use) ctx.drawImage(sprites[`i_${it.use}`], bx + 3, gy + 2); else drawItemIcon(ctx, it, p.cls, bx + 5, gy + 4, RARITY_COL[it.rar]);
     text(ctx, cut(it.name, it.neu ? 19 : 23), bx + 19, gy + 4, RARITY_COL[it.rar], 8);
     if (v) arrow(ctx, bx + bw - 10, gy + 5, v > 0);
     if (it.neu) text(ctx, 'NEU', bx + bw - (v ? 14 : 5), gy + 4, '#ffcd75', 8, 'right');
@@ -833,6 +1059,7 @@ function perkOverlay(ctx: CanvasRenderingContext2D, run: Run) {
     text(ctx, `[${i + 1}]`, x + cw / 2, y + 8, kc, 10, 'center');
     text(ctx, KIND_NAME[pk.kind], x + cw / 2, y + 22, '#566c86', 8, 'center');
     if (pk.kind === 'skill') ctx.drawImage(sprites[`i_${run.p.cls}${id[5]}`], x + 6, y + 6);
+    else drawIcon(ctx, PERK_ICON[id], x + 6, y + 6, kc, 2);
     wrapText(pk.name, 22).forEach((l, k) => text(ctx, l, x + cw / 2, y + 38 + k * 11, '#f4f4f4', 8, 'center'));
     wrapText(pk.desc, 22).forEach((l, k) => text(ctx, l, x + cw / 2, y + 62 + k * 10, '#94b0c2', 8, 'center'));
     const have = run.p.perks.filter(q => q === id).length;
@@ -853,7 +1080,8 @@ function shopOverlay(ctx: CanvasRenderingContext2D, run: Run) {
   run.shop.forEach((o, i) => {
     const oy = y + 46 + i * 30, ok = !o.sold && p.gold >= o.price;
     text(ctx, `[${i + 1}]`, x + 12, oy + 4, o.sold ? '#333c57' : '#ffcd75');
-    text(ctx, o.sold ? `${o.name} – verkauft` : o.left !== undefined ? `${o.name} ×${o.left}` : o.name, x + 36, oy, o.sold ? '#566c86' : o.item ? RARITY_COL[o.item.rar] : '#f4f4f4');
+    if (o.item && !o.sold) drawItemIcon(ctx, o.item, p.cls, x + 36, oy, RARITY_COL[o.item.rar]);
+    text(ctx, o.sold ? `${o.name} – verkauft` : o.left !== undefined ? `${o.name} ×${o.left}` : o.name, x + (o.item && !o.sold ? 48 : 36), oy, o.sold ? '#566c86' : o.item ? RARITY_COL[o.item.rar] : '#f4f4f4');
     text(ctx, cut(o.desc, 46), x + 36, oy + 11, '#94b0c2', 8);
     if (!o.sold) text(ctx, `${o.price} Gold`, x + w - 12, oy + 4, ok ? '#ffcd75' : '#b13e53', 10, 'right');
   });
