@@ -12,28 +12,28 @@ const WEAPON_ICON: Record<string, Ref[]> = {
 };
 const ARMOR_ICON: Ref[] = [['leather'], ['chain'], ['plate'], ['plate', { y: 'o' }]];
 const UNIQUE_ICON: Record<string, Ref> = {
-  'Aschenspalter': ['axe', { w: 'o' }], 'Weltenbrand': ['staff', { y: 'w' }], 'Sternenfall': ['bow', { i: 'y', w: 'y' }],
-  'Drachenhaut': ['plate', { y: 'G' }], 'Schattenmantel': ['leather', { n: 'p', N: 'k' }],
-  'Herz des Vulkans': ['heart', { r: 'o', w: 'y' }], 'Auge des Sehers': ['eye'], 'Blutring': ['ring', { r: 'R' }],
-  'Ring der Gier': ['coin'], 'Sturmring': ['lightning'],
+  'Aschenspalter': ['ashaxe'], 'Weltenbrand': ['firestaff'], 'Sternenfall': ['starbow'],
+  'Drachenhaut': ['dragonscale'], 'Schattenmantel': ['cloak'],
+  'Herz des Vulkans': ['volcanoheart'], 'Auge des Sehers': ['eyeamulet'], 'Blutring': ['bloodring'],
+  'Ring der Gier': ['greedring'], 'Sturmring': ['stormring'],
 };
 // Gaben, Reliquien und Verbesserungen im Lager
 export const PERK_ICON: Record<string, Ref> = {
-  zaeh: ['heart'], scharf: ['sword'], panzer: ['shield'], vampir: ['drop'], krit: ['eye', { s: 'r', k: 'R' }],
-  quelle: ['chalice', { v: 'c' }], meister: ['book'], vorrat: ['potion'], dornen: ['thorns'], seelen: ['soul'],
-  flink: ['boot'], gier: ['coin'], weitblick: ['eye', { s: 'l', k: 'G' }], brandklinge: ['flame'], giftklinge: ['poison'],
-  frosthauch: ['snow'], riese: ['crown'], sprengsatz: ['bomb'], berserker: ['fist', { y: 'r' }], atem: ['potion', { r: 'c' }],
+  zaeh: ['heart'], scharf: ['sword'], panzer: ['shield'], vampir: ['drop'], krit: ['target'],
+  quelle: ['manaorb'], meister: ['book'], vorrat: ['potion'], dornen: ['thorns'], seelen: ['soul'],
+  flink: ['boot'], gier: ['goldbag'], weitblick: ['eye', { s: 'l', k: 'G' }], brandklinge: ['flame'], giftklinge: ['poison'],
+  frosthauch: ['snow'], riese: ['crown'], sprengsatz: ['bomb'], berserker: ['horns'], atem: ['potion', { r: 'c' }],
   pilz: ['mushroom'], ausdauer: ['soul', { s: 'l', c: 'G' }], henker: ['axeblood'], spalter: ['axe'],
   kettenblitz: ['lightning'], durchschuss: ['arrows'],
-  // Reliquien
-  glutherz: ['heart', { r: 'o', w: 'y' }], donnerfaust: ['fist'], pulverfass: ['bomb', { D: 'n' }], sprengmeister: ['bomb', { D: 'r', g: 'y' }],
-  geisterlicht: ['eye', { s: 'w', k: 's' }], steinhaut: ['shield', { d: 'g' }], blutpakt: ['chalice', { v: 'r' }],
-  seelenkelch: ['chalice', { v: 's' }], zeitsand: ['hourglass'], giftzahn: ['poison', { l: 'w' }], frostkern: ['snow', { s: 'c' }],
-  muenze: ['coin', { Y: 'y', y: 'Y' }], eisenwille: ['shield', { d: 'D' }], jaeger: ['skull'], echo: ['book', { k: 'c' }],
+  // Reliquien: jede mit eigenem Motiv
+  glutherz: ['flameheart'], donnerfaust: ['fist'], pulverfass: ['barrel'], sprengmeister: ['bombs'],
+  geisterlicht: ['ghost'], steinhaut: ['rock'], blutpakt: ['scroll'],
+  seelenkelch: ['chalice', { v: 's' }], zeitsand: ['hourglass'], giftzahn: ['fang'], frostkern: ['crystal'],
+  muenze: ['coin'], eisenwille: ['helm'], jaeger: ['skull'], echo: ['waves'],
 };
 export const UPG_ICON: Record<string, Ref> = {
-  vit: ['heart'], atk: ['whetstone'], trank: ['potion'], fokus: ['soul'], gold: ['coin'],
-  bombe: ['bomb'], fund: ['key'], wahl: ['book'], erbe: ['amulet'],
+  vit: ['heartplus'], atk: ['whetstone'], trank: ['potion'], fokus: ['soul', { s: 'v', c: 'p' }], gold: ['coins'],
+  bombe: ['bomb', { g: 'y' }], fund: ['key'], wahl: ['owl'], erbe: ['amulet'],
 };
 
 const cache = new Map<string, HTMLCanvasElement>();
