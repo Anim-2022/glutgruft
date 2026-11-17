@@ -1,0 +1,118 @@
+
+=== neu krieger: Median Ebene 8, Siege 0/40, Big hits(>=50%maxHP) 0, One-shots from full 0
+Gold verdient 758/Lauf, ausgegeben 301, Tränke gekauft 6.2, gefunden 25.5, Bomben gekauft 0.0, Gold übrig bei Sieg -, Tode mit Boss in Sicht 0
+Eb  n  Tod  Züge  HPverl  Tränke Kills  Gold  Lvl  Atk  MaxHP  maxHit  medHit
+ 1  40   0   281     22   0.00  23.6     0  1.0  5.0    36      5      2
+ 2  40   0   270     32   0.17  24.6    40  4.6  6.5    45      5      2
+ 3  40   2   273    112   3.25  22.6    82  7.0  7.2    51      8      3
+ 4  38   3   243    153   4.21  20.3   104  9.1  7.7    57      9      4
+ 5  35   9   251    211   5.14  31.9   158 10.7  8.2    63      8      5
+ 6  26   3   230    244   6.31  24.8   296 13.6  9.0    69      9      5
+ 7  23   3   209    238   5.70  24.2   339 15.2  9.6    75      9      6
+ 8  20   3   225    297   7.65  25.2   361 16.7 10.2    79     10      7
+ 9  17   5   198    318   6.47  20.8   453 18.2 10.6    83     16      8
+10  12   4   222    595  14.83  29.4   564 20.2 11.3    91     17      8
+11   8   5   268    563   7.50  34.4   789 23.5 12.1   100     16      9
+12   3   2   268    770  11.00  39.0   971 28.3 13.7   109     16     10
+13   1   1   150    383   2.00  20.0  1093 33.0 13.0   121     16     11
+Tod durch: [["schuetze",18],["schuetze+skelett",7],["schuetze+sporling",3],["golem",1],["golem+schuetze",1],["golem+schuetze+skelett+sporling",1],["fledermaus+schuetze",1],["schuetze*",1]]
+
+=== neu magier: Median Ebene 9, Siege 11/40, Big hits(>=50%maxHP) 0, One-shots from full 0
+Gold verdient 1908/Lauf, ausgegeben 418, Tränke gekauft 7.5, gefunden 38.2, Bomben gekauft 0.0, Gold übrig bei Sieg 3622, Tode mit Boss in Sicht 0
+Eb  n  Tod  Züge  HPverl  Tränke Kills  Gold  Lvl  Atk  MaxHP  maxHit  medHit
+ 1  40   1   271      9   0.28  21.9     0  1.0  3.0    18      7      5
+ 2  39   0   304      8   0.41  24.9    34  4.4  3.8    27      7      5
+ 3  39   6   250     51   2.92  21.0    69  6.8  4.8    33      9      6
+ 4  33   3   267     63   2.45  22.5   109  9.2  5.6    39     11      6
+ 5  30   4   342    112   3.57  39.4   176 11.1  5.9    45     11      7
+ 6  26   3   256    119   3.96  24.9   370 14.3  6.3    53     10      7
+ 7  23   0   237    116   3.65  25.4   428 16.1  7.0    58     11      8
+ 8  23   3   240    147   4.91  23.9   513 17.4  7.2    63     12      9
+ 9  20   2   251    183   5.05  22.7   618 19.1  7.9    67     16     10
+10  18   1   381    392  12.17  38.9   721 20.6  8.3    73     16     11
+11  17   2   560    417   8.88  59.6  1114 23.5  8.3    79     19     12
+12  15   1   486    337   5.40  56.5  1683 27.5  9.7    89     19     13
+13  14   1   470    364   7.00  54.9  2107 30.9 10.4    97     21     14
+14  13   1   393    361   6.00  48.3  2530 33.4 10.8   103     20     14
+15  12   1   453    488   8.58  63.7  2994 35.8 11.0   107     24     16
+Tod durch: [["schuetze",14],["schuetze+skelett",2],["other",1],["skelett",1],["schuetze+sporling",1],["schuetze+skelett+sporling",1],["fledermaus+schuetze",1],["golem+schuetze+sporling",1]]
+
+=== neu waldlaeufer: Median Ebene 9, Siege 5/40, Big hits(>=50%maxHP) 0, One-shots from full 0
+Gold verdient 1387/Lauf, ausgegeben 343, Tränke gekauft 6.5, gefunden 31.3, Bomben gekauft 0.0, Gold übrig bei Sieg 3676, Tode mit Boss in Sicht 3
+Eb  n  Tod  Züge  HPverl  Tränke Kills  Gold  Lvl  Atk  MaxHP  maxHit  medHit
+ 1  40   1   290     14   0.33  23.8     0  1.0  4.0    22      6      4
+ 2  39   1   274     21   0.77  23.9    39  4.7  5.2    32      7      5
+ 3  38   1   271     63   2.68  23.2    88  7.1  6.1    37      8      5
+ 4  37   4   242     72   2.54  21.2   139  9.2  6.8    43      9      5
+ 5  33   3   291    153   4.73  36.4   198 10.9  7.4    49     10      6
+ 6  30   3   217     92   2.90  23.2   389 13.8  8.0    57      9      6
+ 7  27   3   222    109   2.96  23.6   470 15.5  8.6    61     10      7
+ 8  24   1   213    110   2.17  24.0   549 17.2  9.2    65     12      9
+ 9  23   4   284    259   7.74  25.1   590 18.4  9.2    69     17     10
+10  19   5   276    334   9.42  31.2   674 20.3 10.0    73     18     11
+11  14   4   328    426   7.64  39.2   904 22.7 10.2    81     20     12
+12  10   4   363    465   8.10  44.7  1351 26.1 10.6    89     19     13
+13   6   1   345    473   5.50  44.2  1922 29.2 11.2   100     20     13
+14   5   0   385    393   4.20  48.6  2518 31.6 11.8   102     23     14
+15   5   0   343    539   8.60  50.6  2941 33.8 11.8   107     22     16
+Tod durch: [["schuetze",7],["skelett",4],["golem+schuetze",3],["glutgeist+golem+schuetze+sporling",2],["schuetze+sporling",2],["golem",2],["schuetze+skelett",2],["sporling",2]]
+
+=== max krieger: Median Ebene 10, Siege 1/40, Big hits(>=50%maxHP) 0, One-shots from full 0
+Gold verdient 1503/Lauf, ausgegeben 440, Tränke gekauft 7.6, gefunden 33.0, Bomben gekauft 0.0, Gold übrig bei Sieg 4668, Tode mit Boss in Sicht 1
+Eb  n  Tod  Züge  HPverl  Tränke Kills  Gold  Lvl  Atk  MaxHP  maxHit  medHit
+ 1  40   0   252     19   0.00  22.6    45  1.0  7.0    46      5      2
+ 2  40   0   257     25   0.00  23.9    67  4.4  8.1    56      7      2
+ 3  40   1   267     95   1.50  22.9    95  6.9  8.9    62      8      3
+ 4  39   4   274    177   4.15  23.4   156  9.0 10.4    69      7      3
+ 5  35   3   295    252   5.26  38.9   242 11.0 11.2    74      9      5
+ 6  32   0   201    185   3.69  24.8   412 14.0 11.7    82      9      6
+ 7  32   5   244    298   6.72  26.1   465 15.6 12.2    86     10      7
+ 8  27   4   224    356   8.74  24.8   567 17.3 12.7    91     10      7
+ 9  23   3   224    328   6.52  24.5   616 18.6 12.9    94     16      8
+10  20   8   192    496  11.70  27.4   721 20.4 12.8    99     15      9
+11  12   3   343    715  12.08  48.8   905 23.1 13.0   106     16     10
+12   9   2   252    531   6.33  41.8  1453 26.6 13.7   116     17     10
+13   7   2   383    853  11.00  53.3  1964 29.7 13.9   124     18     11
+14   5   1   383    782   7.20  52.4  2618 33.2 13.2   131     18     12
+15   4   3   451   1686  23.75  62.3  3246 35.8 12.3   140     20     13
+Tod durch: [["schuetze",16],["other",5],["schuetze+sporling",4],["golem+schuetze",3],["schuetze+skelett+sporling",2],["golem+schuetze+skelett+sporling",1],["glutgeist+golem+schuetze",1],["fledermaus+schuetze",1]]
+
+=== max magier: Median Ebene 15, Siege 27/40, Big hits(>=50%maxHP) 0, One-shots from full 0
+Gold verdient 3601/Lauf, ausgegeben 895, Tränke gekauft 12.6, gefunden 57.6, Bomben gekauft 0.0, Gold übrig bei Sieg 3418, Tode mit Boss in Sicht 0
+Eb  n  Tod  Züge  HPverl  Tränke Kills  Gold  Lvl  Atk  MaxHP  maxHit  medHit
+ 1  40   0   234      2   0.00  21.5    45  1.0  5.0    28      5      4
+ 2  40   0   241      4   0.05  21.2    72  4.3  5.8    37      7      6
+ 3  40   0   273     33   0.55  23.8   104  6.4  6.9    43      9      5
+ 4  40   0   289     53   1.35  25.0   168  8.8  7.8    50     10      6
+ 5  40   0   333    103   2.10  41.3   212 10.8  8.5    56     10      7
+ 6  40   0   248    106   2.40  26.7   403 13.8  9.0    64      9      7
+ 7  40   1   239    101   2.00  25.8   465 15.6  9.6    70     11      8
+ 8  39   0   250    111   1.79  26.4   525 17.2 10.1    74     12      9
+ 9  39   1   307    184   3.74  27.2   627 18.6 10.5    79     16     10
+10  38   7   290    288   8.03  34.3   772 20.4 10.8    84     17     11
+11  31   1   429    325   5.03  52.2  1077 23.1 10.9    91     19     12
+12  30   0   474    359   5.27  58.9  1480 26.5 11.2    99     20     13
+13  30   1   444    370   4.67  55.5  1847 29.8 11.8   106     20     14
+14  29   0   452    322   3.24  58.3  2244 32.4 12.3   112     24     15
+15  29   2   454    432   5.21  67.3  2746 35.2 12.9   119     23     16
+Tod durch: [["schuetze+skelett+sporling",3],["schuetze+sporling",2],["golem+schuetze+skelett+sporling",2],["glutgeist+golem+schuetze",1],["glutgeist+schuetze+sporling",1],["golem+schuetze+sporling",1],["glutgeist+golem+schuetze+sporling",1],["glutgeist",1]]
+
+=== max waldlaeufer: Median Ebene 15, Siege 25/40, Big hits(>=50%maxHP) 0, One-shots from full 0
+Gold verdient 3018/Lauf, ausgegeben 872, Tränke gekauft 13.5, gefunden 54.6, Bomben gekauft 0.0, Gold übrig bei Sieg 3029, Tode mit Boss in Sicht 0
+Eb  n  Tod  Züge  HPverl  Tränke Kills  Gold  Lvl  Atk  MaxHP  maxHit  medHit
+ 1  40   0   260      3   0.00  23.2    45  1.0  6.0    32      5      4
+ 2  40   0   254      4   0.00  22.9    64  4.5  7.2    43      5      4
+ 3  40   0   281     31   0.23  25.2    86  6.7  8.3    48      7      5
+ 4  40   0   269     37   0.33  23.9   126  9.1  9.1    55      9      6
+ 5  40   0   277     99   1.80  37.1   173 10.9  9.8    61     10      6
+ 6  40   1   220     60   0.82  26.4   303 13.8 10.3    68     10      7
+ 7  39   1   224     75   1.00  25.7   329 15.5 11.0    74     10      7
+ 8  38   2   217     74   1.05  25.7   383 17.1 11.3    79     11      8
+ 9  36   2   240    164   3.14  23.9   426 18.8 11.9    84     16      9
+10  34   3   246    254   5.50  31.8   482 20.3 12.3    89     20     10
+11  31   1   412    407   6.39  55.5   774 22.9 12.5    95     19     12
+12  30   2   371    320   4.03  50.0  1112 26.4 13.1   104     20     13
+13  28   2   360    324   3.75  50.9  1391 29.3 13.3   111     21     14
+14  26   0   406    262   2.15  57.6  1780 32.2 13.9   118     22     15
+15  26   1   388    393   3.62  66.6  2274 34.8 14.5   124     23     16
+Tod durch: [["golem+schuetze+sporling",4],["golem+schuetze",3],["schuetze",3],["glutgeist+schuetze",1],["schuetze+sporling",1],["glutgeist+golem+schuetze",1],["fledermaus+schuetze+sporling",1],["schuetze+skelett+sporling",1]]

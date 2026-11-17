@@ -18,7 +18,7 @@ const EN: Record<string, string> = {
   'Krieger': 'Warrior', 'Magier': 'Mage', 'Waldläufer': 'Ranger',
   'Zäher Nahkämpfer. Wut entsteht durch Treffer und Schmerz.': 'Tough melee fighter. Rage builds from hits dealt and taken.',
   'Zerbrechlich, aber verheerend. Mana kehrt langsam von selbst zurück.': 'Fragile but devastating. Mana slowly returns on its own.',
-  'Schütze mit Fallen. Fokus wächst beim Warten und mit jedem besiegten Gegner.': 'Archer with traps. Focus grows while waiting and with every kill.',
+  'Schütze mit Fallen. Fokus wächst beim Warten im Kampf und mit jedem besiegten Gegner.': 'Archer with traps. Focus grows while waiting in combat and with every kill.',
   'Wut': 'Rage', 'Fokus': 'Focus',
   'Schildstoß': 'Shield Bash', 'Schaden + betäubt 2 Züge': 'Damage + stuns for 2 turns',
   'Wirbelschlag': 'Whirlwind', 'Trifft alle Gegner ringsum': 'Hits every enemy around you',
@@ -74,6 +74,7 @@ const EN: Record<string, string> = {
   ' angelegt.': ' equipped.', ' abgelegt.': ' unequipped.', ' – im Rucksack [I].': ' – in backpack [I].',
   ' – Rucksack voll, für ': ' – backpack full, sold for ', ' Gold verkauft.': ' gold.', ' für ': ' for ',
   'Der Rucksack ist voll.': 'The backpack is full.',
+  'Der Fluch hält ': 'The curse holds ', ' fest – erst auf der nächsten Ebene löst er sich.': ' tight – it only lets go on the next level.',
   'Verfluchte Truhe': 'Cursed chest', 'Händler': 'Trader', 'Truhe': 'Chest',
   // Meldungen
   'Das Rätsel ist gelöst!': 'The puzzle is solved!',

@@ -218,6 +218,7 @@ function takeItem(run: Run, it: Item, from: string) {
   if (it.slot < 4 && !p.gear[it.slot]) {
     wear(p, it, 1);
     p.gear[it.slot] = it;
+    if (it.cursed) it.lock = run.floor;
     how = 'worn';
     say(run, `${from}: ${it.name} angelegt.`);
   } else {
@@ -270,6 +271,13 @@ function useItem(run: Run, i: number): boolean {
   return true;
 }
 
+// Ein verfluchtes Stück lässt sich erst auf der nächsten Ebene wieder ablegen
+function cursedHold(run: Run, it: Item | null): boolean {
+  if (!it?.cursed || it.lock !== run.floor) return false;
+  say(run, `Der Fluch hält ${it.name} fest – erst auf der nächsten Ebene löst er sich.`);
+  return true;
+}
+
 // Rucksack: kostet keinen Zug
 function manage(run: Run, a: Action): boolean {
   const p = run.p;
@@ -277,9 +285,11 @@ function manage(run: Run, a: Action): boolean {
     const it = p.bag[a.i];
     if (!it) return true;
     const cur = p.gear[it.slot];
+    if (cursedHold(run, cur)) return true;
     if (cur) { wear(p, cur, -1); p.bag[a.i] = cur; } else p.bag.splice(a.i, 1);
     wear(p, it, 1);
     p.gear[it.slot] = it;
+    if (it.cursed) it.lock = run.floor;
     delete it.neu;
     sortBag(p);
     say(run, `${it.name} angelegt.`);
@@ -287,7 +297,7 @@ function manage(run: Run, a: Action): boolean {
   }
   if (a.t === 'unequip') {
     const cur = p.gear[a.slot];
-    if (!cur) return true;
+    if (!cur || cursedHold(run, cur)) return true;
     if (p.bag.length >= BAG_MAX) { say(run, 'Der Rucksack ist voll.'); return true; }
     wear(p, cur, -1);
     p.gear[a.slot] = null;
@@ -317,8 +327,8 @@ function manage(run: Run, a: Action): boolean {
 
 function stock(run: Run): Offer[] {
   const f = run.floor, offers: Offer[] = [
-    { kind: 'potion', name: 'Heiltrank', desc: 'Heilt einen großen Teil deines Lebens', price: 12 + f, sold: false },
-    { kind: 'bomb', name: 'Bombe', desc: 'Sprengt Gegner, Wände und Säulen', price: 10 + f, sold: false },
+    { kind: 'potion', name: 'Heiltrank', desc: 'Heilt einen großen Teil deines Lebens', price: 12 + f, sold: false, left: 3 },
+    { kind: 'bomb', name: 'Bombe', desc: 'Sprengt Gegner, Wände und Säulen', price: 10 + f, sold: false, left: 2 },
   ];
   for (let k = 0; k < 2; k++) {
     const it = genItem(run);
@@ -331,6 +341,7 @@ function stock(run: Run): Offer[] {
 
 // ---------- Rätselkammern ----------
 
+export const MAX_TRAPS = 3;
 export const RUNE_NAMES = ['Sonne', 'Mond', 'Stern', 'Auge'];
 const has = (p: Player, id: string) => p.relics.includes(id);
 export const skillCost = (p: Player, i: number) => Math.max(1, CLASSES[p.cls].skills[i].cost - (has(p, 'echo') ? 1 : 0) - (p.cls === 'krieger' && i === 0 && p.skillMod[0] === 1 ? 1 : 0) - (p.aff.erz ? 1 : 0));
@@ -1018,6 +1029,7 @@ function useSkill(run: Run, i: number): boolean {
         if (!walkable(run.tiles[y * W + x])) break;
         if (!run.traps.some(t => t.x === x && t.y === y)) run.traps.push({ x, y });
       }
+      while (run.traps.length > MAX_TRAPS) run.traps.shift();
       break;
     }
     case 'waldlaeufer2': {
@@ -1084,9 +1096,13 @@ export function act(run: Run, a: Action): void {
       if (!o || o.sold) return;
       if (p.gold < o.price) { say(run, 'Dafür reicht dein Gold nicht.'); return; }
       p.gold -= o.price;
-      if (o.kind === 'potion') p.potions++;
-      else if (o.kind === 'bomb') p.bombs++;
-      else { o.sold = true; takeItem(run, o.item!, 'Händler'); }
+      if (o.kind === 'potion' || o.kind === 'bomb') {
+        if (o.kind === 'potion') p.potions++; else p.bombs++;
+        // begrenzter Vorrat, jedes weitere Stück wird teurer
+        o.left = (o.left ?? (o.kind === 'potion' ? 3 : 2)) - 1;
+        o.price = Math.ceil(o.price * 1.25);
+        if (o.left <= 0) o.sold = true;
+      } else { o.sold = true; takeItem(run, o.item!, 'Händler'); }
     }
     return;
   }
@@ -1183,7 +1199,8 @@ export function act(run: Run, a: Action): void {
       break;
     }
     case 'wait':
-      if (p.cls === 'waldlaeufer') gain(p, 1);
+      // Fokus sammelt sich nur, wenn ein wacher Gegner in Sicht ist
+      if (p.cls === 'waldlaeufer' && run.mobs.some(m => m.awake && run.vis[m.y * W + m.x])) gain(p, 1);
       used = true;
       break;
     case 'shoot': {
@@ -1277,7 +1294,7 @@ function mobAct(run: Run, m: Actor, dist: Int16Array) {
   if (d.ai === 'boss' && ++m.cd >= 5) {
     m.cd = 0;
     const spots = [[1, 0], [-1, 0], [0, 1], [0, -1]].map(([ox, oy]) => [m.x + ox, m.y + oy]).filter(([x, y]) => isFree(run, x, y));
-    if (spots.length && run.mobs.length < 6) {
+    if (spots.length && run.mobs.filter(o => o !== m && cheb(o, m) <= 6).length < 5) {
       const [x, y] = run.rng.pick(spots);
       spawnMob(run, d.minion!, x, y).awake = true;
       say(run, `${m.name} ruft Verstärkung!`);

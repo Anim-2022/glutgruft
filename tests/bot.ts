@@ -54,7 +54,8 @@ export function botAction(run: Run): Action {
 function decide(run: Run): Action {
   if (run.mode === 'play' && run.p.bag.length) {
     // Rucksack: Besseres anlegen, den Rest verkaufen
-    const i = run.p.bag.findIndex(it => it.slot < 4 && itemScore(it) > itemScore(run.p.gear[it.slot]!));
+    const held = (slot: number) => { const g = run.p.gear[slot]; return !!g?.cursed && g.lock === run.floor; };
+    const i = run.p.bag.findIndex(it => it.slot < 4 && !held(it.slot) && itemScore(it) > itemScore(run.p.gear[it.slot]!));
     if (i >= 0) return { t: 'equip', i };
     const j = run.p.bag.findIndex(it => !it.use);
     if (j >= 0) return { t: 'sell', i: j };

@@ -32,7 +32,7 @@ export const CLASSES: Record<ClassId, ClassDef> = {
     ],
   },
   waldlaeufer: {
-    id: 'waldlaeufer', name: 'Waldläufer', desc: 'Schütze mit Fallen. Fokus wächst beim Warten und mit jedem besiegten Gegner.',
+    id: 'waldlaeufer', name: 'Waldläufer', desc: 'Schütze mit Fallen. Fokus wächst beim Warten im Kampf und mit jedem besiegten Gegner.',
     hp: 22, atk: 4, def: 1, resName: 'Fokus', resMax: 8, resStart: 2, resCol: '#a7f070', range: 5, shot: 'Schuss',
     skills: [
       { name: 'Zielschuss', cost: 4, desc: 'Schwerer Schuss auf große Distanz' },
@@ -174,7 +174,7 @@ export const RARITY = ['Gewöhnlich', 'Selten', 'Episch', 'Legendär'];
 export const RARITY_COL = ['#94b0c2', '#41a6f6', '#9a4fc0', '#ffcd75'];
 export const SLOT_NAMES = ['Waffe', 'Rüstung', 'Amulett', 'Ring', 'Verbrauch'];
 export interface Item {
-  slot: number; name: string; rar: number; atk: number; def: number; hp: number; crit: number; cursed?: boolean;
+  slot: number; name: string; rar: number; atk: number; def: number; hp: number; crit: number; cursed?: boolean; lock?: number; // lock: Ebene, auf der ein verfluchtes Stück angelegt wurde
   aff?: [string, number][]; // besondere Eigenschaften
   wk?: number;              // Waffenart 0..2, bestimmt das Aussehen
   use?: string;             // Verbrauchsgegenstand
@@ -208,4 +208,4 @@ export const UNIQUES: U[] = [
   { slot: 3, name: 'Ring der Gier', aff: [['gold', 80], ['quell', 4]] },
   { slot: 3, name: 'Sturmring', aff: [['kette', 60], ['macht', 20]] },
 ];
-export interface Offer { kind: 'potion' | 'bomb' | 'item'; name: string; desc: string; price: number; sold: boolean; item?: Item; }
+export interface Offer { kind: 'potion' | 'bomb' | 'item'; name: string; desc: string; price: number; sold: boolean; item?: Item; left?: number; }

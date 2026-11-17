@@ -853,7 +853,7 @@ function shopOverlay(ctx: CanvasRenderingContext2D, run: Run) {
   run.shop.forEach((o, i) => {
     const oy = y + 46 + i * 30, ok = !o.sold && p.gold >= o.price;
     text(ctx, `[${i + 1}]`, x + 12, oy + 4, o.sold ? '#333c57' : '#ffcd75');
-    text(ctx, o.sold ? `${o.name} – verkauft` : o.name, x + 36, oy, o.sold ? '#566c86' : o.item ? RARITY_COL[o.item.rar] : '#f4f4f4');
+    text(ctx, o.sold ? `${o.name} – verkauft` : o.left !== undefined ? `${o.name} ×${o.left}` : o.name, x + 36, oy, o.sold ? '#566c86' : o.item ? RARITY_COL[o.item.rar] : '#f4f4f4');
     text(ctx, cut(o.desc, 46), x + 36, oy + 11, '#94b0c2', 8);
     if (!o.sold) text(ctx, `${o.price} Gold`, x + w - 12, oy + 4, ok ? '#ffcd75' : '#b13e53', 10, 'right');
   });
