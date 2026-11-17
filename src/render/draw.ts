@@ -357,7 +357,7 @@ export function drawRun(ctx: CanvasRenderingContext2D, run: Run, dt: number, tim
     else if (ps && sprites[`${base}:${v}${ps.k}`]) frame = `${base}:${v}${ps.k}`;
     const img = sprites[frame];
     const l = lunges.get(a.id), k = l ? Math.sin((l.t / LUNGE_T) * Math.PI) * 6 : 0;
-    const glow = GLOW[a.kind];
+    const glow = GLOW[base.split(':')[0]] ?? GLOW[a.kind];
     const jx = glow ? Math.round(Math.sin(time * 17 + a.id) * 0.6) : 0;
     const bx = Math.round(q.x * TS + (l ? l.dx * k : 0)) + ox, by = Math.round(q.y * TS + (l ? l.dy * k : 0)) + oy;
     const dx = bx + 8 - img.width / 2 + jx, dy = by + 14 - img.height;
@@ -377,7 +377,9 @@ export function drawRun(ctx: CanvasRenderingContext2D, run: Run, dt: number, tim
       blit(masks[frame]);
       ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
       lights.push({ x: q.x, y: q.y, r: glow[0] * flick(a.id), col: glow[1] });
-      if (Math.random() < dt * 9) bits.push({ x: (q.x * TS) + 4 + Math.random() * 8, y: q.y * TS + 2 + Math.random() * 6, vx: (Math.random() - 0.5) * 10, vy: -18 - Math.random() * 14, col: Math.random() < 0.5 ? '#ffcd75' : '#ef7d57', t: 0, g: -10 });
+      // zweite Phase des Schmiedefürsten: dichte Feueraura um den ganzen Leib
+      const aura = base === 'fuerst2';
+      for (let n = aura ? 3 : 1; n > 0; n--) if (Math.random() < dt * 9) bits.push({ x: (q.x * TS) + (aura ? -4 + Math.random() * 24 : 4 + Math.random() * 8), y: q.y * TS + (aura ? -8 + Math.random() * 20 : 2 + Math.random() * 6), vx: (Math.random() - 0.5) * 10, vy: -18 - Math.random() * 14, col: Math.random() < 0.5 ? '#ffcd75' : '#ef7d57', t: 0, g: -10 });
     }
     if (a === p && p.gear[2] && v === 'f') { ctx.fillStyle = RARITY_COL[p.gear[2].rar]; ctx.fillRect(dx + 7, dy + 9, 2, 1); ctx.fillRect(dx + 7, dy + 10, 2, 1); }
     if (a.elite) {
