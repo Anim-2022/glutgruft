@@ -83,7 +83,8 @@ export function newRun(seed: number, cls: ClassId, meta: Meta): Run {
   const u = (id: string) => meta.upg[id] ?? 0;
   const hp = c.hp + 2 * u('vit');
   const p: Player = {
-    id: 0, kind: cls, name: c.name, x: 0, y: 0, hp, maxHp: hp, atk: c.atk + u('atk'), def: c.def,
+    id: 0, kind: cls, name: c.name, // Schleifstein wirkt nicht beim Magier: sein kleiner Grundangriff würde sonst um zwei Drittel wachsen
+    x: 0, y: 0, hp, maxHp: hp, atk: c.atk + (cls === 'magier' ? 0 : u('atk')), def: c.def,
     st: {}, xp: 0, cd: 0, awake: true,
     cls, lvl: 1, exp: 0, res: c.resStart, resMax: c.resMax + u('fokus'), potions: 1 + u('trank'), bombs: 1 + u('bombe'),
     crit: 0.05, pow: 1, vamp: 0, thorns: 0, soulMul: 1, dir: [1, 0], perks: [], relics: [], hits: 0, gold: 15 * u('gold'), gear: [null, null, null, null], bag: [], keys: 0,

@@ -141,7 +141,7 @@ export interface UpgDef { id: string; name: string; desc: string; max: number; c
 
 export const UPGRADES: UpgDef[] = [
   { id: 'vit', name: 'Vitalität', desc: '+2 Leben pro Stufe', max: 5, cost: 20 },
-  { id: 'atk', name: 'Schleifstein', desc: '+1 Angriff pro Stufe', max: 2, cost: 60 },
+  { id: 'atk', name: 'Schleifstein', desc: '+1 Angriff pro Stufe (nicht für den Magier)', max: 2, cost: 60 },
   { id: 'trank', name: 'Proviant', desc: '+1 Heiltrank zum Start', max: 3, cost: 25 },
   { id: 'fokus', name: 'Fokus', desc: '+1 max. Klassenressource', max: 3, cost: 20 },
   { id: 'gold', name: 'Startkapital', desc: '+15 Gold zum Start', max: 3, cost: 15 },
