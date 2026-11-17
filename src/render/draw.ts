@@ -1,6 +1,7 @@
 import { VW, VH, TS, sprites, masks, tilesets, text, panel, bar, heroLook, figure } from './gfx';
 import { GLOW } from './sprites';
-import { W, H, T, wallLike, walkable, los } from '../game/dungeon';
+import { W, H, T, wallLike, walkable } from '../game/dungeon';
+import { threatOf } from './warn';
 import { sfx } from '../core/audio';
 import { tr } from '../core/i18n';
 import { Run, Actor, xpNeed, skillCost, itemText, itemValue, itemScore, perkInfo, skillModName, shotRange, RANKS, SORT_NAMES, BAG_MAX, RUNE_NAMES } from '../game/run';
@@ -311,11 +312,9 @@ export function drawRun(ctx: CanvasRenderingContext2D, run: Run, dt: number, tim
   };
   // Warnung: dieser Gegner kann im nächsten Gegnerzug zuschlagen oder schießen
   const warn = (m: Actor, q: { x: number; y: number }, dx: number, dy: number, w: number) => {
-    if (!m.awake || m.st.stun || run.mode !== 'play') return;
-    const d = MOBS[m.kind], man = Math.abs(p.x - m.x) + Math.abs(p.y - m.y);
-    if (man === 1 && d.ai === 'slow' && m.cd) return; // Golem holt aus
-    const shot = man > 1 && !!d.range && Math.max(Math.abs(p.x - m.x), Math.abs(p.y - m.y)) <= d.range && los(run.tiles, m.x, m.y, p.x, p.y);
-    if (man !== 1 && !shot) return;
+    const th = threatOf(run, m);
+    if (!th) return;
+    const shot = th === 'shot';
     const blink = 0.55 + 0.45 * Math.sin(time * 8 + m.id);
     if (shot) {
       // gestrichelte Ziellinie vom Schützen zum Helden
