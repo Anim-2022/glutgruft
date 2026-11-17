@@ -111,7 +111,6 @@ export const HEROES = new Set(['krieger', 'magier', 'waldlaeufer']);
 export function poseFrames(name: string, views: Record<string, string[]>): Record<string, string[]> {
   const out: Record<string, string[]> = {};
   const hero = HEROES.has(name);
-  if (!hero) return out; // Gegner: siehe Punkt 4
   for (const [v, rows] of Object.entries(views)) {
     out[`${v}a`] = hero ? heroAttack(name, v, rows) : mobAttack(name, v, rows);
     if (name === 'magier') out[`${v}c`] = heroCast(v, rows);
