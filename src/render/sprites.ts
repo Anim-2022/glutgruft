@@ -6,6 +6,8 @@ export const PAL: Record<string, string> = {
   c: '#41a6f6', s: '#73eff7', p: '#5d275d', v: '#9a4fc0',
   n: '#8a5a3a', N: '#5a3a28', h: '#e8b796', H: '#c48a6a',
   S: '#c9d4dc', F: '#1e6b3a',
+  // Phase 2: R dunkelrot, i Stahl hell, m Stahl dunkel (T ist schon Petrol), u Knochenschatten
+  R: '#6b1d2a', i: '#8b8f9c', m: '#4a4d58', u: '#d9cfb4',
 };
 
 export const ACTORS = ['krieger', 'magier', 'waldlaeufer', 'ratte', 'skelett', 'schuetze', 'fledermaus', 'sporling', 'golem', 'glutgeist', 'koenig', 'mutter', 'fuerst'];
