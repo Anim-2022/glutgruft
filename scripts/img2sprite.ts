@@ -1,7 +1,7 @@
 // Bild (PNG) -> Sprite-Matrix im Format von src/render/sprites.ts.
 // Keine Abhängigkeiten: PNG wird mit node:zlib gelesen und geschrieben.
 //
-//   node scripts/img2sprite.ts <bild.png> [--size 16] [--tol 12] [--empty 0.5] [--kweight 0.3] [--global] [--name schuetze_test] [--out assets/_hf_test]
+//   node scripts/img2sprite.ts <bild.png> [--size 16] [--tol 12] [--empty 0.5] [--kweight 0.3] [--global] [--grid] [--name schuetze_test] [--out assets/_hf_test]
 //   npx tsx scripts/img2sprite.ts ...  (geht genauso)
 //
 // Schritte: Hintergrund (Farbe der Ecken ± tol) -> transparent, auf Inhalt zuschneiden,
@@ -145,6 +145,64 @@ function downscale(img: Img, box: { x0: number; y0: number; side: number }, size
   return rows;
 }
 
+// ---------- --grid: Pixelraster der Vorlage erkennen ----------
+// 1) Kantenprofil je Achse (Summe der Farbsprünge zwischen Nachbarspalten bzw. -zeilen), Hochpass gegen Verläufe.
+// 2) Autokorrelation: Verschiebung L mit dem stärksten Wert = Zellgröße; ist L/2 oder L/3 fast genauso stark,
+//    gilt der Teiler (sonst würde eine doppelte Zelle gewählt).
+// 3) Feinabstimmung p ∈ [L−1, L+1] in 0,05-px-Schritten und Phase o: maximale Kantenmasse auf den Linien o + k·p.
+// Unsicher (gemittelte Korrelation < 0,15) -> null, der Aufrufer fällt auf den normalen Modus zurück.
+function edgeProfile(img: Img, axis: 'x' | 'y'): Float64Array {
+  const { w, h, px } = img, n = axis === 'x' ? w : h, m = axis === 'x' ? h : w, e = new Float64Array(n);
+  for (let a = 1; a < n; a++) for (let b = 0; b < m; b++) {
+    const i = axis === 'x' ? (b * w + a) * 4 : (a * w + b) * 4, j = axis === 'x' ? i - 4 : i - w * 4;
+    e[a] += Math.abs(px[i] - px[j]) + Math.abs(px[i + 1] - px[j + 1]) + Math.abs(px[i + 2] - px[j + 2]);
+  }
+  const hp = new Float64Array(n); // Hochpass: minus gleitender Mittelwert über 9 px
+  for (let a = 0; a < n; a++) {
+    let s = 0, c = 0; for (let d = -4; d <= 4; d++) if (a + d >= 0 && a + d < n) { s += e[a + d]; c++; }
+    hp[a] = Math.max(0, e[a] - s / c);
+  }
+  return hp;
+}
+interface Grid { p: number; o: number; corr: number }
+// Pixel sind quadratisch: Autokorrelation beider Achsen wird gemittelt -> eine gemeinsame Zellgröße.
+function autocorr(e: Float64Array, l: number): number { let s = 0; for (let i = 0; i + l < e.length; i++) s += e[i] * e[i + l]; return s; }
+function findGrid(ex: Float64Array, ey: Float64Array, minP = 6): [Grid, Grid] | null {
+  const ax = autocorr(ex, 0), ay = autocorr(ey, 0);
+  if (!ax || !ay) return null;
+  const ac = (l: number) => (autocorr(ex, l) / ax + autocorr(ey, l) / ay) / 2;
+  let L = 0, best = 0;
+  for (let l = minP; l <= Math.min(ex.length, ey.length) / 6; l++) { const v = ac(l); if (v > best) { best = v; L = l; } }
+  if (best < 0.15) return null;
+  for (const k of [3, 2]) if (L / k >= minP && ac(Math.round(L / k)) >= 0.8 * best) { L = Math.round(L / k); break; }
+  // Feinabstimmung: gemeinsame Periode p, Phase je Achse
+  let res: [Grid, Grid] | null = null, bm = -1;
+  for (let p = L - 1; p <= L + 1; p += 0.05) {
+    const phase = (e: Float64Array) => {
+      const bins = Math.ceil(p * 2), hist = new Float64Array(bins);
+      for (let x = 0; x < e.length; x++) hist[Math.floor((x % p) * 2) % bins] += e[x];
+      let bs = -1, bo = 0;
+      for (let b = 0; b < bins; b++) { let s = 0; for (let d = -2; d <= 2; d++) s += hist[(b + d + bins) % bins]; if (s > bs) { bs = s; bo = b / 2; } }
+      return [bs, bo];
+    };
+    const [sx, ox] = phase(ex), [sy, oy] = phase(ey), m = sx / ax ** 0.5 + sy / ay ** 0.5;
+    if (m > bm) { bm = m; res = [{ p, o: ox, corr: best }, { p, o: oy, corr: best }]; }
+  }
+  return res;
+}
+
+// Farbe aus der Mitte jeder Rasterzelle, ohne Mittelwert
+function sampleGrid(img: Img, gx: Grid, gy: Grid): Img {
+  const centers = (g: Grid, n: number) => {
+    const c: number[] = []; let v = g.o - g.p / 2; while (v - g.p >= 0) v -= g.p;
+    for (; v < n; v += g.p) if (v >= 0) c.push(Math.round(v));
+    return c;
+  };
+  const cx = centers(gx, img.w), cy = centers(gy, img.h), px = new Uint8Array(cx.length * cy.length * 4);
+  cy.forEach((y, j) => cx.forEach((x, i) => px.set(img.px.subarray((y * img.w + x) * 4, (y * img.w + x) * 4 + 4), (j * cx.length + i) * 4)));
+  return { w: cx.length, h: cy.length, px };
+}
+
 function preview(rows: string[], scale: number): Img {
   const h = rows.length * scale, w = rows[0].length * scale, px = new Uint8Array(w * h * 4);
   rows.forEach((r, y) => [...r].forEach((ch, x) => {
@@ -159,19 +217,32 @@ function preview(rows: string[], scale: number): Img {
 const args = process.argv.slice(2);
 const opt = (k: string, d: string) => { const i = args.indexOf(`--${k}`); return i >= 0 ? args.splice(i, 2)[1] : d; };
 const size = Number(opt('size', '16')), tol = Number(opt('tol', '12')), empty = Number(opt('empty', '0.5')), kw = Number(opt('kweight', '0.3'));
-const outDir = opt('out', 'assets/_hf_test'), global = args.includes('--global');
-if (global) args.splice(args.indexOf('--global'), 1);
+const outDir = opt('out', 'assets/_hf_test');
+const flag = (k: string) => { const i = args.indexOf(`--${k}`); if (i >= 0) args.splice(i, 1); return i >= 0; };
+const global = flag('global'), useGrid = flag('grid');
 const file = args[0];
-if (!file) { console.error('Aufruf: node scripts/img2sprite.ts <bild.png> [--size 16] [--tol 12] [--empty 0.5] [--kweight 0.3] [--global] [--name name] [--out dir]'); process.exit(1); }
+if (!file) { console.error('Aufruf: node scripts/img2sprite.ts <bild.png> [--size 16] [--tol 12] [--empty 0.5] [--kweight 0.3] [--global] [--grid] [--name name] [--out dir]'); process.exit(1); }
 const stem = basename(file, extname(file));
 const name = opt('name', stem.replace(/[^A-Za-z0-9_]/g, '_'));
 
-const img = readPng(readFileSync(file));
+let img = readPng(readFileSync(file));
+let suffix = '';
+if (useGrid) {
+  const g = findGrid(edgeProfile(img, 'x'), edgeProfile(img, 'y'));
+  if (g) {
+    img = sampleGrid(img, g[0], g[1]); suffix = '_grid';
+    console.error(`Raster gefunden: Zelle ${g[0].p.toFixed(2)} px (Korr. ${g[0].corr.toFixed(2)}), ${img.w}×${img.h} Zellen`);
+  } else console.error('Raster nicht gefunden – normaler Modus');
+}
 removeBackground(img, tol, global);
-const rows = downscale(img, cropSquare(img), size, empty, kw);
+const box = cropSquare(img);
+// Im Raster ist eine Zelle schon ein Spielpixel: kleinere Figuren nicht hochskalieren, sondern zentrieren
+if (suffix && box.side < size) { const d = size - box.side; box.x0 -= Math.floor(d / 2); box.y0 -= Math.floor(d / 2); box.side = size; }
+if (suffix) console.error(`Inhalt: ${box.side} Zellen${box.side > size ? ` → auf ${size} verkleinert (häufigste Farbe)` : ''}`);
+const rows = downscale(img, box, size, empty, kw);
 
 console.log(`  ${name}: [\n${rows.map(r => `    '${r}',`).join('\n')}\n  ],`);
 mkdirSync(outDir, { recursive: true });
-const out = join(outDir, `${stem}_preview.png`);
+const out = join(outDir, `${stem}${suffix}_preview.png`);
 writeFileSync(out, writePng(preview(rows, 8)));
 console.error(`Vorschau: ${out}`);
