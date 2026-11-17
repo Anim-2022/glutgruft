@@ -790,7 +790,7 @@ function kill(run: Run, m: Actor) {
   run.kills++;
   p.exp += m.xp;
   run.souls += Math.max(1, Math.round((m.xp / 3) * p.soulMul));
-  p.gold += Math.ceil((m.xp / 4) * (1 + (p.aff.gold ?? 0) / 100));
+  p.gold += Math.ceil((m.xp / 6) * (1 + (p.aff.gold ?? 0) / 100));
   if (p.aff.ausdauer) gain(p, p.aff.ausdauer);
   if (p.aff.asche && !m.boss) {
     run.fx.push({ k: 'boom', x: m.x, y: m.y, r: 1 });
@@ -922,7 +922,7 @@ function openChest(run: Run, i: number) {
     else if (r < 0.38) { p.bombs += 2; say(run, 'Truhe: zwei Bomben.'); }
     else if (r < 0.70) takeItem(run, genItem(run), 'Truhe');
     else if (r < 0.80) takeItem(run, genConsumable(run), 'Truhe');
-    else if (r < 0.92) { const g = Math.round((12 + run.floor * 3) * (1 + (p.aff.gold ?? 0) / 100)); p.gold += g; say(run, `Truhe: ${g} Gold.`); }
+    else if (r < 0.92) { const g = Math.round((8 + run.floor * 2) * (1 + (p.aff.gold ?? 0) / 100)); p.gold += g; say(run, `Truhe: ${g} Gold.`); }
     else { const n = Math.round(10 * p.soulMul); run.souls += n; say(run, `Truhe: ${n} Seelensplitter.`); }
   }
   if (p.aff.midas) p.gold += 10 + run.floor * 2;
@@ -1017,7 +1017,7 @@ function useSkill(run: Run, i: number): boolean {
       const t = nearestMob(run, 8);
       if (!t) return noTarget();
       run.fx.push({ k: 'bolt', x0: p.x, y0: p.y, x1: t.x, y1: t.y, col: '#ffcd75' });
-      playerHit(run, t, atk * 1.9 * sp, mod === 2 && t.hp >= t.maxHp);
+      playerHit(run, t, atk * 1.7 * sp, mod === 2 && t.hp >= t.maxHp);
       if (mod === 1) {
         const b = mobAt(run, t.x + Math.sign(t.x - p.x), t.y + Math.sign(t.y - p.y));
         if (b && b !== t) damage(run, b, atk * 1.1 * sp - b.def, '#ffcd75');

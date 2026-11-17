@@ -27,7 +27,7 @@ export const CLASSES: Record<ClassId, ClassDef> = {
     hp: 18, atk: 3, def: 0, resName: 'Mana', resMax: 12, resStart: 12, resCol: '#41a6f6', range: 3, shot: 'Funke',
     skills: [
       { name: 'Feuerball', cost: 6, desc: 'Explosion + Brand' },
-      { name: 'Frostnova', cost: 6, desc: 'Friert Gegner in der Nähe ein' },
+      { name: 'Frostnova', cost: 7, desc: 'Friert Gegner in der Nähe ein' },
       { name: 'Blinzeln', cost: 3, desc: 'Teleport weg von Gefahr' },
     ],
   },
