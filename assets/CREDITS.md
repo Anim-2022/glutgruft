@@ -1,15 +1,24 @@
 # Herkunft der Grafiken
 
-Alle Sprites stehen als Zeichenmatrizen in `src/render/sprites.ts` und `src/render/poses.ts`.
+Alle Sprites stehen als Zeichenmatrizen im Code (`src/render/sprites.ts`, `src/render/poses.ts`, `src/render/gfx.ts`).
 KI-Referenzen werden hier je Sprite eingetragen (Format siehe `docs/asset-pipeline.md`); PNG-Referenzen werden nicht eingecheckt.
 
-## Phase 2 (Visual Pass)
+## Knochenschütze (`schuetze`, Umschalter `SCHUETZE_NEU` in `src/render/sprites.ts`)
 
-Keine KI-Referenz verwendet: Das ZeroGPU-Kontingent für `mcp-tools/Z-Image-Turbo` war erschöpft
-(„ZeroGPU quota exceeded“). Alle neuen Sprites der Phase 2 sind von Hand gezeichnet:
+- Die im Repository eingebaute neue Fassung ist **von Hand gezeichnet, ohne KI-Referenz** (2026-11-17).
+  Beim Zeichnen war das ZeroGPU-Kontingent für `mcp-tools/Z-Image-Turbo` erschöpft, und die Fassung
+  `schuetze_hand` aus der Referenz-Sitzung lag im Repository nicht vor.
+- Referenz aus der Pipeline-Sitzung (nicht in dieser Fassung verwendet): Modell Tongyi-MAI/Z-Image-Turbo
+  (Space `mcp-tools/Z-Image-Turbo`), Lizenz Apache-2.0, Prompt „B“ (Wortlaut liegt hier nicht vor), Seed 42.
+  Wird `schuetze_hand` eingebaut, wird dieser Eintrag mit vollständigem Prompt ergänzt.
+- Alte Fassung bleibt als `schuetze_alt` erhalten – von Hand.
 
-- `schuetze` (neue Fassung, Umschalter `SCHUETZE_NEU`) – von Hand, 2026-11-17
-- Angriffs-, Zauber- und Todesbilder der Helden (`src/render/poses.ts`, abgeleitet aus den vorhandenen Matrizen) – 2026-11-17
-- Angriffsbilder der sieben Gegner und der drei Bosse, zweite Bossfassung `koenig2`/`mutter2`/`fuerst2` (`src/render/sprites.ts`, `ATTACK`) – von Hand, 2026-11-17
-- 37 Symbole 9×9 (`ICONS` in `src/render/sprites.ts`) – von Hand, 2026-11-17
-- Wand- und Bodenspielarten, Lava (`src/render/gfx.ts`, im Code gezeichnet) – 2026-11-17
+## Von Hand gezeichnet (Phase 2)
+
+- Angriffs-, Zauber- und Todesbilder der Helden (`src/render/poses.ts`, aus den vorhandenen Matrizen abgeleitet)
+- Angriffsbilder der sieben Gegner und der drei Bosse; zweite Bossfassung `koenig2`, `mutter2`, `fuerst2` (`ATTACK`, `SPR` in `src/render/sprites.ts`)
+- 64 Symbole 9×9 (`ICONS` in `src/render/sprites.ts`)
+- Wand- und Bodenspielarten, Lava der Glutschmiede (`src/render/gfx.ts`, im Code gezeichnet)
+- Palettenergänzung R, i, m, u (`PAL`)
+
+Keine dieser Grafiken beruht auf einer KI-Referenz.
