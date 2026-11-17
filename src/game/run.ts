@@ -329,7 +329,7 @@ function manage(run: Run, a: Action): boolean {
 
 function stock(run: Run): Offer[] {
   const f = run.floor, offers: Offer[] = [
-    { kind: 'potion', name: 'Heiltrank', desc: 'Heilt einen großen Teil deines Lebens', price: 15 + 3 * f, sold: false, left: 3 },
+    { kind: 'potion', name: 'Heiltrank', desc: 'Heilt einen großen Teil deines Lebens', price: 20 + 4 * f, sold: false, left: 3 },
     { kind: 'bomb', name: 'Bombe', desc: 'Sprengt Gegner, Wände und Säulen', price: 10 + f, sold: false, left: 2 },
   ];
   for (let k = 0; k < 2; k++) {
@@ -973,14 +973,14 @@ function useSkill(run: Run, i: number): boolean {
       for (let y = t.y - 1; y <= t.y + 1; y++) for (let x = t.x - 1; x <= t.x + 1; x++) ignite(run, x, y, 2);
       for (const m of run.mobs.filter(m => cheb(m, t) <= (mod === 1 ? 2 : 1))) {
         m.st.brand = 2;
-        damage(run, m, (m === t ? atk + p.lvl * 0.3 : 3) * sp - m.def, '#ef7d57');
+        damage(run, m, (m === t ? atk * 0.8 + p.lvl * 0.3 : 3) * sp - m.def, '#ef7d57');
       }
       if (mod === 2) {
         const o = run.mobs.filter(m => m !== t && run.vis[m.y * W + m.x] && cheb(m, p) <= 7).sort((a, b) => cheb(a, p) - cheb(b, p))[0];
         if (o) {
           run.fx.push({ k: 'bolt', x0: p.x, y0: p.y, x1: o.x, y1: o.y, col: '#ef7d57' });
           o.st.brand = 2;
-          damage(run, o, (atk + p.lvl * 0.3) * sp * 0.6 - o.def, '#ef7d57');
+          damage(run, o, (atk * 0.8 + p.lvl * 0.3) * sp * 0.6 - o.def, '#ef7d57');
         }
       }
       break;
@@ -1017,7 +1017,7 @@ function useSkill(run: Run, i: number): boolean {
       const t = nearestMob(run, 8);
       if (!t) return noTarget();
       run.fx.push({ k: 'bolt', x0: p.x, y0: p.y, x1: t.x, y1: t.y, col: '#ffcd75' });
-      playerHit(run, t, atk * 1.7 * sp, mod === 2 && t.hp >= t.maxHp);
+      playerHit(run, t, atk * 1.8 * sp, mod === 2 && t.hp >= t.maxHp);
       if (mod === 1) {
         const b = mobAt(run, t.x + Math.sign(t.x - p.x), t.y + Math.sign(t.y - p.y));
         if (b && b !== t) damage(run, b, atk * 1.1 * sp - b.def, '#ffcd75');
