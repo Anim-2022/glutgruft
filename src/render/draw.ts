@@ -1,6 +1,6 @@
 import { VW, VH, TS, sprites, masks, tilesets, text, panel, bar, heroLook, figure } from './gfx';
 import { GLOW } from './sprites';
-import { W, H, T, wallLike, walkable } from '../game/dungeon';
+import { W, H, T, wallLike, walkable, los } from '../game/dungeon';
 import { sfx } from '../core/audio';
 import { tr } from '../core/i18n';
 import { Run, Actor, xpNeed, skillCost, itemText, itemValue, itemScore, perkInfo, skillModName, shotRange, RANKS, SORT_NAMES, BAG_MAX, RUNE_NAMES } from '../game/run';
@@ -267,6 +267,54 @@ export function drawRun(ctx: CanvasRenderingContext2D, run: Run, dt: number, tim
   }
   for (const t of run.traps) ctx.drawImage(sprites.trap, t.x * TS + ox, t.y * TS + oy);
 
+  // Status auf dem Sprite: Betäubung, Brand, Gift, Spröde, Schutzwall
+  const statusFx = (a: Actor, isP: boolean, dx: number, dy: number, w: number, h: number, q: { x: number; y: number }) => {
+    const st = a.st, cx = dx + w / 2;
+    if (st.stun) {
+      for (let k = 0; k < 3; k++) {
+        const ang = time * 5 + (k * Math.PI * 2) / 3, sx2 = Math.round(cx + Math.cos(ang) * 6) - 1, sy2 = Math.round(dy - 3 + Math.sin(ang) * 2);
+        ctx.fillStyle = Math.sin(ang) > 0 ? '#ffcd75' : '#c98a3a';
+        ctx.fillRect(sx2, sy2, 3, 1); ctx.fillRect(sx2 + 1, sy2 - 1, 1, 3);
+      }
+    }
+    if (st.brand) {
+      if (Math.random() < dt * 14) bits.push({ x: q.x * TS + 3 + Math.random() * 10, y: q.y * TS + 14 - h + Math.random() * h * 0.8, vx: (Math.random() - 0.5) * 6, vy: -14 - Math.random() * 10, col: Math.random() < 0.6 ? '#ef7d57' : '#ffcd75', t: 0, g: -25 });
+      lights.push({ x: q.x, y: q.y, r: 1.4, col: '#ef7d57', a: 0.5 });
+    }
+    if (st.gift && Math.random() < dt * 7) bits.push({ x: q.x * TS + 4 + Math.random() * 8, y: q.y * TS + 12 - Math.random() * h * 0.6, vx: (Math.random() - 0.5) * 4, vy: -8 - Math.random() * 6, col: Math.random() < 0.5 ? '#38b764' : '#a7f070', t: 0, g: -6 });
+    if (st.sproede) {
+      ctx.fillStyle = '#73eff7';
+      ctx.fillRect(dx + 1, dy + 3, 1, 3); ctx.fillRect(dx, dy + 4, 3, 1);
+      ctx.fillRect(dx + w - 2, dy + h - 6, 1, 3); ctx.fillRect(dx + w - 3, dy + h - 5, 3, 1);
+    }
+    if (isP && st.wall) {
+      ctx.globalAlpha = 0.45 + 0.2 * Math.sin(time * 6);
+      ctx.fillStyle = '#94b0c2';
+      for (let k = 0; k < 20; k++) { const ang = (k / 20) * Math.PI * 2; ctx.fillRect(Math.round(cx + Math.cos(ang) * 10), Math.round(dy + h / 2 + 1 + Math.sin(ang) * 9), 1, 1); }
+      ctx.globalAlpha = 1;
+    }
+  };
+  // Warnung: dieser Gegner kann im nächsten Gegnerzug zuschlagen oder schießen
+  const warn = (m: Actor, q: { x: number; y: number }, dx: number, dy: number, w: number) => {
+    if (!m.awake || m.st.stun || run.mode !== 'play') return;
+    const d = MOBS[m.kind], man = Math.abs(p.x - m.x) + Math.abs(p.y - m.y);
+    if (man === 1 && d.ai === 'slow' && m.cd) return; // Golem holt aus
+    const shot = man > 1 && !!d.range && Math.max(Math.abs(p.x - m.x), Math.abs(p.y - m.y)) <= d.range && los(run.tiles, m.x, m.y, p.x, p.y);
+    if (man !== 1 && !shot) return;
+    const blink = 0.55 + 0.45 * Math.sin(time * 8 + m.id);
+    if (shot) {
+      // gestrichelte Ziellinie vom Schützen zum Helden
+      const x0 = q.x * TS + 8, y0 = q.y * TS + 6, x1 = pp.x * TS + 8, y1 = pp.y * TS + 7, n = Math.hypot(x1 - x0, y1 - y0);
+      ctx.globalAlpha = 0.45 * blink + 0.3; ctx.fillStyle = '#b13e53';
+      for (let k = 6; k < n - 4; k += 4) { if (((k / 4) | 0) % 2) continue; ctx.fillRect(Math.round(x0 + ((x1 - x0) * k) / n) + ox, Math.round(y0 + ((y1 - y0) * k) / n) + oy, 2, 1); }
+      ctx.globalAlpha = 1;
+    }
+    const wx = dx + w / 2 - 1, wy = dy - 12 + (m.hp < m.maxHp ? -3 : 0) + (m.st.stun ? -3 : 0);
+    ctx.globalAlpha = blink;
+    ctx.fillStyle = '#1a1c2c'; ctx.fillRect(wx - 1, wy - 1, 4, 9);
+    ctx.fillStyle = shot ? '#ef7d57' : '#b13e53'; ctx.fillRect(wx, wy, 2, 5); ctx.fillRect(wx, wy + 6, 2, 2);
+    ctx.globalAlpha = 1;
+  };
   const actor = (a: Actor, q: { x: number; y: number }) => {
     // Blickrichtung wählt die Ansicht, Bewegung die Schrittbilder
     const f = a === p ? p.dir : a.f ?? [0, 1];
@@ -284,7 +332,10 @@ export function drawRun(ctx: CanvasRenderingContext2D, run: Run, dt: number, tim
       ctx.save(); ctx.translate(dx + c.width, dy); ctx.scale(-1, 1); ctx.drawImage(c, 0, 0); ctx.restore();
     };
     if (!glow) { ctx.fillStyle = 'rgba(0,0,0,0.35)'; ctx.fillRect(bx + 8 - img.width / 2 + 3, Math.round(q.y * TS) + oy + 13, img.width - 6, 2); }
+    // Ausweichen: Held flackert halbdurchsichtig
+    if (a.st.dodge) ctx.globalAlpha = 0.55 + 0.25 * Math.sin(time * 18);
     blit(img);
+    ctx.globalAlpha = 1;
     if (glow) {
       // Feuerwesen flimmern, werfen Licht und verlieren Funken
       ctx.globalCompositeOperation = 'lighter';
@@ -302,9 +353,8 @@ export function drawRun(ctx: CanvasRenderingContext2D, run: Run, dt: number, tim
     }
     const fl = flashes.get(a.id);
     if (fl) { ctx.globalAlpha = Math.min(1, fl / FLASH_T + 0.2); blit(masks[frame]); ctx.globalAlpha = 1; }
-    if (a.st.stun) text(ctx, 'z', dx + img.width - 4, dy - 5, '#73eff7', 8);
-    if (a.st.brand) { ctx.fillStyle = '#ef7d57'; ctx.fillRect(dx + 1, dy - 2, 2, 2); }
-    if (a.st.gift) { ctx.fillStyle = '#38b764'; ctx.fillRect(dx + 4, dy - 2, 2, 2); }
+    statusFx(a, a === p, dx, dy, img.width, img.height, q);
+    if (a !== p) warn(a, q, dx, dy, img.width);
     if (run.target && a.id === run.target) {
       ctx.fillStyle = '#ffcd75';
       for (const [cx, cy] of [[0, 0], [13, 0], [0, 13], [13, 13]]) { ctx.fillRect(bx + cx, by + cy, 3, 1); ctx.fillRect(bx + (cx ? 15 : 0), by + cy - (cy ? 2 : 0), 1, 3); }
