@@ -54,7 +54,7 @@ const EN: Record<string, string> = {
   'Sprengmeister': 'Demolitionist', '+1 Bombe auf jeder neuen Ebene': '+1 bomb on every new floor',
   'Geisterlicht': 'Ghost Light', 'Du siehst 3 Felder weiter': 'You see 3 tiles farther',
   'Steinhaut': 'Stone Skin', 'Jeder Treffer gegen dich: 1 Schaden weniger': 'Every hit against you deals 1 less damage',
-  'Blutpakt': 'Blood Pact', '+4 Angriff, aber -8 max. Leben': '+4 attack, but -8 max health',
+  'Blutpakt': 'Blood Pact', '+3 Angriff, aber -20 % max. Leben': '+3 attack, but -20 % max health',
   'Seelenkelch': 'Soul Chalice', 'Heiltränke heilen vollständig': 'Potions heal you fully',
   'Zeitsand': 'Sands of Time', 'Gegner verlieren manchmal ihren Zug': 'Enemies sometimes lose their turn',
   'Giftzahn': 'Venom Fang', 'Deine Treffer vergiften': 'Your hits poison',
@@ -220,7 +220,7 @@ const EN: Record<string, string> = {
   'Frosthauch': 'Frost Breath', '10 % Betäubung bei Treffer': '10 % stun on hit', 'Riesenschreck': 'Giant Bane', '+30 % gegen Bosse': '+30 % vs. bosses',
   'Sprengsatz': 'Explosives', '+2 Bomben': '+2 bombs', 'Berserker': 'Berserker', '+2 Angriff, -1 Verteidigung': '+2 attack, -1 defense',
   'Zweiter Atem': 'Second Wind', 'Heilt 1 Leben alle 6 Züge': 'Heals 1 health every 6 turns', 'Glückspilz': 'Lucky', 'Bessere Funde in Truhen': 'Better finds in chests',
-  'Ausdauer': 'Stamina', '+1 Klassenressource pro Sieg': '+1 class resource per kill', 'Henker': 'Executioner', '+50 % Schaden gegen Angeschlagene': '+50 % damage vs. wounded enemies',
+  'Ausdauer': 'Stamina', '+1 Klassenressource pro Sieg': '+1 class resource per kill', 'Henker': 'Executioner', '+25 % Schaden gegen Angeschlagene': '+25 % damage vs. wounded enemies',
   'Spalter': 'Cleaver', 'Angriffe treffen Nachbarn mit 40 %': 'Attacks cleave neighbours for 40 %', 'Kettenblitz': 'Chain Lightning', 'Geschosse springen mit 50 % weiter': 'Bolts chain for 50 %',
   'Durchschuss': 'Piercing Shot', 'Pfeile durchstoßen mit 60 %': 'Arrows pierce for 60 %',
   // Lager

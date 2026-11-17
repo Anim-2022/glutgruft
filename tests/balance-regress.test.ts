@@ -99,4 +99,83 @@ describe('Balance-Regressionen', () => {
     expect(hp('fuerst', 15)).toBeGreaterThanOrEqual(500);
     expect(hp('koenig', 5)).toBeLessThanOrEqual(110);
   });
+
+  it('Schütze weicht zurück, wenn der Spieler direkt daneben steht', () => {
+    const r = arena('krieger', 5);
+    const m = mob(r, 'schuetze', 31, 6);
+    m.hp = m.maxHp = 999;
+    const hp = r.p.hp;
+    act(r, { t: 'wait' });
+    expect(Math.abs(m.x - r.p.x) + Math.abs(m.y - r.p.y)).toBe(2);
+    expect(r.p.hp).toBe(hp);
+  });
+
+  it('Schütze ohne Ausweg schlägt zu', () => {
+    const r = arena('krieger', 5);
+    // Sackgasse: Schütze rechts vom Spieler, dahinter und daneben Wand
+    for (const [x, y] of [[32, 6], [31, 5], [31, 7]]) r.tiles[y * W + x] = T.WALL;
+    const m = mob(r, 'schuetze', 31, 6);
+    m.hp = m.maxHp = 999;
+    const hp = r.p.hp;
+    act(r, { t: 'wait' });
+    expect(m.x).toBe(31);
+    expect(r.p.hp).toBeLessThan(hp);
+  });
+
+  it('Fernschüsse treffen mit 70 % des Angriffs', () => {
+    const r = arena('magier', 5);
+    const m = mob(r, 'schuetze', 34, 6);
+    m.hp = m.maxHp = 999; m.atk = 20;
+    const hp = r.p.hp;
+    act(r, { t: 'wait' });
+    expect(hp - r.p.hp).toBe(14 - r.p.def);
+  });
+
+  it('Golem schlägt nur jeden zweiten Zug zu und lässt sich nicht mehr gefahrlos auf Abstand halten', () => {
+    const r = arena('krieger', 5);
+    const g = mob(r, 'golem', 31, 6);
+    g.hp = g.maxHp = 9999; g.atk = 10;
+    r.p.hp = r.p.maxHp = 9999;
+    let hits = 0;
+    for (let k = 0; k < 6; k++) { const hp = r.p.hp; act(r, { t: 'wait' }); if (r.p.hp < hp) hits++; }
+    expect(hits).toBe(3);
+    // Weglaufen: der Golem folgt jeden Zug
+    const k2 = arena('waldlaeufer', 5);
+    const g2 = mob(k2, 'golem', 27, 6);
+    g2.hp = g2.maxHp = 9999;
+    const x0 = g2.x;
+    for (let k = 0; k < 4; k++) act(k2, { t: 'move', dx: 1, dy: 0 });
+    expect(g2.x - x0).toBe(4);
+  });
+
+  it('Krieger sammelt Wut neben einem Gegner, sonst nicht', () => {
+    const r = arena('krieger');
+    r.p.res = 0;
+    act(r, { t: 'wait' });
+    expect(r.p.res).toBe(0);
+    const m = mob(r, 'ratte', 31, 6);
+    m.hp = m.maxHp = 999; m.atk = 0;
+    r.p.def = 99;
+    act(r, { t: 'wait' });
+    expect(r.p.res).toBeGreaterThanOrEqual(1);
+  });
+
+  it('Frostnova Rang I betäubt einen Zug', () => {
+    const r = arena('magier');
+    const m = mob(r, 'skelett', 31, 6);
+    m.hp = m.maxHp = 999;
+    r.p.res = r.p.resMax;
+    act(r, { t: 'skill', i: 1 });
+    expect(m.st.immun).toBeGreaterThan(0); // Betäubung schon abgelaufen, Immunität läuft
+    expect(m.st.stun ?? 0).toBe(0);
+  });
+
+  it('Blutpakt: +3 Angriff, -20 % max. Leben', () => {
+    const r = arena('krieger');
+    r.mode = 'perk'; r.perkChoices = ['blutpakt'];
+    const atk = r.p.atk, maxHp = r.p.maxHp;
+    act(r, { t: 'perk', i: 0 });
+    expect(r.p.atk).toBe(atk + 3);
+    expect(r.p.maxHp).toBe(Math.round(maxHp * 0.8));
+  });
 });

@@ -103,7 +103,7 @@ export function newRun(seed: number, cls: ClassId, meta: Meta): Run {
 function spawnMob(run: Run, kind: string, x: number, y: number): Actor {
   const d = MOBS[kind];
   // Bosse wachsen mit der Tiefe mit, normale Gegner etwas langsamer als früher
-  const s = 1 + 0.26 * (run.floor - 1);
+  const s = 1 + 0.30 * (run.floor - 1);
   const hp = d.boss ? Math.round(d.hp * (1.2 + 0.12 * run.floor)) : Math.round(d.hp * s);
   const m: Actor = {
     id: run.nextId++, kind, name: d.name, x, y, hp, maxHp: hp,
@@ -601,7 +601,8 @@ function nextFloor(run: Run) {
   const table = spawnTable(run.floor);
   for (let i = 1; i < rooms.length; i++) {
     const r = rooms[i];
-    const n = (bossFloor && r === last) ? 0 : rng.int(1, 2) + Math.floor(run.floor / 5);
+    // auf Boss-Ebenen ein Gegner weniger je Raum
+    const n = (bossFloor && r === last) ? 0 : rng.int(1, 2) + Math.floor(run.floor / 5) - (bossFloor ? 1 : 0);
     for (let k = 0; k < n; k++) {
       const f = freeInRoom(run, r);
       if (f) spawnMob(run, rng.pick(table), f[0], f[1]);
@@ -668,9 +669,9 @@ export function explode(run: Run, x: number, y: number, r = 1) {
     else if (t === T.BARREL) chain.push(i);
     else if (t === T.GRASS) ignite(run, xx, yy);
   }
-  const dmg = 9 + run.floor;
+  const dmg = 6 + Math.round(2.5 * run.floor);
   for (const m of run.mobs.filter(m => Math.abs(m.x - x) <= r && Math.abs(m.y - y) <= r)) damage(run, m, dmg, '#ef7d57');
-  if (!has(p, 'pulverfass') && Math.abs(p.x - x) <= r && Math.abs(p.y - y) <= r) damage(run, p, Math.ceil(dmg / 2), '#b13e53');
+  if (!has(p, 'pulverfass') && Math.abs(p.x - x) <= r && Math.abs(p.y - y) <= r) damage(run, p, Math.ceil(dmg * 0.3), '#b13e53');
   for (const i of chain) if (run.tiles[i] === T.BARREL) burst(run, i);
 }
 
@@ -788,7 +789,7 @@ function kill(run: Run, m: Actor) {
   run.kills++;
   p.exp += m.xp;
   run.souls += Math.max(1, Math.round((m.xp / 3) * p.soulMul));
-  p.gold += Math.ceil((m.xp / 3) * (1 + (p.aff.gold ?? 0) / 100));
+  p.gold += Math.ceil((m.xp / 4) * (1 + (p.aff.gold ?? 0) / 100));
   if (p.aff.ausdauer) gain(p, p.aff.ausdauer);
   if (p.aff.asche && !m.boss) {
     run.fx.push({ k: 'boom', x: m.x, y: m.y, r: 1 });
@@ -808,7 +809,7 @@ function kill(run: Run, m: Actor) {
     p.keys++;
     p.potions++;
     say(run, `${m.name} lässt einen Schlüssel und einen Heiltrank fallen.`);
-  } else if (run.rng.chance(0.08)) {
+  } else if (run.rng.chance(0.04)) {
     p.potions++;
     say(run, `${m.name} lässt einen Heiltrank fallen.`);
   }
@@ -845,7 +846,7 @@ function applyPerk(run: Run, id: string) {
   const p = run.p;
   if (RELICS[id]) {
     p.relics.push(id);
-    if (id === 'blutpakt') { p.atk += 4; p.maxHp = Math.max(5, p.maxHp - 8); p.hp = Math.min(p.hp, p.maxHp); }
+    if (id === 'blutpakt') { p.atk += 3; p.maxHp = Math.max(5, Math.round(p.maxHp * 0.8)); p.hp = Math.min(p.hp, p.maxHp); }
     say(run, `Reliquie: ${RELICS[id].name}`);
     return;
   }
@@ -870,7 +871,7 @@ function applyPerk(run: Run, id: string) {
     case 'atem': addAff(p, 'regen', 1); break;
     case 'pilz': addAff(p, 'fund', 15); break;
     case 'ausdauer': addAff(p, 'ausdauer', 1); break;
-    case 'henker': addAff(p, 'henker', 50); break;
+    case 'henker': addAff(p, 'henker', 25); break;
     case 'spalter': addAff(p, 'spalt', 40); break;
     case 'kettenblitz': addAff(p, 'kette', 50); break;
     case 'durchschuss': addAff(p, 'stoss', 60); break;
@@ -971,14 +972,14 @@ function useSkill(run: Run, i: number): boolean {
       for (let y = t.y - 1; y <= t.y + 1; y++) for (let x = t.x - 1; x <= t.x + 1; x++) ignite(run, x, y, 2);
       for (const m of run.mobs.filter(m => cheb(m, t) <= (mod === 1 ? 2 : 1))) {
         m.st.brand = 2;
-        damage(run, m, (m === t ? 6 + p.lvl * 0.5 : 3) * sp - m.def, '#ef7d57');
+        damage(run, m, (m === t ? atk * 1.4 + p.lvl * 0.3 : 3) * sp - m.def, '#ef7d57');
       }
       if (mod === 2) {
         const o = run.mobs.filter(m => m !== t && run.vis[m.y * W + m.x] && cheb(m, p) <= 7).sort((a, b) => cheb(a, p) - cheb(b, p))[0];
         if (o) {
           run.fx.push({ k: 'bolt', x0: p.x, y0: p.y, x1: o.x, y1: o.y, col: '#ef7d57' });
           o.st.brand = 2;
-          damage(run, o, (6 + p.lvl * 0.5) * sp * 0.6 - o.def, '#ef7d57');
+          damage(run, o, (atk * 1.4 + p.lvl * 0.3) * sp * 0.6 - o.def, '#ef7d57');
         }
       }
       break;
@@ -987,7 +988,7 @@ function useSkill(run: Run, i: number): boolean {
       const ts = around(mod === 1 ? 3 : 2);
       if (!ts.length) return noTarget();
       for (const i of [...run.fire.keys()]) if (cheb({ x: i % W, y: (i / W) | 0 }, p) <= 2) run.fire.delete(i);
-      for (const t of ts) { stun(run, t, L ? 3 : 2); delete t.st.brand; damage(run, t, 3 * sp, '#73eff7'); if (mod === 2 && t.hp > 0) t.st.sproede = 4; }
+      for (const t of ts) { stun(run, t, L ? 2 : 1); delete t.st.brand; damage(run, t, 3 * sp, '#73eff7'); if (mod === 2 && t.hp > 0) t.st.sproede = 4; }
       break;
     }
     case 'magier2': {
@@ -1266,7 +1267,8 @@ function hitPlayer(run: Run, m: Actor, melee: boolean) {
   m.f = Math.abs(p.x - m.x) >= Math.abs(p.y - m.y) ? [Math.sign(p.x - m.x), 0] : [0, Math.sign(p.y - m.y)];
   if (melee) run.fx.push({ k: 'lunge', id: m.id, dx: Math.sign(p.x - m.x), dy: Math.sign(p.y - m.y) });
   if (p.st.dodge || (p.aff.flink && run.rng.chance(Math.min(40, p.aff.flink) / 100))) { run.fx.push({ k: 'num', x: p.x, y: p.y, s: 'verfehlt', col: '#94b0c2' }); if (p.aff.konter) p.st.konter = 1; return; }
-  damage(run, p, Math.max(Math.ceil(m.atk * 0.3), m.atk - p.def - (p.st.wall ? 3 : 0)) - (has(p, 'steinhaut') ? 1 : 0), '#b13e53');
+  const atk = melee ? m.atk : Math.round(m.atk * 0.7); // Fernschüsse treffen schwächer
+  damage(run, p, Math.max(Math.ceil(atk * 0.3), atk - p.def - (p.st.wall ? 3 : 0)) - (has(p, 'steinhaut') ? 1 : 0), '#b13e53');
   run.fx.push({ k: 'shake', n: m.boss ? 5 : 2 });
   if (p.cls === 'krieger') gain(p, 1);
   if (d.poison && run.rng.chance(0.5)) p.st.gift = 4;
@@ -1290,7 +1292,6 @@ function moveMob(run: Run, m: Actor, x: number, y: number) {
 function mobAct(run: Run, m: Actor, dist: Int16Array) {
   const p = run.p, d = MOBS[m.kind];
   if (!m.awake) { if (run.vis[m.y * W + m.x]) m.awake = true; return; }
-  if (d.ai === 'slow' && run.turn % 2) return;
   const man = Math.abs(p.x - m.x) + Math.abs(p.y - m.y);
   if (d.ai === 'boss' && ++m.cd >= 5) {
     m.cd = 0;
@@ -1302,7 +1303,17 @@ function mobAct(run: Run, m: Actor, dist: Int16Array) {
       return;
     }
   }
-  if (man === 1) { hitPlayer(run, m, true); return; }
+  if (man === 1) {
+    // Schützen weichen einen Schritt zurück, wenn Platz ist
+    if (d.range) {
+      const back = [[1, 0], [-1, 0], [0, 1], [0, -1]].map(([ox, oy]) => [m.x + ox, m.y + oy]).find(([x, y]) => isFree(run, x, y) && Math.abs(p.x - x) + Math.abs(p.y - y) === 2);
+      if (back) { moveMob(run, m, back[0], back[1]); return; }
+    }
+    // Golems holen nach jedem Schlag einen Zug lang aus
+    if (d.ai === 'slow') { if (m.cd) { m.cd = 0; return; } m.cd = 1; }
+    hitPlayer(run, m, true);
+    return;
+  }
   if (d.range && cheb(m, p) <= d.range && los(run.tiles, m.x, m.y, p.x, p.y)) {
     run.fx.push({ k: 'bolt', x0: m.x, y0: m.y, x1: p.x, y1: p.y, col: '#f4f4f4' });
     hitPlayer(run, m, false);
@@ -1351,6 +1362,8 @@ function endTurn(run: Run) {
   for (const m of run.mobs) if (run.fire.has(m.y * W + m.x)) m.st.brand = Math.max(m.st.brand ?? 0, 2);
   tickDots(run, p);
   if (p.cls === 'magier' && run.turn % 3 === 0) gain(p, 1);
+  // Krieger: Wut wächst, solange ein sichtbarer Gegner direkt daneben steht
+  if (p.cls === 'krieger' && run.mobs.some(m => cheb(m, p) <= 1 && run.vis[m.y * W + m.x])) gain(p, 1);
   const dist = distMap(run.tiles, p.x, p.y);
   computeFov(run.tiles, p.x, p.y, fovR(run), run.vis, run.seen);
   for (const m of [...run.mobs]) {
