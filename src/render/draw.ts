@@ -20,6 +20,9 @@ const shots: Shot[] = [];
 const rings: { x: number; y: number; r: number; t: number }[] = [];
 const sparks: { x: number; y: number; col: string; big: boolean; t: number }[] = [];
 const bashes: { x: number; y: number; dx: number; dy: number; t: number }[] = [];
+const swipes: { x: number; y: number; dx: number; dy: number; big: boolean; t: number }[] = [];
+let deathT = -1; // Zeit seit dem Tod des Helden, -1 = lebt
+const SWIPE_T = 0.2, DEATH_T = 1.3;
 const RING_T = 0.38, SPARK_T = 0.18, BASH_T = 0.22;
 const burstBits = (x: number, y: number, n: number, cols: string[], v0: number, v1: number, up = 30, g?: number) => {
   for (let k = 0; k < n; k++) {
@@ -118,7 +121,7 @@ function applyLight(ctx: CanvasRenderingContext2D, run: Run, lights: Light[], ox
 export function resetView() {
   pos.clear(); lunges.clear(); flashes.clear();
   nums.length = 0; bolts.length = 0; bits.length = 0; booms.length = 0; shake = 0;
-  shots.length = 0; rings.length = 0; sparks.length = 0; bashes.length = 0;
+  shots.length = 0; rings.length = 0; sparks.length = 0; bashes.length = 0; swipes.length = 0; deathT = -1;
 }
 
 function smooth(a: Actor, dt: number) {
@@ -179,6 +182,18 @@ export function drawRun(ctx: CanvasRenderingContext2D, run: Run, dt: number, tim
         burstBits(f.x * TS + 8 - f.dx * 6, f.y * TS + 10 - f.dy * 6, 10, ['#94b0c2', '#c9d4dc', '#566c86'], 20, 60, 25);
         shake = Math.max(shake, 4);
         break;
+      case 'swipe':
+        swipes.push({ x: f.x, y: f.y, dx: f.dx, dy: f.dy, big: f.big, t: 0 });
+        if (f.big) shake = Math.max(shake, 6);
+        break;
+      case 'pdeath': {
+        deathT = 0;
+        const v = run.p.dir[1] < 0 ? 'b' : run.p.dir[1] > 0 ? 'f' : 's';
+        shatter(`${lookOf(run.p)}:${v}0`, f.x, f.y);
+        burstBits(f.x * TS + 8, f.y * TS + 8, 18, ['#b13e53', '#7d2b45', '#ef7d57'], 30, 90, 40);
+        shake = Math.max(shake, 8);
+        break;
+      }
       case 'debris':
         sfx('crack');
         for (let k = 0; k < 14; k++) {
@@ -316,6 +331,7 @@ export function drawRun(ctx: CanvasRenderingContext2D, run: Run, dt: number, tim
     ctx.globalAlpha = 1;
   };
   const actor = (a: Actor, q: { x: number; y: number }) => {
+    if (a === p && deathT >= 0) return;
     // Blickrichtung wählt die Ansicht, Bewegung die Schrittbilder
     const f = a === p ? p.dir : a.f ?? [0, 1];
     const v = f[1] < 0 ? 'b' : f[1] > 0 ? 'f' : 's', mirror = v === 's' && f[0] < 0;
@@ -497,6 +513,27 @@ export function drawRun(ctx: CanvasRenderingContext2D, run: Run, dt: number, tim
     ctx.globalAlpha = 1;
     lights.push({ x: b.x, y: b.y, r: 2, col: '#f4f4f4', a: 0.6 });
   }
+  // Gegnerangriff: Krallen-/Klingenhieb über dem Helden
+  for (let i = swipes.length - 1; i >= 0; i--) {
+    const w = swipes[i];
+    w.t += dt;
+    if (w.t > SWIPE_T) { swipes.splice(i, 1); continue; }
+    const f = w.t / SWIPE_T, cx = w.x * TS + 8 + ox, cy = w.y * TS + 7 + oy, len = w.big ? 11 : 7;
+    // Hieb quer zur Angriffsrichtung, wandert von einer Seite zur anderen
+    const px = -w.dy || 0.7, py = w.dx || 0.7, nl = Math.hypot(px, py), ux = px / nl, uy = py / nl, fx = w.dx * 0.6, fy = w.dy * 0.6;
+    const head = Math.min(1, f * 2.2);
+    ctx.globalAlpha = f < 0.5 ? 1 : 1 - (f - 0.5) * 2;
+    for (const off of w.big ? [-4, 0, 4] : [-3, 0, 3]) {
+      for (let k = -len; k <= len; k++) {
+        const g = (k + len) / (2 * len);
+        if (g > head) continue;
+        const bend = (1 - (k / len) ** 2) * 2;
+        ctx.fillStyle = Math.abs(k) < len * 0.5 ? '#f4f4f4' : '#b13e53';
+        ctx.fillRect(Math.round(cx + ux * k + fx * off + w.dx * bend), Math.round(cy + uy * k + fy * off + w.dy * bend - (off * (1 - Math.abs(fx)))), 1, 1);
+      }
+    }
+    ctx.globalAlpha = 1;
+  }
   for (const b of booms) lights.push({ x: b.x, y: b.y, r: 6 * (1 - b.t / 0.32) + 1, col: '#ffcd75' });
   for (const b of bolts) lights.push({ x: b.x1, y: b.y1, r: 2, col: b.col === '#1a1c2c' ? undefined : b.col, a: 0.7 });
   applyLight(ctx, run, lights, ox, oy, x0, y0, x1, y1);
@@ -521,7 +558,15 @@ export function drawRun(ctx: CanvasRenderingContext2D, run: Run, dt: number, tim
   else if (overlay === 'inv') invSheet(ctx, run, time);
   if (run.mode === 'perk') perkOverlay(ctx, run);
   if (run.mode === 'shop') shopOverlay(ctx, run);
-  if (run.mode === 'dead' || run.mode === 'win') endOverlay(ctx, run);
+  if (deathT >= 0 && run.mode === 'dead') {
+    deathT += dt;
+    const f = Math.min(1, deathT / DEATH_T);
+    ctx.fillStyle = `rgba(177,62,83,${Math.max(0, 0.45 - deathT * 0.9)})`; ctx.fillRect(0, 0, VW, VH);
+    const g = ctx.createRadialGradient(VW / 2, VH / 2, 40, VW / 2, VH / 2, VW * 0.65);
+    g.addColorStop(0, 'rgba(13,14,23,0)'); g.addColorStop(1, `rgba(13,14,23,${0.85 * f})`);
+    ctx.fillStyle = g; ctx.fillRect(0, 0, VW, VH);
+  }
+  if (run.mode === 'win' || (run.mode === 'dead' && (deathT < 0 || deathT > DEATH_T))) endOverlay(ctx, run);
 }
 
 // ---- Oberfläche ----

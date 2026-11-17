@@ -49,7 +49,9 @@ export type Fx =
   | { k: 'fireball'; x0: number; y0: number; x1: number; y1: number; r: number }
   | { k: 'nova'; x: number; y: number; r: number }
   | { k: 'bash'; x: number; y: number; dx: number; dy: number }
-  | { k: 'arrow'; x0: number; y0: number; x1: number; y1: number; col: string; heavy: boolean };
+  | { k: 'arrow'; x0: number; y0: number; x1: number; y1: number; col: string; heavy: boolean }
+  | { k: 'swipe'; x: number; y: number; dx: number; dy: number; big: boolean }
+  | { k: 'pdeath'; x: number; y: number };
 
 export interface Run {
   seed: number; rng: RNG; floor: number;
@@ -786,6 +788,7 @@ function fatal(run: Run) {
   if (has(p, 'eisenwille') && !run.willUsed) { run.willUsed = true; p.hp = 1; say(run, 'Eisenwille hält dich am Leben!'); return; }
   p.hp = 0;
   run.mode = 'dead';
+  run.fx.push({ k: 'pdeath', x: p.x, y: p.y });
   say(run, 'Du bist gefallen.');
 }
 
@@ -1273,7 +1276,7 @@ export function act(run: Run, a: Action): void {
 function hitPlayer(run: Run, m: Actor, melee: boolean) {
   const p = run.p, d = MOBS[m.kind];
   m.f = Math.abs(p.x - m.x) >= Math.abs(p.y - m.y) ? [Math.sign(p.x - m.x), 0] : [0, Math.sign(p.y - m.y)];
-  if (melee) run.fx.push({ k: 'lunge', id: m.id, dx: Math.sign(p.x - m.x), dy: Math.sign(p.y - m.y) });
+  if (melee) run.fx.push({ k: 'lunge', id: m.id, dx: Math.sign(p.x - m.x), dy: Math.sign(p.y - m.y) }, { k: 'swipe', x: p.x, y: p.y, dx: Math.sign(p.x - m.x), dy: Math.sign(p.y - m.y), big: !!m.boss });
   if (p.st.dodge || (p.aff.flink && run.rng.chance(Math.min(40, p.aff.flink) / 100))) { run.fx.push({ k: 'num', x: p.x, y: p.y, s: 'verfehlt', col: '#94b0c2' }); if (p.aff.konter) p.st.konter = 1; return; }
   const atk = melee ? m.atk : Math.round(m.atk * 0.7); // Fernschüsse treffen schwächer
   damage(run, p, Math.max(Math.ceil(atk * 0.3), atk - p.def - (p.st.wall ? 3 : 0)) - (has(p, 'steinhaut') ? 1 : 0), '#b13e53');
@@ -1323,7 +1326,7 @@ function mobAct(run: Run, m: Actor, dist: Int16Array) {
     return;
   }
   if (d.range && cheb(m, p) <= d.range && los(run.tiles, m.x, m.y, p.x, p.y)) {
-    run.fx.push({ k: 'bolt', x0: m.x, y0: m.y, x1: p.x, y1: p.y, col: '#f4f4f4' });
+    run.fx.push({ k: 'arrow', x0: m.x, y0: m.y, x1: p.x, y1: p.y, col: '#c9d4dc', heavy: false });
     hitPlayer(run, m, false);
     return;
   }
