@@ -341,7 +341,8 @@ export function drawRun(ctx: CanvasRenderingContext2D, run: Run, dt: number, tim
     const v = f[1] < 0 ? 'b' : f[1] > 0 ? 'f' : 's', mirror = v === 's' && f[0] < 0;
     const moving = Math.abs(q.x - a.x) + Math.abs(q.y - a.y) > 0.04;
     const fr = moving ? [2, 0, 3, 0][Math.floor(time * 11) % 4] : Math.floor(time * 2.5 + a.id * 0.37) % 2;
-    const base = a === p ? lookOf(p) : a.kind, ps = poses.get(a.id);
+    // Bosse zeigen ab halber Lebenskraft ihre verwundete Fassung (nur gelesen, keine Logik)
+    const base = a === p ? lookOf(p) : a.boss && a.hp * 2 < a.maxHp && sprites[`${a.kind}2:f0`] ? `${a.kind}2` : a.kind, ps = poses.get(a.id);
     // Tod des Helden: einknicken, kippen, liegen bleiben; sonst Pose (Angriff/Zauber) vor Schrittbild
     let frame = `${base}:${v}${fr}`;
     if (a === p && deathT >= 0) frame = `${base}:${v}d${deathT < 0.14 ? 0 : deathT < 0.3 ? 1 : 2}`;
