@@ -44,7 +44,12 @@ export type Fx =
   | { k: 'boom'; x: number; y: number; r: number }
   | { k: 'debris'; x: number; y: number }
   | { k: 'loot'; item: Item; how: 'worn' | 'bag' | 'sold' }
-  | { k: 'bolt'; x0: number; y0: number; x1: number; y1: number; col: string };
+  | { k: 'bolt'; x0: number; y0: number; x1: number; y1: number; col: string }
+  // Rein visuelle Fähigkeitseffekte (werden von der Logik nie gelesen)
+  | { k: 'fireball'; x0: number; y0: number; x1: number; y1: number; r: number }
+  | { k: 'nova'; x: number; y: number; r: number }
+  | { k: 'bash'; x: number; y: number; dx: number; dy: number }
+  | { k: 'arrow'; x0: number; y0: number; x1: number; y1: number; col: string; heavy: boolean };
 
 export interface Run {
   seed: number; rng: RNG; floor: number;
@@ -942,7 +947,7 @@ function useSkill(run: Run, i: number): boolean {
       const t = nearestMob(run, 1);
       if (!t) return noTarget();
       stun(run, t, L ? 3 : 2);
-      run.fx.push({ k: 'lunge', id: 0, dx: Math.sign(t.x - p.x), dy: Math.sign(t.y - p.y) });
+      run.fx.push({ k: 'lunge', id: 0, dx: Math.sign(t.x - p.x), dy: Math.sign(t.y - p.y) }, { k: 'bash', x: t.x, y: t.y, dx: Math.sign(t.x - p.x), dy: Math.sign(t.y - p.y) });
       playerHit(run, t, atk * 1.3 * sp + 1);
       if (mod === 2 && t.hp > 0) {
         // Rammstoß: bis zu zwei Felder zurück, ein Hindernis tut weh
@@ -970,7 +975,7 @@ function useSkill(run: Run, i: number): boolean {
     case 'magier0': {
       const t = nearestMob(run, 7);
       if (!t) return noTarget();
-      run.fx.push({ k: 'bolt', x0: p.x, y0: p.y, x1: t.x, y1: t.y, col: '#ef7d57' }, { k: 'shake', n: 3 });
+      run.fx.push({ k: 'fireball', x0: p.x, y0: p.y, x1: t.x, y1: t.y, r: mod === 1 ? 2 : 1 }, { k: 'shake', n: 3 });
       for (let y = t.y - 1; y <= t.y + 1; y++) for (let x = t.x - 1; x <= t.x + 1; x++) ignite(run, x, y, 2);
       for (const m of run.mobs.filter(m => cheb(m, t) <= (mod === 1 ? 2 : 1))) {
         m.st.brand = 2;
@@ -979,7 +984,7 @@ function useSkill(run: Run, i: number): boolean {
       if (mod === 2) {
         const o = run.mobs.filter(m => m !== t && run.vis[m.y * W + m.x] && cheb(m, p) <= 7).sort((a, b) => cheb(a, p) - cheb(b, p))[0];
         if (o) {
-          run.fx.push({ k: 'bolt', x0: p.x, y0: p.y, x1: o.x, y1: o.y, col: '#ef7d57' });
+          run.fx.push({ k: 'fireball', x0: p.x, y0: p.y, x1: o.x, y1: o.y, r: 0 });
           o.st.brand = 2;
           damage(run, o, (atk * 0.8 + p.lvl * 0.3) * sp * 0.6 - o.def, '#ef7d57');
         }
@@ -989,6 +994,7 @@ function useSkill(run: Run, i: number): boolean {
     case 'magier1': {
       const ts = around(mod === 1 ? 3 : 2);
       if (!ts.length) return noTarget();
+      run.fx.push({ k: 'nova', x: p.x, y: p.y, r: mod === 1 ? 3 : 2 });
       for (const i of [...run.fire.keys()]) if (cheb({ x: i % W, y: (i / W) | 0 }, p) <= 2) run.fire.delete(i);
       for (const t of ts) { stun(run, t, L ? 2 : 1); delete t.st.brand; damage(run, t, 3 * sp, '#73eff7'); if (mod === 2 && t.hp > 0) t.st.sproede = 4; }
       break;
@@ -1017,7 +1023,7 @@ function useSkill(run: Run, i: number): boolean {
     case 'waldlaeufer0': {
       const t = nearestMob(run, 8);
       if (!t) return noTarget();
-      run.fx.push({ k: 'bolt', x0: p.x, y0: p.y, x1: t.x, y1: t.y, col: '#ffcd75' });
+      run.fx.push({ k: 'arrow', x0: p.x, y0: p.y, x1: t.x, y1: t.y, col: '#ffcd75', heavy: true });
       playerHit(run, t, atk * 1.8 * sp, mod === 2 && t.hp >= t.maxHp);
       if (mod === 1) {
         const b = mobAt(run, t.x + Math.sign(t.x - p.x), t.y + Math.sign(t.y - p.y));
@@ -1047,7 +1053,7 @@ function useSkill(run: Run, i: number): boolean {
       p.st.dodge = mod === 1 ? 2 : 1;
       if (mod === 2) {
         const t = nearestMob(run, shotRange(p));
-        if (t) { run.fx.push({ k: 'bolt', x0: p.x, y0: p.y, x1: t.x, y1: t.y, col: '#ffcd75' }); playerHit(run, t, atk * 0.75); }
+        if (t) { run.fx.push({ k: 'arrow', x0: p.x, y0: p.y, x1: t.x, y1: t.y, col: '#ffcd75', heavy: false }); playerHit(run, t, atk * 0.75); }
       }
       break;
     }

@@ -14,6 +14,19 @@ const bolts: { x0: number; y0: number; x1: number; y1: number; col: string; t: n
 const booms: { x: number; y: number; r: number; t: number }[] = [];
 const bits: { x: number; y: number; vx: number; vy: number; col: string; t: number; g?: number }[] = [];
 let shake = 0;
+// Fähigkeitseffekte (nur Darstellung)
+type Shot = { x0: number; y0: number; x1: number; y1: number; col: string; kind: 'fire' | 'arrow' | 'heavy'; r: number; t: number; dur: number };
+const shots: Shot[] = [];
+const rings: { x: number; y: number; r: number; t: number }[] = [];
+const sparks: { x: number; y: number; col: string; big: boolean; t: number }[] = [];
+const bashes: { x: number; y: number; dx: number; dy: number; t: number }[] = [];
+const RING_T = 0.38, SPARK_T = 0.18, BASH_T = 0.22;
+const burstBits = (x: number, y: number, n: number, cols: string[], v0: number, v1: number, up = 30, g?: number) => {
+  for (let k = 0; k < n; k++) {
+    const ang = Math.random() * Math.PI * 2, v = v0 + Math.random() * (v1 - v0);
+    bits.push({ x, y, vx: Math.cos(ang) * v, vy: Math.sin(ang) * v - up, col: cols[k % cols.length], t: 0, g });
+  }
+};
 const cam = { x: 0, y: 0 };
 const view = { ox: 0, oy: 0 };
 // Bildschirmpunkt -> Kartenfeld (für Mausklicks)
@@ -105,6 +118,7 @@ function applyLight(ctx: CanvasRenderingContext2D, run: Run, lights: Light[], ox
 export function resetView() {
   pos.clear(); lunges.clear(); flashes.clear();
   nums.length = 0; bolts.length = 0; bits.length = 0; booms.length = 0; shake = 0;
+  shots.length = 0; rings.length = 0; sparks.length = 0; bashes.length = 0;
 }
 
 function smooth(a: Actor, dt: number) {
@@ -148,6 +162,23 @@ export function drawRun(ctx: CanvasRenderingContext2D, run: Run, dt: number, tim
       case 'die': shatter(f.kind, f.x, f.y); sfx('kill'); break;
       case 'loot': loot = { item: f.item, how: f.how, t: 0 }; sfx('pick'); break;
       case 'boom': booms.push({ x: f.x, y: f.y, r: f.r, t: 0 }); sfx('boom'); break;
+      case 'fireball': case 'arrow': {
+        const fire = f.k === 'fireball', d = Math.hypot(f.x1 - f.x0, f.y1 - f.y0);
+        shots.push({ x0: f.x0, y0: f.y0, x1: f.x1, y1: f.y1, t: 0, col: fire ? '#ef7d57' : f.col, r: fire ? f.r : 0,
+          kind: fire ? 'fire' : f.heavy ? 'heavy' : 'arrow', dur: Math.min(fire ? 0.3 : 0.18, (fire ? 0.06 : 0.03) + d * (fire ? 0.03 : 0.018)) });
+        sfx('zap');
+        break;
+      }
+      case 'nova':
+        rings.push({ x: f.x, y: f.y, r: f.r, t: 0 });
+        burstBits(f.x * TS + 8, f.y * TS + 8, 26, ['#73eff7', '#c9d4dc', '#f4f4f4', '#41a6f6'], 40, 110, 10, 40);
+        shake = Math.max(shake, 3); sfx('zap');
+        break;
+      case 'bash':
+        bashes.push({ x: f.x, y: f.y, dx: f.dx, dy: f.dy, t: 0 });
+        burstBits(f.x * TS + 8 - f.dx * 6, f.y * TS + 10 - f.dy * 6, 10, ['#94b0c2', '#c9d4dc', '#566c86'], 20, 60, 25);
+        shake = Math.max(shake, 4);
+        break;
       case 'debris':
         sfx('crack');
         for (let k = 0; k < 14; k++) {
@@ -330,6 +361,91 @@ export function drawRun(ctx: CanvasRenderingContext2D, run: Run, dt: number, tim
       if (f > head || f < head - 0.45) continue;
       ctx.fillRect(Math.round((b.x0 + (b.x1 - b.x0) * f) * TS + 7) + ox, Math.round((b.y0 + (b.y1 - b.y0) * f) * TS + 6) + oy, 2, 2);
     }
+  }
+  // Geschosse der Fähigkeiten: Feuerball, Pfeile, Zielschuss
+  for (let i = shots.length - 1; i >= 0; i--) {
+    const s = shots[i];
+    s.t += dt;
+    const done = s.t >= s.dur, f = Math.min(1, s.t / s.dur);
+    const hx = (s.x0 + (s.x1 - s.x0) * f) * TS + 8, hy = (s.y0 + (s.y1 - s.y0) * f) * TS + 7;
+    const len = Math.hypot(s.x1 - s.x0, s.y1 - s.y0) || 1, ux = (s.x1 - s.x0) / len, uy = (s.y1 - s.y0) / len;
+    if (done) {
+      shots.splice(i, 1);
+      if (s.kind === 'fire') {
+        booms.push({ x: s.x1, y: s.y1, r: s.r, t: 0 }); sfx('boom');
+        burstBits(hx, hy, 12 + s.r * 8, ['#ffcd75', '#ef7d57', '#b13e53'], 30, 90, 30);
+      } else {
+        sparks.push({ x: hx, y: hy, col: s.col, big: s.kind === 'heavy', t: 0 });
+        burstBits(hx, hy, s.kind === 'heavy' ? 8 : 3, [s.col, '#f4f4f4'], 30, 70, 10);
+      }
+      continue;
+    }
+    if (s.kind === 'fire') {
+      if (Math.random() < dt * 70) bits.push({ x: hx - ux * 3 + (Math.random() - 0.5) * 3, y: hy - uy * 3 + (Math.random() - 0.5) * 3, vx: -ux * 15 + (Math.random() - 0.5) * 12, vy: -uy * 15 - 8, col: Math.random() < 0.5 ? '#ef7d57' : '#ffcd75', t: 0, g: -20 });
+      ctx.fillStyle = '#b13e53'; ctx.fillRect(Math.round(hx - 3) + ox, Math.round(hy - 3) + oy, 6, 6);
+      ctx.fillStyle = '#ef7d57'; ctx.fillRect(Math.round(hx - 2) + ox, Math.round(hy - 3) + oy, 4, 6); ctx.fillRect(Math.round(hx - 3) + ox, Math.round(hy - 2) + oy, 6, 4);
+      ctx.fillStyle = '#ffcd75'; ctx.fillRect(Math.round(hx - 1) + ox, Math.round(hy - 1) + oy, 3, 3);
+      lights.push({ x: hx / TS - 0.5, y: hy / TS - 0.5, r: 3, col: '#ef7d57' });
+    } else {
+      const tail = s.kind === 'heavy' ? 26 : 10;
+      for (let k = 0; k <= tail; k += 2) {
+        ctx.globalAlpha = s.kind === 'heavy' ? 1 - k / tail : 1;
+        ctx.fillStyle = k < 3 ? '#f4f4f4' : s.col;
+        ctx.fillRect(Math.round(hx - ux * k) + ox, Math.round(hy - uy * k) + oy, s.kind === 'heavy' && k < 6 ? 2 : 1, s.kind === 'heavy' && k < 6 ? 2 : 1);
+      }
+      ctx.globalAlpha = 1;
+      if (s.kind === 'heavy') lights.push({ x: hx / TS - 0.5, y: hy / TS - 0.5, r: 2, col: s.col, a: 0.7 });
+    }
+  }
+  // Trefferblitz: Kreuz mit Strahlen
+  for (let i = sparks.length - 1; i >= 0; i--) {
+    const k = sparks[i];
+    k.t += dt;
+    if (k.t > SPARK_T) { sparks.splice(i, 1); continue; }
+    const f = k.t / SPARK_T, n = Math.round((k.big ? 7 : 4) * (0.5 + f)), cx = Math.round(k.x) + ox, cy = Math.round(k.y) + oy;
+    ctx.globalAlpha = 1 - f;
+    ctx.fillStyle = '#f4f4f4'; ctx.fillRect(cx - n, cy, n * 2 + 1, 1); ctx.fillRect(cx, cy - n, 1, n * 2 + 1);
+    if (k.big) { ctx.fillStyle = k.col; for (let d = 2; d < n; d += 2) for (const [sx2, sy2] of [[1, 1], [1, -1], [-1, 1], [-1, -1]]) ctx.fillRect(cx + sx2 * d, cy + sy2 * d, 1, 1); ctx.fillRect(cx - 1, cy - 1, 3, 3); }
+    ctx.globalAlpha = 1;
+    lights.push({ x: k.x / TS - 0.5, y: k.y / TS - 0.5, r: k.big ? 2.6 : 1.4, col: k.col, a: 0.8 });
+  }
+  // Frostnova: wachsender Eisring
+  for (let i = rings.length - 1; i >= 0; i--) {
+    const g = rings[i];
+    g.t += dt;
+    if (g.t > RING_T) { rings.splice(i, 1); continue; }
+    const f = g.t / RING_T, rad = (g.r + 0.5) * TS * (0.15 + 0.85 * Math.sqrt(f)), cx = g.x * TS + 8 + ox, cy = g.y * TS + 8 + oy;
+    const steps = Math.max(24, Math.round(rad * 1.6));
+    ctx.globalAlpha = 1 - f * f;
+    for (let k = 0; k < steps; k++) {
+      const a = (k / steps) * Math.PI * 2, px = Math.round(cx + Math.cos(a) * rad), py = Math.round(cy + Math.sin(a) * rad);
+      ctx.fillStyle = k % 3 ? '#73eff7' : '#f4f4f4'; ctx.fillRect(px, py, 2, 2);
+      if (k % 4 === 0) { ctx.fillStyle = '#41a6f6'; ctx.fillRect(Math.round(cx + Math.cos(a) * (rad - 3)), Math.round(cy + Math.sin(a) * (rad - 3)), 1, 1); }
+    }
+    ctx.fillStyle = 'rgba(115,239,247,0.12)';
+    ctx.beginPath(); ctx.arc(cx, cy, rad, 0, Math.PI * 2); ctx.fill();
+    ctx.globalAlpha = 1;
+    lights.push({ x: g.x, y: g.y, r: 2 + (g.r + 1) * f * 1.5, col: '#73eff7', a: 0.9 });
+  }
+  // Schildstoß: Aufprall-Halbmond und Schlaglinien
+  for (let i = bashes.length - 1; i >= 0; i--) {
+    const b = bashes[i];
+    b.t += dt;
+    if (b.t > BASH_T) { bashes.splice(i, 1); continue; }
+    const f = b.t / BASH_T, base = Math.atan2(b.dy, b.dx), cx = b.x * TS + 8 - b.dx * 6 + ox, cy = b.y * TS + 8 - b.dy * 6 + oy, rad = 5 + f * 9;
+    ctx.globalAlpha = 1 - f;
+    for (let k = -6; k <= 6; k++) {
+      const a = base + k * 0.22;
+      ctx.fillStyle = Math.abs(k) < 3 ? '#f4f4f4' : '#94b0c2';
+      ctx.fillRect(Math.round(cx + Math.cos(a) * rad), Math.round(cy + Math.sin(a) * rad), 2, 2);
+    }
+    ctx.fillStyle = '#ffcd75';
+    for (const k of [-0.7, 0, 0.7]) {
+      const a = base + k;
+      for (let d = 0; d < 4; d++) ctx.fillRect(Math.round(cx + Math.cos(a) * (rad + 3 + d)), Math.round(cy + Math.sin(a) * (rad + 3 + d)), 1, 1);
+    }
+    ctx.globalAlpha = 1;
+    lights.push({ x: b.x, y: b.y, r: 2, col: '#f4f4f4', a: 0.6 });
   }
   for (const b of booms) lights.push({ x: b.x, y: b.y, r: 6 * (1 - b.t / 0.32) + 1, col: '#ffcd75' });
   for (const b of bolts) lights.push({ x: b.x1, y: b.y1, r: 2, col: b.col === '#1a1c2c' ? undefined : b.col, a: 0.7 });
