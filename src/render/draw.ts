@@ -239,10 +239,16 @@ export function drawRun(ctx: CanvasRenderingContext2D, run: Run, dt: number, tim
       const front = y + 1 < H && !wallLike(run.tiles[i + W]);
       const open = (ox2: number, oy2: number) => x + ox2 >= 0 && x + ox2 < W && y + oy2 >= 0 && y + oy2 < H && !wallLike(run.tiles[i + oy2 * W + ox2]);
       const l = open(-1, 0), r = open(1, 0), u = open(0, -1);
-      if (front) ctx.drawImage(ts.wall, dx, dy);
+      // Wandspielart fest am Feld (Hash der Koordinaten, kein Zufall): meist die Grundwand
+      if (front) { const hv = hash(x, y, 101) % 7; ctx.drawImage(ts.walls[hv < 5 ? 0 : hv - 4], dx, dy); }
       else {
         const c = [open(-1, -1), open(1, -1), open(-1, 1), open(1, 1)];
-        ctx.drawImage(l || r || u || c.some(Boolean) ? ts.cap : ts.top, dx, dy);
+        const inner = !(l || r || u || c.some(Boolean));
+        // Glutschmiede: in der Mauerkrone fließt hier und da Lava (vier Bilder, Phase je Feld versetzt)
+        if (!inner && ts.lava.length && hash(x, y, 202) % 5 === 0) {
+          ctx.drawImage(ts.lava[(Math.floor(time * 5) + x) % 4], dx, dy);
+          lights.push({ x, y, r: 1.8 * flick(i), col: '#ef7d57', a: 0.6 });
+        } else ctx.drawImage(inner ? ts.top : ts.cap, dx, dy);
         ctx.fillStyle = ts.hi;
         if (u) ctx.fillRect(dx, dy, TS, 2);
         if (c[0] && !l && !u) ctx.fillRect(dx, dy, 2, 2);
@@ -260,7 +266,8 @@ export function drawRun(ctx: CanvasRenderingContext2D, run: Run, dt: number, tim
         lights.push({ x, y: y + 0.6, r: 5 * flick(i), col: '#ef7d57' });
       }
     } else {
-      ctx.drawImage(t === T.ICE ? sprites.ice : ts.floor[(x * 7 + y * 13 + ((x * y) % 5)) % 4], dx, dy);
+      const hf = hash(x, y, 303);
+      ctx.drawImage(t === T.ICE ? sprites.ice : hf % 6 === 0 ? ts.floorX[(hf >>> 4) % ts.floorX.length] : ts.floor[(x * 7 + y * 13 + ((x * y) % 5)) % 4], dx, dy);
       if (y > 0 && wallLike(run.tiles[i - W])) { ctx.fillStyle = 'rgba(0,0,0,0.38)'; ctx.fillRect(dx, dy, TS, 4); }
       if (t === T.FLOOR) { const h = hash(x, y, run.seed + run.floor * 7); if (h % 9 === 0) ctx.drawImage(ts.decals[(h >>> 8) % ts.decals.length], dx, dy); }
       if (t === T.GRASS) ctx.drawImage(ts.grass[(x * 5 + y * 3) % 3], dx, dy);
