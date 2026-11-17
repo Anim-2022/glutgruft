@@ -1,7 +1,7 @@
 import { VW, VH, TS, sprites, masks, tilesets, text, panel, bar, heroLook, figure } from './gfx';
 import { GLOW } from './sprites';
 import { W, H, T, wallLike, walkable } from '../game/dungeon';
-import { threatOf } from './warn';
+import { threatOf, statusMarks } from './warn';
 import { drawItemIcon, drawIcon, PERK_ICON } from './icons';
 import { sfx } from '../core/audio';
 import { tr } from '../core/i18n';
@@ -299,25 +299,25 @@ export function drawRun(ctx: CanvasRenderingContext2D, run: Run, dt: number, tim
 
   // Status auf dem Sprite: Betäubung, Brand, Gift, Spröde, Schutzwall
   const statusFx = (a: Actor, isP: boolean, dx: number, dy: number, w: number, h: number, q: { x: number; y: number }) => {
-    const st = a.st, cx = dx + w / 2;
-    if (st.stun) {
+    const cx = dx + w / 2, mk = new Set(statusMarks(a, isP));
+    if (mk.has('stun')) {
       for (let k = 0; k < 3; k++) {
         const ang = time * 5 + (k * Math.PI * 2) / 3, sx2 = Math.round(cx + Math.cos(ang) * 6) - 1, sy2 = Math.round(dy - 3 + Math.sin(ang) * 2);
         ctx.fillStyle = Math.sin(ang) > 0 ? '#ffcd75' : '#c98a3a';
         ctx.fillRect(sx2, sy2, 3, 1); ctx.fillRect(sx2 + 1, sy2 - 1, 1, 3);
       }
     }
-    if (st.brand) {
+    if (mk.has('brand')) {
       if (Math.random() < dt * 14) bits.push({ x: q.x * TS + 3 + Math.random() * 10, y: q.y * TS + 14 - h + Math.random() * h * 0.8, vx: (Math.random() - 0.5) * 6, vy: -14 - Math.random() * 10, col: Math.random() < 0.6 ? '#ef7d57' : '#ffcd75', t: 0, g: -25 });
       lights.push({ x: q.x, y: q.y, r: 1.4, col: '#ef7d57', a: 0.5 });
     }
-    if (st.gift && Math.random() < dt * 7) bits.push({ x: q.x * TS + 4 + Math.random() * 8, y: q.y * TS + 12 - Math.random() * h * 0.6, vx: (Math.random() - 0.5) * 4, vy: -8 - Math.random() * 6, col: Math.random() < 0.5 ? '#38b764' : '#a7f070', t: 0, g: -6 });
-    if (st.sproede) {
+    if (mk.has('gift') && Math.random() < dt * 7) bits.push({ x: q.x * TS + 4 + Math.random() * 8, y: q.y * TS + 12 - Math.random() * h * 0.6, vx: (Math.random() - 0.5) * 4, vy: -8 - Math.random() * 6, col: Math.random() < 0.5 ? '#38b764' : '#a7f070', t: 0, g: -6 });
+    if (mk.has('sproede')) {
       ctx.fillStyle = '#73eff7';
       ctx.fillRect(dx + 1, dy + 3, 1, 3); ctx.fillRect(dx, dy + 4, 3, 1);
       ctx.fillRect(dx + w - 2, dy + h - 6, 1, 3); ctx.fillRect(dx + w - 3, dy + h - 5, 3, 1);
     }
-    if (isP && st.wall) {
+    if (mk.has('wall')) {
       ctx.globalAlpha = 0.45 + 0.2 * Math.sin(time * 6);
       ctx.fillStyle = '#94b0c2';
       for (let k = 0; k < 20; k++) { const ang = (k / 20) * Math.PI * 2; ctx.fillRect(Math.round(cx + Math.cos(ang) * 10), Math.round(dy + h / 2 + 1 + Math.sin(ang) * 9), 1, 1); }
@@ -367,7 +367,7 @@ export function drawRun(ctx: CanvasRenderingContext2D, run: Run, dt: number, tim
     };
     if (!glow) { ctx.fillStyle = 'rgba(0,0,0,0.35)'; const sw = Math.min(img.width, a.boss ? 24 : 16); ctx.fillRect(bx + 8 - sw / 2 + 3, Math.round(q.y * TS) + oy + 13, sw - 6, 2); }
     // Ausweichen: Held flackert halbdurchsichtig
-    if (a.st.dodge) ctx.globalAlpha = 0.55 + 0.25 * Math.sin(time * 18);
+    if (statusMarks(a, a === p).includes('dodge')) ctx.globalAlpha = 0.55 + 0.25 * Math.sin(time * 18);
     blit(img);
     ctx.globalAlpha = 1;
     if (glow) {

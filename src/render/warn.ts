@@ -14,3 +14,16 @@ export function threatOf(run: Run, m: Actor): Threat {
   const shot = !!d.range && Math.max(Math.abs(p.x - m.x), Math.abs(p.y - m.y)) <= d.range && los(run.tiles, m.x, m.y, p.x, p.y);
   return shot ? 'shot' : null;
 }
+
+// Welche Statusanzeigen eine Figur bekommt (Reihenfolge = Zeichenreihenfolge). Nur lesend.
+export type Mark = 'stun' | 'brand' | 'gift' | 'sproede' | 'wall' | 'dodge';
+export function statusMarks(a: Actor, isPlayer: boolean): Mark[] {
+  const st = a.st, out: Mark[] = [];
+  if (st.stun) out.push('stun');
+  if (st.brand) out.push('brand');
+  if (st.gift) out.push('gift');
+  if (st.sproede) out.push('sproede');
+  if (isPlayer && st.wall) out.push('wall');
+  if (isPlayer && st.dodge) out.push('dodge');
+  return out;
+}
