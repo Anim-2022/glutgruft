@@ -2,6 +2,7 @@ import { VW, VH, TS, sprites, masks, tilesets, text, panel, bar, heroLook, figur
 import { GLOW } from './sprites';
 import { W, H, T, wallLike, walkable } from '../game/dungeon';
 import { threatOf, statusMarks } from './warn';
+import { onDeath, drawDecals, drawDying, resetDeaths, reducedFx } from './deaths';
 import { drawItemIcon, drawIcon, PERK_ICON } from './icons';
 import { sfx } from '../core/audio';
 import { tr } from '../core/i18n';
@@ -127,6 +128,7 @@ export function resetView() {
   pos.clear(); lunges.clear(); flashes.clear();
   nums.length = 0; bolts.length = 0; bits.length = 0; booms.length = 0; shake = 0;
   shots.length = 0; rings.length = 0; sparks.length = 0; bashes.length = 0; swipes.length = 0; deathT = -1; poses.clear();
+  resetDeaths();
 }
 
 function smooth(a: Actor, dt: number) {
@@ -137,20 +139,6 @@ function smooth(a: Actor, dt: number) {
   return p;
 }
 
-// Gegner zerfällt in seine eigenen Pixel
-function shatter(kind: string, tx: number, ty: number) {
-  const s = sprites[kind];
-  if (!s) return;
-  const d = s.getContext('2d')!.getImageData(0, 0, s.width, s.height).data;
-  const ox = tx * TS + 8 - s.width / 2, oy = ty * TS + 14 - s.height;
-  for (let y = 0; y < s.height; y += 2) for (let x = 0; x < s.width; x += 2) {
-    const i = (y * s.width + x) * 4;
-    if (d[i + 3] === 0) continue;
-    const ang = Math.atan2(y - s.height / 2, x - s.width / 2) + (Math.random() - 0.5);
-    const v = 20 + Math.random() * 50;
-    bits.push({ x: ox + x, y: oy + y, vx: Math.cos(ang) * v, vy: Math.sin(ang) * v - 30, col: `rgb(${d[i]},${d[i + 1]},${d[i + 2]})`, t: 0 });
-  }
-}
 
 const TILE_SPR: Record<number, string> = {
   [T.STAIRS]: 'stairs', [T.CHEST]: 'chest', [T.CHEST_OPEN]: 'chest_open', [T.ALTAR]: 'altar', [T.ALTAR_USED]: 'altar_used',
@@ -167,7 +155,7 @@ export function drawRun(ctx: CanvasRenderingContext2D, run: Run, dt: number, tim
       case 'bolt': bolts.push({ ...f, t: 0 }); sfx('zap'); if (f.x0 === run.p.x && f.y0 === run.p.y) pose(0, 'a'); break;
       case 'lunge': lunges.set(f.id, { dx: f.dx, dy: f.dy, t: 0 }); sfx('hit'); pose(f.id, 'a'); break;
       case 'flash': flashes.set(f.id, FLASH_T); if (f.id === 0) sfx('hurt'); break;
-      case 'die': shatter(f.kind, f.x, f.y); sfx('kill'); break;
+      case 'die': shake = Math.max(shake, onDeath(run, f.kind, f.x, f.y)); sfx('kill'); break;
       case 'loot': loot = { item: f.item, how: f.how, t: 0 }; sfx('pick'); break;
       case 'boom': booms.push({ x: f.x, y: f.y, r: f.r, t: 0 }); sfx('boom'); break;
       case 'fireball': case 'arrow': {
@@ -219,7 +207,7 @@ export function drawRun(ctx: CanvasRenderingContext2D, run: Run, dt: number, tim
   const tx = pp.x * TS + 8 - VW / 2, ty = pp.y * TS + 8 - VH / 2;
   if (Math.abs(tx - cam.x) > 220 || Math.abs(ty - cam.y) > 220) { cam.x = tx; cam.y = ty; }
   cam.x += (tx - cam.x) * Math.min(1, dt * 10); cam.y += (ty - cam.y) * Math.min(1, dt * 10);
-  shake = Math.max(0, shake - dt * 30);
+  shake = reducedFx() ? 0 : Math.max(0, shake - dt * 30);
   const sx = shake ? Math.round((Math.random() - 0.5) * shake) : 0, sy = shake ? Math.round((Math.random() - 0.5) * shake) : 0;
   const ox = -Math.round(cam.x) + sx, oy = -Math.round(cam.y) + sy;
 
@@ -227,7 +215,7 @@ export function drawRun(ctx: CanvasRenderingContext2D, run: Run, dt: number, tim
   ctx.fillStyle = '#08090f'; ctx.fillRect(0, 0, VW, VH);
   const ts = tilesets[biomeOf(run.floor)];
   buildLight(run);
-  const lights: Light[] = [];
+  const lights: Light[] = [], floorTiles: number[] = [];
   const flick = (n: number) => 0.92 + 0.08 * Math.sin(time * 9 + n) + 0.04 * Math.sin(time * 23 + n * 1.7);
   const x0 = Math.max(0, Math.floor(cam.x / TS) - 1), x1 = Math.min(W - 1, x0 + VW / TS + 2);
   const y0 = Math.max(0, Math.floor(cam.y / TS) - 1), y1 = Math.min(H - 1, y0 + Math.ceil(VH / TS) + 2);
@@ -272,30 +260,37 @@ export function drawRun(ctx: CanvasRenderingContext2D, run: Run, dt: number, tim
       if (t === T.FLOOR) { const h = hash(x, y, run.seed + run.floor * 7); if (h % 9 === 0) ctx.drawImage(ts.decals[(h >>> 8) % ts.decals.length], dx, dy); }
       if (t === T.GRASS) ctx.drawImage(ts.grass[(x * 5 + y * 3) % 3], dx, dy);
       else if (t === T.BURNT) ctx.drawImage(ts.burnt, dx, dy);
-      const s = TILE_SPR[t];
-      if (t === T.CRATE_ON) ctx.drawImage(sprites.plate, dx, dy);
-      if (s) ctx.drawImage(sprites[s], dx, dy);
-      if (t === T.CRATE_ON) { ctx.fillStyle = 'rgba(255,205,117,0.3)'; ctx.fillRect(dx + 1, dy + 1, 14, 14); }
-      if (t === T.GOAL) { ctx.fillStyle = `rgba(115,239,247,${0.15 + 0.1 * Math.sin(time * 4)})`; ctx.fillRect(dx, dy, TS, TS); lights.push({ x, y, r: 2.2, col: '#73eff7', a: 0.8 }); }
-      if (t === T.FOUNTAIN) lights.push({ x, y, r: 2.4, col: '#41a6f6', a: 0.7 });
-      if (t === T.RUNE && run.puzzle) {
-        const z = run.puzzle, k = z.runes[i];
-        ctx.globalAlpha = z.dead ? 0.3 : 1;
-        ctx.drawImage(sprites[`rune${k}${z.pressed.includes(k) || z.solved ? '_on' : ''}`], dx, dy);
-        ctx.globalAlpha = 1;
-      }
-      if (t === T.BARREL && run.fuses.has(i) && Math.floor(time * 10) % 2) {
-        ctx.fillStyle = '#ffcd75'; ctx.fillRect(dx + 7, dy - 1, 2, 2);
-        ctx.fillStyle = '#ef7d57'; ctx.fillRect(dx + 6, dy, 1, 1); ctx.fillRect(dx + 9, dy - 2, 1, 1);
-      }
-      if (run.fire.has(i) && run.vis[i]) {
-        ctx.drawImage(sprites[Math.floor(time * 8 + x + y) % 2 ? 'fire_a' : 'fire_b'], dx, dy - 2);
-        lights.push({ x, y, r: 3 * flick(i), col: '#ef7d57' });
-      }
-      if (t === T.ALTAR) lights.push({ x, y, r: 2.6 + 0.3 * Math.sin(time * 3), col: '#73eff7', a: 0.8 });
+      floorTiles.push(i);
     }
   }
+  // Spuren am Boden liegen über dem Boden, aber unter Gegenständen, Fallen und Figuren
+  drawDecals(ctx, run, ox, oy, lights, time, dt);
+  for (const i of floorTiles) {
+    const x = i % W, y = (i / W) | 0, t = run.tiles[i], dx = x * TS + ox, dy = y * TS + oy;
+    const s = TILE_SPR[t];
+    if (t === T.CRATE_ON) ctx.drawImage(sprites.plate, dx, dy);
+    if (s) ctx.drawImage(sprites[s], dx, dy);
+    if (t === T.CRATE_ON) { ctx.fillStyle = 'rgba(255,205,117,0.3)'; ctx.fillRect(dx + 1, dy + 1, 14, 14); }
+    if (t === T.GOAL) { ctx.fillStyle = `rgba(115,239,247,${0.15 + 0.1 * Math.sin(time * 4)})`; ctx.fillRect(dx, dy, TS, TS); lights.push({ x, y, r: 2.2, col: '#73eff7', a: 0.8 }); }
+    if (t === T.FOUNTAIN) lights.push({ x, y, r: 2.4, col: '#41a6f6', a: 0.7 });
+    if (t === T.RUNE && run.puzzle) {
+      const z = run.puzzle, k = z.runes[i];
+      ctx.globalAlpha = z.dead ? 0.3 : 1;
+      ctx.drawImage(sprites[`rune${k}${z.pressed.includes(k) || z.solved ? '_on' : ''}`], dx, dy);
+      ctx.globalAlpha = 1;
+    }
+    if (t === T.BARREL && run.fuses.has(i) && Math.floor(time * 10) % 2) {
+      ctx.fillStyle = '#ffcd75'; ctx.fillRect(dx + 7, dy - 1, 2, 2);
+      ctx.fillStyle = '#ef7d57'; ctx.fillRect(dx + 6, dy, 1, 1); ctx.fillRect(dx + 9, dy - 2, 1, 1);
+    }
+    if (run.fire.has(i) && run.vis[i]) {
+      ctx.drawImage(sprites[Math.floor(time * 8 + x + y) % 2 ? 'fire_a' : 'fire_b'], dx, dy - 2);
+      lights.push({ x, y, r: 3 * flick(i), col: '#ef7d57' });
+    }
+    if (t === T.ALTAR) lights.push({ x, y, r: 2.6 + 0.3 * Math.sin(time * 3), col: '#73eff7', a: 0.8 });
+  }
   for (const t of run.traps) ctx.drawImage(sprites.trap, t.x * TS + ox, t.y * TS + oy);
+  drawDying(ctx, run, ox, oy, lights, dt);
 
   // Status auf dem Sprite: Betäubung, Brand, Gift, Spröde, Schutzwall
   const statusFx = (a: Actor, isP: boolean, dx: number, dy: number, w: number, h: number, q: { x: number; y: number }) => {
