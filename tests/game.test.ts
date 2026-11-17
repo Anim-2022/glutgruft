@@ -173,6 +173,7 @@ describe('Gegenstände und Ausbau', () => {
         p.bag = [it];
         act(run, { t: 'equip', i: 0 });
         expect(p.gear[it.slot]).toBe(it);
+        if (it.cursed) run.floor++; // der Fluch löst sich erst auf der nächsten Ebene
         act(run, { t: 'unequip', slot: it.slot });
         p.bag = [];
         p.hp = p.maxHp;

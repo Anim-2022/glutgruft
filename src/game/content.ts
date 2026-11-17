@@ -15,9 +15,9 @@ export const CLASS_ORDER: ClassId[] = ['krieger', 'magier', 'waldlaeufer'];
 export const CLASSES: Record<ClassId, ClassDef> = {
   krieger: {
     id: 'krieger', name: 'Krieger', desc: 'Zäher Nahkämpfer. Wut entsteht durch Treffer und Schmerz.',
-    hp: 36, atk: 5, def: 2, resName: 'Wut', resMax: 10, resStart: 0, resCol: '#ef7d57', range: 0, shot: '',
+    hp: 40, atk: 5, def: 2, resName: 'Wut', resMax: 10, resStart: 0, resCol: '#ef7d57', range: 0, shot: '',
     skills: [
-      { name: 'Schildstoß', cost: 3, desc: 'Schaden + betäubt 2 Züge' },
+      { name: 'Schildstoß', cost: 2, desc: 'Schaden + betäubt 2 Züge' },
       { name: 'Wirbelschlag', cost: 5, desc: 'Trifft alle Gegner ringsum' },
       { name: 'Kriegsschrei', cost: 4, desc: '+3 Angriff für 6 Züge' },
     ],
@@ -26,13 +26,13 @@ export const CLASSES: Record<ClassId, ClassDef> = {
     id: 'magier', name: 'Magier', desc: 'Zerbrechlich, aber verheerend. Mana kehrt langsam von selbst zurück.',
     hp: 18, atk: 3, def: 0, resName: 'Mana', resMax: 12, resStart: 12, resCol: '#41a6f6', range: 3, shot: 'Funke',
     skills: [
-      { name: 'Feuerball', cost: 5, desc: 'Explosion + Brand' },
+      { name: 'Feuerball', cost: 6, desc: 'Explosion + Brand' },
       { name: 'Frostnova', cost: 6, desc: 'Friert Gegner in der Nähe ein' },
       { name: 'Blinzeln', cost: 3, desc: 'Teleport weg von Gefahr' },
     ],
   },
   waldlaeufer: {
-    id: 'waldlaeufer', name: 'Waldläufer', desc: 'Schütze mit Fallen. Fokus wächst beim Warten und mit jedem besiegten Gegner.',
+    id: 'waldlaeufer', name: 'Waldläufer', desc: 'Schütze mit Fallen. Fokus wächst beim Warten im Kampf und mit jedem besiegten Gegner.',
     hp: 22, atk: 4, def: 1, resName: 'Fokus', resMax: 8, resStart: 2, resCol: '#a7f070', range: 5, shot: 'Schuss',
     skills: [
       { name: 'Zielschuss', cost: 4, desc: 'Schwerer Schuss auf große Distanz' },
@@ -54,7 +54,7 @@ export const MOBS: Record<string, MobDef> = {
   schuetze: { name: 'Knochenschütze', hp: 8, atk: 3, def: 0, xp: 7, ai: 'chase', range: 5 },
   fledermaus: { name: 'Fledermaus', hp: 5, atk: 3, def: 0, xp: 4, ai: 'erratic' },
   sporling: { name: 'Sporling', hp: 12, atk: 3, def: 1, xp: 7, ai: 'chase', poison: true },
-  golem: { name: 'Steingolem', hp: 30, atk: 8, def: 3, xp: 14, ai: 'slow', smash: true },
+  golem: { name: 'Steingolem', hp: 24, atk: 8, def: 3, xp: 14, ai: 'slow', smash: true },
   glutgeist: { name: 'Glutgeist', hp: 14, atk: 5, def: 0, xp: 10, ai: 'erratic', burn: true },
   koenig: { name: 'Gruftkönig', hp: 60, atk: 7, def: 2, xp: 40, ai: 'boss', boss: true, minion: 'skelett', smash: true },
   mutter: { name: 'Sporenmutter', hp: 110, atk: 9, def: 3, xp: 80, ai: 'boss', boss: true, minion: 'sporling', poison: true, smash: true },
@@ -71,8 +71,9 @@ export const biomeOf = (floor: number) => Math.min(2, Math.floor((floor - 1) / F
 export function spawnTable(floor: number): string[] {
   const b = biomeOf(floor);
   if (b === 0) return floor >= 3 ? ['ratte', 'skelett', 'skelett', 'fledermaus', 'schuetze'] : ['ratte', 'ratte', 'skelett', 'fledermaus'];
-  if (b === 1) return floor >= 9 ? ['sporling', 'sporling', 'schuetze', 'skelett', 'golem'] : ['sporling', 'sporling', 'fledermaus', 'schuetze', 'skelett'];
-  return ['golem', 'glutgeist', 'glutgeist', 'schuetze', 'sporling'];
+  // Golems erst ab der Glutschmiede (Ebene 11), damit der Übergang 9–11 nicht springt
+  if (b === 1) return floor >= 9 ? ['sporling', 'sporling', 'schuetze', 'skelett', 'skelett'] : ['sporling', 'sporling', 'fledermaus', 'schuetze', 'skelett'];
+  return ['golem', 'glutgeist', 'schuetze', 'sporling', 'skelett'];
 }
 
 export interface PerkDef { name: string; desc: string; cls?: ClassId; }
@@ -100,7 +101,7 @@ export const PERKS: Record<string, PerkDef> = {
   atem: { name: 'Zweiter Atem', desc: 'Heilt 1 Leben alle 6 Züge' },
   pilz: { name: 'Glückspilz', desc: 'Bessere Funde in Truhen' },
   ausdauer: { name: 'Ausdauer', desc: '+1 Klassenressource pro Sieg' },
-  henker: { name: 'Henker', desc: '+50 % Schaden gegen Angeschlagene' },
+  henker: { name: 'Henker', desc: '+25 % Schaden gegen Angeschlagene' },
   spalter: { name: 'Spalter', desc: 'Angriffe treffen Nachbarn mit 40 %', cls: 'krieger' },
   kettenblitz: { name: 'Kettenblitz', desc: 'Geschosse springen mit 50 % weiter', cls: 'magier' },
   durchschuss: { name: 'Durchschuss', desc: 'Pfeile durchstoßen mit 60 %', cls: 'waldlaeufer' },
@@ -140,7 +141,7 @@ export interface UpgDef { id: string; name: string; desc: string; max: number; c
 
 export const UPGRADES: UpgDef[] = [
   { id: 'vit', name: 'Vitalität', desc: '+2 Leben pro Stufe', max: 5, cost: 20 },
-  { id: 'atk', name: 'Schleifstein', desc: '+1 Angriff pro Stufe', max: 2, cost: 60 },
+  { id: 'atk', name: 'Schleifstein', desc: '+1 Angriff pro Stufe (nicht für den Magier)', max: 2, cost: 60 },
   { id: 'trank', name: 'Proviant', desc: '+1 Heiltrank zum Start', max: 3, cost: 25 },
   { id: 'fokus', name: 'Fokus', desc: '+1 max. Klassenressource', max: 3, cost: 20 },
   { id: 'gold', name: 'Startkapital', desc: '+15 Gold zum Start', max: 3, cost: 15 },
@@ -159,7 +160,7 @@ export const RELICS: Record<string, PerkDef> = {
   sprengmeister: { name: 'Sprengmeister', desc: '+1 Bombe auf jeder neuen Ebene' },
   geisterlicht: { name: 'Geisterlicht', desc: 'Du siehst 3 Felder weiter' },
   steinhaut: { name: 'Steinhaut', desc: 'Jeder Treffer gegen dich: 1 Schaden weniger' },
-  blutpakt: { name: 'Blutpakt', desc: '+4 Angriff, aber -8 max. Leben' },
+  blutpakt: { name: 'Blutpakt', desc: '+3 Angriff, aber -20 % max. Leben' },
   seelenkelch: { name: 'Seelenkelch', desc: 'Heiltränke heilen vollständig' },
   zeitsand: { name: 'Zeitsand', desc: 'Gegner verlieren manchmal ihren Zug' },
   giftzahn: { name: 'Giftzahn', desc: 'Deine Treffer vergiften' },
@@ -174,7 +175,7 @@ export const RARITY = ['Gewöhnlich', 'Selten', 'Episch', 'Legendär'];
 export const RARITY_COL = ['#94b0c2', '#41a6f6', '#9a4fc0', '#ffcd75'];
 export const SLOT_NAMES = ['Waffe', 'Rüstung', 'Amulett', 'Ring', 'Verbrauch'];
 export interface Item {
-  slot: number; name: string; rar: number; atk: number; def: number; hp: number; crit: number; cursed?: boolean;
+  slot: number; name: string; rar: number; atk: number; def: number; hp: number; crit: number; cursed?: boolean; lock?: number; // lock: Ebene, auf der ein verfluchtes Stück angelegt wurde
   aff?: [string, number][]; // besondere Eigenschaften
   wk?: number;              // Waffenart 0..2, bestimmt das Aussehen
   use?: string;             // Verbrauchsgegenstand
@@ -205,7 +206,7 @@ export const UNIQUES: U[] = [
   { slot: 2, name: 'Herz des Vulkans', hp: 6, crit: 0.08, aff: [['brand', 40], ['asche', 1]] },
   { slot: 2, name: 'Auge des Sehers', crit: 0.16, aff: [['sicht', 3], ['macht', 15]] },
   { slot: 3, name: 'Blutring', aff: [['vamp', 3], ['boss', 30]] },
-  { slot: 3, name: 'Ring der Gier', aff: [['gold', 80], ['quell', 4]] },
+  { slot: 3, name: 'Ring der Gier', aff: [['gold', 40], ['quell', 4]] },
   { slot: 3, name: 'Sturmring', aff: [['kette', 60], ['macht', 20]] },
 ];
-export interface Offer { kind: 'potion' | 'bomb' | 'item'; name: string; desc: string; price: number; sold: boolean; item?: Item; }
+export interface Offer { kind: 'potion' | 'bomb' | 'item'; name: string; desc: string; price: number; sold: boolean; item?: Item; left?: number; }

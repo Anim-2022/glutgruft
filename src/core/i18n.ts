@@ -18,7 +18,7 @@ const EN: Record<string, string> = {
   'Krieger': 'Warrior', 'Magier': 'Mage', 'Waldläufer': 'Ranger',
   'Zäher Nahkämpfer. Wut entsteht durch Treffer und Schmerz.': 'Tough melee fighter. Rage builds from hits dealt and taken.',
   'Zerbrechlich, aber verheerend. Mana kehrt langsam von selbst zurück.': 'Fragile but devastating. Mana slowly returns on its own.',
-  'Schütze mit Fallen. Fokus wächst beim Warten und mit jedem besiegten Gegner.': 'Archer with traps. Focus grows while waiting and with every kill.',
+  'Schütze mit Fallen. Fokus wächst beim Warten im Kampf und mit jedem besiegten Gegner.': 'Archer with traps. Focus grows while waiting in combat and with every kill.',
   'Wut': 'Rage', 'Fokus': 'Focus',
   'Schildstoß': 'Shield Bash', 'Schaden + betäubt 2 Züge': 'Damage + stuns for 2 turns',
   'Wirbelschlag': 'Whirlwind', 'Trifft alle Gegner ringsum': 'Hits every enemy around you',
@@ -45,7 +45,7 @@ const EN: Record<string, string> = {
   'Dornen': 'Thorns', 'Nahkämpfer erleiden 2 Schaden': 'Melee attackers take 2 damage',
   'Seelenfänger': 'Soul Catcher', '+50 % Seelensplitter': '+50 % soul shards',
   // Verbesserungen
-  'Vitalität': 'Vitality', '+2 Leben pro Stufe': '+2 health per rank', 'Schleifstein': 'Whetstone', '+1 Angriff pro Stufe': '+1 attack per rank',
+  'Vitalität': 'Vitality', '+2 Leben pro Stufe': '+2 health per rank', 'Schleifstein': 'Whetstone', '+1 Angriff pro Stufe (nicht für den Magier)': '+1 attack per rank (not for the Mage)',
   'Proviant': 'Provisions', '+1 Heiltrank zum Start': '+1 starting potion',
   // Reliquien
   'Glutherz': 'Ember Heart', 'Brand heilt dich, statt zu schaden': 'Burning heals you instead of hurting',
@@ -54,7 +54,7 @@ const EN: Record<string, string> = {
   'Sprengmeister': 'Demolitionist', '+1 Bombe auf jeder neuen Ebene': '+1 bomb on every new floor',
   'Geisterlicht': 'Ghost Light', 'Du siehst 3 Felder weiter': 'You see 3 tiles farther',
   'Steinhaut': 'Stone Skin', 'Jeder Treffer gegen dich: 1 Schaden weniger': 'Every hit against you deals 1 less damage',
-  'Blutpakt': 'Blood Pact', '+4 Angriff, aber -8 max. Leben': '+4 attack, but -8 max health',
+  'Blutpakt': 'Blood Pact', '+3 Angriff, aber -20 % max. Leben': '+3 attack, but -20 % max health',
   'Seelenkelch': 'Soul Chalice', 'Heiltränke heilen vollständig': 'Potions heal you fully',
   'Zeitsand': 'Sands of Time', 'Gegner verlieren manchmal ihren Zug': 'Enemies sometimes lose their turn',
   'Giftzahn': 'Venom Fang', 'Deine Treffer vergiften': 'Your hits poison',
@@ -74,6 +74,7 @@ const EN: Record<string, string> = {
   ' angelegt.': ' equipped.', ' abgelegt.': ' unequipped.', ' – im Rucksack [I].': ' – in backpack [I].',
   ' – Rucksack voll, für ': ' – backpack full, sold for ', ' Gold verkauft.': ' gold.', ' für ': ' for ',
   'Der Rucksack ist voll.': 'The backpack is full.',
+  'Der Fluch hält ': 'The curse holds ', ' fest – erst auf der nächsten Ebene löst er sich.': ' tight – it only lets go on the next level.',
   'Verfluchte Truhe': 'Cursed chest', 'Händler': 'Trader', 'Truhe': 'Chest',
   // Meldungen
   'Das Rätsel ist gelöst!': 'The puzzle is solved!',
@@ -219,7 +220,7 @@ const EN: Record<string, string> = {
   'Frosthauch': 'Frost Breath', '10 % Betäubung bei Treffer': '10 % stun on hit', 'Riesenschreck': 'Giant Bane', '+30 % gegen Bosse': '+30 % vs. bosses',
   'Sprengsatz': 'Explosives', '+2 Bomben': '+2 bombs', 'Berserker': 'Berserker', '+2 Angriff, -1 Verteidigung': '+2 attack, -1 defense',
   'Zweiter Atem': 'Second Wind', 'Heilt 1 Leben alle 6 Züge': 'Heals 1 health every 6 turns', 'Glückspilz': 'Lucky', 'Bessere Funde in Truhen': 'Better finds in chests',
-  'Ausdauer': 'Stamina', '+1 Klassenressource pro Sieg': '+1 class resource per kill', 'Henker': 'Executioner', '+50 % Schaden gegen Angeschlagene': '+50 % damage vs. wounded enemies',
+  'Ausdauer': 'Stamina', '+1 Klassenressource pro Sieg': '+1 class resource per kill', 'Henker': 'Executioner', '+25 % Schaden gegen Angeschlagene': '+25 % damage vs. wounded enemies',
   'Spalter': 'Cleaver', 'Angriffe treffen Nachbarn mit 40 %': 'Attacks cleave neighbours for 40 %', 'Kettenblitz': 'Chain Lightning', 'Geschosse springen mit 50 % weiter': 'Bolts chain for 50 %',
   'Durchschuss': 'Piercing Shot', 'Pfeile durchstoßen mit 60 %': 'Arrows pierce for 60 %',
   // Lager

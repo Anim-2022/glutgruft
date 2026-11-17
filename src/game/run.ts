@@ -70,7 +70,7 @@ export type Action =
 
 const FOV_R = 8;
 const cheb = (a: { x: number; y: number }, b: { x: number; y: number }) => Math.max(Math.abs(a.x - b.x), Math.abs(a.y - b.y));
-export const xpNeed = (lvl: number) => 8 + lvl * 6;
+export const xpNeed = (lvl: number) => 10 + lvl * 9;
 export const playerAtk = (p: Player) => p.atk + (p.st.stark ? 3 : 0);
 
 function say(run: Run, s: string) { run.log.push(s); if (run.log.length > 40) run.log.shift(); }
@@ -83,7 +83,8 @@ export function newRun(seed: number, cls: ClassId, meta: Meta): Run {
   const u = (id: string) => meta.upg[id] ?? 0;
   const hp = c.hp + 2 * u('vit');
   const p: Player = {
-    id: 0, kind: cls, name: c.name, x: 0, y: 0, hp, maxHp: hp, atk: c.atk + u('atk'), def: c.def,
+    id: 0, kind: cls, name: c.name, // Schleifstein wirkt nicht beim Magier: sein kleiner Grundangriff würde sonst um zwei Drittel wachsen
+    x: 0, y: 0, hp, maxHp: hp, atk: c.atk + (cls === 'magier' ? 0 : u('atk')), def: c.def,
     st: {}, xp: 0, cd: 0, awake: true,
     cls, lvl: 1, exp: 0, res: c.resStart, resMax: c.resMax + u('fokus'), potions: 1 + u('trank'), bombs: 1 + u('bombe'),
     crit: 0.05, pow: 1, vamp: 0, thorns: 0, soulMul: 1, dir: [1, 0], perks: [], relics: [], hits: 0, gold: 15 * u('gold'), gear: [null, null, null, null], bag: [], keys: 0,
@@ -102,11 +103,12 @@ export function newRun(seed: number, cls: ClassId, meta: Meta): Run {
 
 function spawnMob(run: Run, kind: string, x: number, y: number): Actor {
   const d = MOBS[kind];
-  const s = 1 + 0.34 * (run.floor - 1);
-  const hp = d.boss ? Math.round(d.hp * 1.6) : Math.round(d.hp * s);
+  // Bosse wachsen mit der Tiefe mit, normale Gegner etwas langsamer als früher
+  const s = 1 + 0.30 * (run.floor - 1);
+  const hp = d.boss ? Math.round(d.hp * (1.2 + 0.12 * run.floor)) : Math.round(d.hp * s);
   const m: Actor = {
     id: run.nextId++, kind, name: d.name, x, y, hp, maxHp: hp,
-    atk: d.boss ? d.atk + 3 : d.atk + Math.round(run.floor * 1.0), def: d.def,
+    atk: d.atk + Math.round(run.floor * 0.8), def: d.def,
     st: {}, xp: d.xp, cd: 0, awake: false, boss: d.boss,
   };
   run.mobs.push(m);
@@ -200,7 +202,8 @@ function wear(p: Player, it: Item, sign: 1 | -1) {
   for (const [id, v] of it.aff ?? []) addAff(p, id, sign * v);
 }
 
-export const itemValue = (it: Item) => it.use ? 6 : 5 * (it.rar + 1) * (it.cursed ? 0 : 1) + (it.cursed ? 2 : 0) + (it.aff?.length ?? 0) * 3;
+// Verkaufswert: 60 % des früheren Werts, damit sich kein Goldberg ansammelt
+export const itemValue = (it: Item) => Math.max(1, Math.round(0.6 * (it.use ? 6 : 5 * (it.rar + 1) * (it.cursed ? 0 : 1) + (it.cursed ? 2 : 0) + (it.aff?.length ?? 0) * 3)));
 // Ordnung im Rucksack: nach Platz, nach Seltenheit oder danach, wie viel besser als das Angelegte
 export const SORT_NAMES = ['Platz', 'Seltenheit', 'Verbesserung'];
 function sortBag(p: Player) {
@@ -218,6 +221,7 @@ function takeItem(run: Run, it: Item, from: string) {
   if (it.slot < 4 && !p.gear[it.slot]) {
     wear(p, it, 1);
     p.gear[it.slot] = it;
+    if (it.cursed) it.lock = run.floor;
     how = 'worn';
     say(run, `${from}: ${it.name} angelegt.`);
   } else {
@@ -270,6 +274,13 @@ function useItem(run: Run, i: number): boolean {
   return true;
 }
 
+// Ein verfluchtes Stück lässt sich erst auf der nächsten Ebene wieder ablegen
+function cursedHold(run: Run, it: Item | null): boolean {
+  if (!it?.cursed || it.lock !== run.floor) return false;
+  say(run, `Der Fluch hält ${it.name} fest – erst auf der nächsten Ebene löst er sich.`);
+  return true;
+}
+
 // Rucksack: kostet keinen Zug
 function manage(run: Run, a: Action): boolean {
   const p = run.p;
@@ -277,9 +288,11 @@ function manage(run: Run, a: Action): boolean {
     const it = p.bag[a.i];
     if (!it) return true;
     const cur = p.gear[it.slot];
+    if (cursedHold(run, cur)) return true;
     if (cur) { wear(p, cur, -1); p.bag[a.i] = cur; } else p.bag.splice(a.i, 1);
     wear(p, it, 1);
     p.gear[it.slot] = it;
+    if (it.cursed) it.lock = run.floor;
     delete it.neu;
     sortBag(p);
     say(run, `${it.name} angelegt.`);
@@ -287,7 +300,7 @@ function manage(run: Run, a: Action): boolean {
   }
   if (a.t === 'unequip') {
     const cur = p.gear[a.slot];
-    if (!cur) return true;
+    if (!cur || cursedHold(run, cur)) return true;
     if (p.bag.length >= BAG_MAX) { say(run, 'Der Rucksack ist voll.'); return true; }
     wear(p, cur, -1);
     p.gear[a.slot] = null;
@@ -317,12 +330,12 @@ function manage(run: Run, a: Action): boolean {
 
 function stock(run: Run): Offer[] {
   const f = run.floor, offers: Offer[] = [
-    { kind: 'potion', name: 'Heiltrank', desc: 'Heilt einen großen Teil deines Lebens', price: 12 + f, sold: false },
-    { kind: 'bomb', name: 'Bombe', desc: 'Sprengt Gegner, Wände und Säulen', price: 10 + f, sold: false },
+    { kind: 'potion', name: 'Heiltrank', desc: 'Heilt einen großen Teil deines Lebens', price: 20 + 4 * f, sold: false, left: 3 },
+    { kind: 'bomb', name: 'Bombe', desc: 'Sprengt Gegner, Wände und Säulen', price: 10 + f, sold: false, left: 2 },
   ];
   for (let k = 0; k < 2; k++) {
     const it = genItem(run);
-    offers.push({ kind: 'item', name: it.name, desc: itemText(it), price: 18 + it.rar * 22 + f * 2, sold: false, item: it });
+    offers.push({ kind: 'item', name: it.name, desc: itemText(it), price: Math.round((18 + it.rar * 22 + f * 2) * (it.rar ? 1.2 : 1)), sold: false, item: it });
   }
   const c = genConsumable(run);
   offers.push({ kind: 'item', name: c.name, desc: itemText(c), price: 14 + f, sold: false, item: c });
@@ -331,6 +344,7 @@ function stock(run: Run): Offer[] {
 
 // ---------- Rätselkammern ----------
 
+export const MAX_TRAPS = 3;
 export const RUNE_NAMES = ['Sonne', 'Mond', 'Stern', 'Auge'];
 const has = (p: Player, id: string) => p.relics.includes(id);
 export const skillCost = (p: Player, i: number) => Math.max(1, CLASSES[p.cls].skills[i].cost - (has(p, 'echo') ? 1 : 0) - (p.cls === 'krieger' && i === 0 && p.skillMod[0] === 1 ? 1 : 0) - (p.aff.erz ? 1 : 0));
@@ -589,7 +603,8 @@ function nextFloor(run: Run) {
   const table = spawnTable(run.floor);
   for (let i = 1; i < rooms.length; i++) {
     const r = rooms[i];
-    const n = (bossFloor && r === last) ? 0 : rng.int(1, 2) + Math.floor(run.floor / 5);
+    // auf Boss-Ebenen ein Gegner weniger je Raum
+    const n = (bossFloor && r === last) ? 0 : rng.int(1, 2) + Math.floor(run.floor / 5) - (bossFloor ? 1 : 0);
     for (let k = 0; k < n; k++) {
       const f = freeInRoom(run, r);
       if (f) spawnMob(run, rng.pick(table), f[0], f[1]);
@@ -656,9 +671,9 @@ export function explode(run: Run, x: number, y: number, r = 1) {
     else if (t === T.BARREL) chain.push(i);
     else if (t === T.GRASS) ignite(run, xx, yy);
   }
-  const dmg = 9 + run.floor;
+  const dmg = 6 + Math.round(2.5 * run.floor);
   for (const m of run.mobs.filter(m => Math.abs(m.x - x) <= r && Math.abs(m.y - y) <= r)) damage(run, m, dmg, '#ef7d57');
-  if (!has(p, 'pulverfass') && Math.abs(p.x - x) <= r && Math.abs(p.y - y) <= r) damage(run, p, Math.ceil(dmg / 2), '#b13e53');
+  if (!has(p, 'pulverfass') && Math.abs(p.x - x) <= r && Math.abs(p.y - y) <= r) damage(run, p, Math.ceil(dmg * 0.3), '#b13e53');
   for (const i of chain) if (run.tiles[i] === T.BARREL) burst(run, i);
 }
 
@@ -776,7 +791,7 @@ function kill(run: Run, m: Actor) {
   run.kills++;
   p.exp += m.xp;
   run.souls += Math.max(1, Math.round((m.xp / 3) * p.soulMul));
-  p.gold += Math.ceil((m.xp / 3) * (1 + (p.aff.gold ?? 0) / 100));
+  p.gold += Math.ceil((m.xp / 6) * (1 + (p.aff.gold ?? 0) / 100));
   if (p.aff.ausdauer) gain(p, p.aff.ausdauer);
   if (p.aff.asche && !m.boss) {
     run.fx.push({ k: 'boom', x: m.x, y: m.y, r: 1 });
@@ -796,7 +811,7 @@ function kill(run: Run, m: Actor) {
     p.keys++;
     p.potions++;
     say(run, `${m.name} lässt einen Schlüssel und einen Heiltrank fallen.`);
-  } else if (run.rng.chance(0.08)) {
+  } else if (run.rng.chance(0.04)) {
     p.potions++;
     say(run, `${m.name} lässt einen Heiltrank fallen.`);
   }
@@ -808,7 +823,7 @@ function checkLevel(run: Run) {
   if (run.mode !== 'play' || p.exp < xpNeed(p.lvl)) return;
   p.exp -= xpNeed(p.lvl);
   p.lvl++;
-  p.maxHp += 2;
+  p.maxHp += 3;
   p.hp = Math.min(p.maxHp, p.hp + Math.ceil(p.maxHp * 0.2));
   say(run, `Stufe ${p.lvl} erreicht!`);
   offerPerks(run);
@@ -833,7 +848,7 @@ function applyPerk(run: Run, id: string) {
   const p = run.p;
   if (RELICS[id]) {
     p.relics.push(id);
-    if (id === 'blutpakt') { p.atk += 4; p.maxHp = Math.max(5, p.maxHp - 8); p.hp = Math.min(p.hp, p.maxHp); }
+    if (id === 'blutpakt') { p.atk += 3; p.maxHp = Math.max(5, Math.round(p.maxHp * 0.8)); p.hp = Math.min(p.hp, p.maxHp); }
     say(run, `Reliquie: ${RELICS[id].name}`);
     return;
   }
@@ -858,7 +873,7 @@ function applyPerk(run: Run, id: string) {
     case 'atem': addAff(p, 'regen', 1); break;
     case 'pilz': addAff(p, 'fund', 15); break;
     case 'ausdauer': addAff(p, 'ausdauer', 1); break;
-    case 'henker': addAff(p, 'henker', 50); break;
+    case 'henker': addAff(p, 'henker', 25); break;
     case 'spalter': addAff(p, 'spalt', 40); break;
     case 'kettenblitz': addAff(p, 'kette', 50); break;
     case 'durchschuss': addAff(p, 'stoss', 60); break;
@@ -908,7 +923,7 @@ function openChest(run: Run, i: number) {
     else if (r < 0.38) { p.bombs += 2; say(run, 'Truhe: zwei Bomben.'); }
     else if (r < 0.70) takeItem(run, genItem(run), 'Truhe');
     else if (r < 0.80) takeItem(run, genConsumable(run), 'Truhe');
-    else if (r < 0.92) { const g = Math.round((12 + run.floor * 3) * (1 + (p.aff.gold ?? 0) / 100)); p.gold += g; say(run, `Truhe: ${g} Gold.`); }
+    else if (r < 0.92) { const g = Math.round((8 + run.floor * 2) * (1 + (p.aff.gold ?? 0) / 100)); p.gold += g; say(run, `Truhe: ${g} Gold.`); }
     else { const n = Math.round(10 * p.soulMul); run.souls += n; say(run, `Truhe: ${n} Seelensplitter.`); }
   }
   if (p.aff.midas) p.gold += 10 + run.floor * 2;
@@ -959,14 +974,14 @@ function useSkill(run: Run, i: number): boolean {
       for (let y = t.y - 1; y <= t.y + 1; y++) for (let x = t.x - 1; x <= t.x + 1; x++) ignite(run, x, y, 2);
       for (const m of run.mobs.filter(m => cheb(m, t) <= (mod === 1 ? 2 : 1))) {
         m.st.brand = 2;
-        damage(run, m, (m === t ? 6 + p.lvl * 0.5 : 3) * sp - m.def, '#ef7d57');
+        damage(run, m, (m === t ? atk * 0.8 + p.lvl * 0.3 : 3) * sp - m.def, '#ef7d57');
       }
       if (mod === 2) {
         const o = run.mobs.filter(m => m !== t && run.vis[m.y * W + m.x] && cheb(m, p) <= 7).sort((a, b) => cheb(a, p) - cheb(b, p))[0];
         if (o) {
           run.fx.push({ k: 'bolt', x0: p.x, y0: p.y, x1: o.x, y1: o.y, col: '#ef7d57' });
           o.st.brand = 2;
-          damage(run, o, (6 + p.lvl * 0.5) * sp * 0.6 - o.def, '#ef7d57');
+          damage(run, o, (atk * 0.8 + p.lvl * 0.3) * sp * 0.6 - o.def, '#ef7d57');
         }
       }
       break;
@@ -975,7 +990,7 @@ function useSkill(run: Run, i: number): boolean {
       const ts = around(mod === 1 ? 3 : 2);
       if (!ts.length) return noTarget();
       for (const i of [...run.fire.keys()]) if (cheb({ x: i % W, y: (i / W) | 0 }, p) <= 2) run.fire.delete(i);
-      for (const t of ts) { stun(run, t, L ? 3 : 2); delete t.st.brand; damage(run, t, 3 * sp, '#73eff7'); if (mod === 2 && t.hp > 0) t.st.sproede = 4; }
+      for (const t of ts) { stun(run, t, L ? 2 : 1); delete t.st.brand; damage(run, t, 3 * sp, '#73eff7'); if (mod === 2 && t.hp > 0) t.st.sproede = 4; }
       break;
     }
     case 'magier2': {
@@ -1003,7 +1018,7 @@ function useSkill(run: Run, i: number): boolean {
       const t = nearestMob(run, 8);
       if (!t) return noTarget();
       run.fx.push({ k: 'bolt', x0: p.x, y0: p.y, x1: t.x, y1: t.y, col: '#ffcd75' });
-      playerHit(run, t, atk * 1.9 * sp, mod === 2 && t.hp >= t.maxHp);
+      playerHit(run, t, atk * 1.8 * sp, mod === 2 && t.hp >= t.maxHp);
       if (mod === 1) {
         const b = mobAt(run, t.x + Math.sign(t.x - p.x), t.y + Math.sign(t.y - p.y));
         if (b && b !== t) damage(run, b, atk * 1.1 * sp - b.def, '#ffcd75');
@@ -1018,6 +1033,7 @@ function useSkill(run: Run, i: number): boolean {
         if (!walkable(run.tiles[y * W + x])) break;
         if (!run.traps.some(t => t.x === x && t.y === y)) run.traps.push({ x, y });
       }
+      while (run.traps.length > MAX_TRAPS) run.traps.shift();
       break;
     }
     case 'waldlaeufer2': {
@@ -1084,9 +1100,13 @@ export function act(run: Run, a: Action): void {
       if (!o || o.sold) return;
       if (p.gold < o.price) { say(run, 'Dafür reicht dein Gold nicht.'); return; }
       p.gold -= o.price;
-      if (o.kind === 'potion') p.potions++;
-      else if (o.kind === 'bomb') p.bombs++;
-      else { o.sold = true; takeItem(run, o.item!, 'Händler'); }
+      if (o.kind === 'potion' || o.kind === 'bomb') {
+        if (o.kind === 'potion') p.potions++; else p.bombs++;
+        // begrenzter Vorrat, jedes weitere Stück wird teurer
+        o.left = (o.left ?? (o.kind === 'potion' ? 3 : 2)) - 1;
+        o.price = Math.ceil(o.price * 1.25);
+        if (o.left <= 0) o.sold = true;
+      } else { o.sold = true; takeItem(run, o.item!, 'Händler'); }
     }
     return;
   }
@@ -1183,7 +1203,8 @@ export function act(run: Run, a: Action): void {
       break;
     }
     case 'wait':
-      if (p.cls === 'waldlaeufer') gain(p, 1);
+      // Fokus sammelt sich nur, wenn ein wacher Gegner in Sicht ist
+      if (p.cls === 'waldlaeufer' && run.mobs.some(m => m.awake && run.vis[m.y * W + m.x])) gain(p, 1);
       used = true;
       break;
     case 'shoot': {
@@ -1248,7 +1269,8 @@ function hitPlayer(run: Run, m: Actor, melee: boolean) {
   m.f = Math.abs(p.x - m.x) >= Math.abs(p.y - m.y) ? [Math.sign(p.x - m.x), 0] : [0, Math.sign(p.y - m.y)];
   if (melee) run.fx.push({ k: 'lunge', id: m.id, dx: Math.sign(p.x - m.x), dy: Math.sign(p.y - m.y) });
   if (p.st.dodge || (p.aff.flink && run.rng.chance(Math.min(40, p.aff.flink) / 100))) { run.fx.push({ k: 'num', x: p.x, y: p.y, s: 'verfehlt', col: '#94b0c2' }); if (p.aff.konter) p.st.konter = 1; return; }
-  damage(run, p, Math.max(Math.ceil(m.atk * 0.3), m.atk - p.def - (p.st.wall ? 3 : 0)) - (has(p, 'steinhaut') ? 1 : 0), '#b13e53');
+  const atk = melee ? m.atk : Math.round(m.atk * 0.7); // Fernschüsse treffen schwächer
+  damage(run, p, Math.max(Math.ceil(atk * 0.3), atk - p.def - (p.st.wall ? 3 : 0)) - (has(p, 'steinhaut') ? 1 : 0), '#b13e53');
   run.fx.push({ k: 'shake', n: m.boss ? 5 : 2 });
   if (p.cls === 'krieger') gain(p, 1);
   if (d.poison && run.rng.chance(0.5)) p.st.gift = 4;
@@ -1272,19 +1294,28 @@ function moveMob(run: Run, m: Actor, x: number, y: number) {
 function mobAct(run: Run, m: Actor, dist: Int16Array) {
   const p = run.p, d = MOBS[m.kind];
   if (!m.awake) { if (run.vis[m.y * W + m.x]) m.awake = true; return; }
-  if (d.ai === 'slow' && run.turn % 2) return;
   const man = Math.abs(p.x - m.x) + Math.abs(p.y - m.y);
   if (d.ai === 'boss' && ++m.cd >= 5) {
     m.cd = 0;
     const spots = [[1, 0], [-1, 0], [0, 1], [0, -1]].map(([ox, oy]) => [m.x + ox, m.y + oy]).filter(([x, y]) => isFree(run, x, y));
-    if (spots.length && run.mobs.length < 6) {
+    if (spots.length && run.mobs.filter(o => o !== m && cheb(o, m) <= 6).length < 5) {
       const [x, y] = run.rng.pick(spots);
       spawnMob(run, d.minion!, x, y).awake = true;
       say(run, `${m.name} ruft Verstärkung!`);
       return;
     }
   }
-  if (man === 1) { hitPlayer(run, m, true); return; }
+  if (man === 1) {
+    // Schützen weichen oft einen Schritt zurück, wenn Platz ist
+    if (d.range && run.rng.chance(0.5)) {
+      const back = [[1, 0], [-1, 0], [0, 1], [0, -1]].map(([ox, oy]) => [m.x + ox, m.y + oy]).find(([x, y]) => isFree(run, x, y) && Math.abs(p.x - x) + Math.abs(p.y - y) === 2);
+      if (back) { moveMob(run, m, back[0], back[1]); return; }
+    }
+    // Golems holen nach jedem Schlag einen Zug lang aus
+    if (d.ai === 'slow') { if (m.cd) { m.cd = 0; return; } m.cd = 1; }
+    hitPlayer(run, m, true);
+    return;
+  }
   if (d.range && cheb(m, p) <= d.range && los(run.tiles, m.x, m.y, p.x, p.y)) {
     run.fx.push({ k: 'bolt', x0: m.x, y0: m.y, x1: p.x, y1: p.y, col: '#f4f4f4' });
     hitPlayer(run, m, false);
@@ -1333,6 +1364,8 @@ function endTurn(run: Run) {
   for (const m of run.mobs) if (run.fire.has(m.y * W + m.x)) m.st.brand = Math.max(m.st.brand ?? 0, 2);
   tickDots(run, p);
   if (p.cls === 'magier' && run.turn % 3 === 0) gain(p, 1);
+  // Krieger: Wut wächst, solange ein sichtbarer Gegner direkt daneben steht
+  if (p.cls === 'krieger' && run.mobs.some(m => cheb(m, p) <= 1 && run.vis[m.y * W + m.x])) gain(p, 1);
   const dist = distMap(run.tiles, p.x, p.y);
   computeFov(run.tiles, p.x, p.y, fovR(run), run.vis, run.seen);
   for (const m of [...run.mobs]) {

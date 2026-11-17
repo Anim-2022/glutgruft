@@ -34,19 +34,19 @@ function stepTo(run: Run, goal: (x: number, y: number, i: number) => boolean, av
 
 const shopped = new Set<number>();
 const trail: number[] = [];
-let visitFloor = 0, wander = 0;
+let visitFloor = 0, wander = 0, loops = 0;
 
 export function botAction(run: Run): Action {
   if (run.mode === 'shop') shopped.add(run.floor);
   if (run.turn === 0) shopped.clear();
-  if (run.turn === 0 || visitFloor !== run.floor) { trail.length = 0; wander = 0; visitFloor = run.floor; }
+  if (run.turn === 0 || visitFloor !== run.floor) { trail.length = 0; wander = 0; loops = 0; visitFloor = run.floor; }
   if (wander > 0 && run.mode === 'play') { wander--; const d = DIRS[(wander * 7 + run.turn) % 4]; return { t: 'move', dx: d[0], dy: d[1] }; }
   const a = decide(run);
   // Gegen Pendeln: wechselt der Bot nur noch zwischen zwei Feldern, läuft er kurz ziellos
   if (a.t === 'move' && run.mode === 'play') {
     trail.push(run.p.y * W + run.p.x);
     if (trail.length > 14) trail.shift();
-    if (trail.length === 14 && new Set(trail).size <= 4) { trail.length = 0; wander = 8; }
+    if (trail.length === 14 && new Set(trail).size <= 4) { trail.length = 0; wander = 8 * ++loops; } // jede weitere Schleife auf derselben Ebene: länger umherlaufen
   } else trail.length = 0;
   return a;
 }
@@ -54,7 +54,8 @@ export function botAction(run: Run): Action {
 function decide(run: Run): Action {
   if (run.mode === 'play' && run.p.bag.length) {
     // Rucksack: Besseres anlegen, den Rest verkaufen
-    const i = run.p.bag.findIndex(it => it.slot < 4 && itemScore(it) > itemScore(run.p.gear[it.slot]!));
+    const held = (slot: number) => { const g = run.p.gear[slot]; return !!g?.cursed && g.lock === run.floor; };
+    const i = run.p.bag.findIndex(it => it.slot < 4 && !held(it.slot) && itemScore(it) > itemScore(run.p.gear[it.slot]!));
     if (i >= 0) return { t: 'equip', i };
     const j = run.p.bag.findIndex(it => !it.use);
     if (j >= 0) return { t: 'sell', i: j };
