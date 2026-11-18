@@ -832,6 +832,7 @@ function kill(run: Run, m: Actor) {
   checkLevel(run);
 }
 
+export const TREE_EVERY = 3;
 export function checkLevel(run: Run) {
   const p = run.p;
   if (run.mode !== 'play' || p.exp < xpNeed(p.lvl)) return;
@@ -840,10 +841,11 @@ export function checkLevel(run: Run) {
   p.maxHp += 3;
   p.hp = Math.min(p.maxHp, p.hp + Math.ceil(p.maxHp * 0.2));
   say(run, `Stufe ${p.lvl} erreicht!`);
-  // gerade Stufen: ein Fertigkeitspunkt, ungerade: eine Gabe
-  if (p.lvl % 2 === 0) p.pts++; else run.perkQ++;
+  // jede dritte Stufe (3, 6, 9 …) ein Fertigkeitspunkt, sonst eine Gabe
+  const point = p.lvl % TREE_EVERY === 0;
+  if (point) p.pts++; else run.perkQ++;
   settlePoints(run);
-  if (p.lvl % 2 === 0 && p.pts > 0) run.mode = 'tree';
+  if (point && p.pts > 0) run.mode = 'tree';
   else nextChoice(run);
 }
 

@@ -1,27 +1,39 @@
 // Fertigkeitsbaum, Schritt 2a: Punkte, Gaben im Wechsel, Restpunkt, Spielstände
 import { describe, it, expect } from 'vitest';
 import { defaultMeta, parseMeta } from '../src/core/save';
-import { newRun, act, checkLevel, availableNodes, serialize, deserialize, xpNeed, Run } from '../src/game/run';
+import { newRun, act, checkLevel, availableNodes, serialize, deserialize, xpNeed, Run, TREE_EVERY } from '../src/game/run';
 import { TREE_NODES } from '../src/game/content';
 
 const ALL = TREE_NODES.map(n => n.id);
 function levelUp(run: Run) { run.p.exp = xpNeed(run.p.lvl); checkLevel(run); }
+// bis kurz vor die nächste Punktstufe aufsteigen, die Gaben unterwegs wählen
+function toPointLevel(run: Run) { while ((run.p.lvl + 1) % TREE_EVERY) { levelUp(run); while (run.mode === 'perk') act(run, { t: 'perk', i: 0 }); } levelUp(run); }
 const fresh = () => { const r = newRun(11, 'magier', defaultMeta()); r.mode = 'play'; return r; };
 
 describe('Fertigkeitsbaum', () => {
-  it('gerade Stufe: Punkt und Baum, ungerade Stufe: Gabe', () => {
+  it('jede dritte Stufe: Punkt und Baum, sonst Gabe', () => {
+    expect(TREE_EVERY).toBe(3);
     const run = fresh();
     levelUp(run); // Stufe 2
-    expect(run.p.lvl).toBe(2);
+    expect(run.mode).toBe('perk');
+    expect(run.perkChoices.every(id => !id.startsWith('skill'))).toBe(true);
+    act(run, { t: 'perk', i: 0 });
+    levelUp(run); // Stufe 3
+    expect(run.p.lvl).toBe(3);
     expect(run.mode).toBe('tree');
     expect(run.p.pts).toBe(1);
     act(run, { t: 'learn', id: 'n0_1' });
     expect(run.p.skillLvl[0]).toBe(1);
     expect(run.p.tree).toEqual(['n0_1']);
     expect(run.mode).toBe('play');
-    levelUp(run); // Stufe 3
+    levelUp(run); // Stufe 4
     expect(run.mode).toBe('perk');
-    expect(run.perkChoices.every(id => !id.startsWith('skill'))).toBe(true);
+    act(run, { t: 'perk', i: 0 });
+    levelUp(run); // Stufe 5
+    expect(run.mode).toBe('perk');
+    act(run, { t: 'perk', i: 0 });
+    levelUp(run); // Stufe 6
+    expect(run.mode).toBe('tree');
   });
 
   it('Rang III: A und B schließen sich aus, Voraussetzung ist Rang II', () => {
@@ -43,7 +55,7 @@ describe('Fertigkeitsbaum', () => {
 
   it('„später“ behält den Punkt, der Baum lässt sich wieder öffnen', () => {
     const run = fresh();
-    levelUp(run);
+    toPointLevel(run);
     act(run, { t: 'later' });
     expect(run.mode).toBe('play');
     expect(run.p.pts).toBe(1);
@@ -55,7 +67,8 @@ describe('Fertigkeitsbaum', () => {
     const run = fresh();
     run.p.tree = ALL.filter(id => !id.endsWith('b')); run.p.skillLvl = [2, 2, 2]; run.p.skillMod = [1, 1, 1];
     expect(availableNodes(run)).toEqual([]);
-    levelUp(run); // Stufe 2: Punkt, aber nichts zu lernen
+    run.p.lvl = 2;
+    levelUp(run); // Stufe 3: Punkt, aber nichts zu lernen
     expect(run.mode).toBe('perk');
     expect(run.p.pts).toBe(0);
     expect(run.p.rest).toBe(1);
@@ -66,9 +79,10 @@ describe('Fertigkeitsbaum', () => {
 
   it('Restpunkt: aufgeschobene Punkte werden beim nächsten Aufstieg zu Gaben', () => {
     const run = fresh();
-    levelUp(run); act(run, { t: 'later' });          // Stufe 2: Punkt aufgehoben
+    toPointLevel(run); act(run, { t: 'later' });     // Stufe 3: Punkt aufgehoben
+    const perks = run.p.perks.length;
     run.p.tree = ALL.filter(id => !id.endsWith('b')); // inzwischen ist alles gelernt
-    levelUp(run);                                     // Stufe 3: Gabe + Restpunkt
+    levelUp(run);                                     // Stufe 4: Gabe + Restpunkt
     expect(run.p.rest).toBe(1);
     expect(run.p.pts).toBe(0);
     expect(run.mode).toBe('perk');
@@ -76,7 +90,7 @@ describe('Fertigkeitsbaum', () => {
     expect(run.mode).toBe('perk');                    // zweite Gabe aus dem Restpunkt
     act(run, { t: 'perk', i: 0 });
     expect(run.mode).toBe('play');
-    expect(run.p.perks.length).toBe(2);
+    expect(run.p.perks.length).toBe(perks + 2);
   });
 
   it('Restpunkt: auch beim Öffnen des Baums', () => {
