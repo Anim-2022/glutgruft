@@ -1,0 +1,51 @@
+
+=== neu magier: Median Ebene 10, Siege 16/80, Big hits(>=50%maxHP) 0, One-shots from full 0
+Gold verdient 656/Lauf, ausgegeben 284, Tränke gekauft 3.9, gefunden 19.0, Bomben gekauft 0.0, Gold übrig bei Sieg 1210, Tode mit Boss in Sicht 3
+Eb  n  Tod  Züge  HPverl  Tränke Kills  Gold  Lvl  Atk  MaxHP  maxHit  medHit
+ 1  80   8   313     16   0.72  23.5     0  1.0  3.0    18      7      5
+ 2  72   9   272     20   0.76  21.8    22  3.9  3.9    28      7      6
+ 3  63   6   296     63   2.89  22.6    46  5.8  4.4    35      9      3
+ 4  57   7   307     56   1.89  22.5    67  7.6  4.9    43      9      3
+ 5  50   4   273     69   1.80  23.3    83  9.1  5.6    49     11      4
+ 6  46   2   256     92   2.57  24.9   142 10.8  5.9    56     11      4
+ 7  44   2   247     75   1.57  24.0   135 12.2  6.1    61     10      4
+ 8  42   0   267     88   1.57  26.3   143 13.4  6.3    65     10      4
+ 9  42   1   253    129   2.88  24.3   155 14.7  6.5    70     13      5
+10  41  11   298    180   3.88  28.6   162 15.8  6.8    73     17      7
+11  30   7   426    379   7.00  46.7   269 17.7  7.1    80     17      7
+12  23   3   876    355   5.17  48.0   392 20.6  8.2    91     18      8
+13  19   2   448    284   2.21  52.8   520 22.9  8.7   100     18      7
+14  17   1   475    370   3.53  56.4   674 25.1  9.2   107     20      9
+15  16   0   452    415   4.38  57.5   934 27.3  9.6   115     25     10
+Tod durch: [["skelett",17],["schuetze",11],["schuetze+skelett",5],["golem+schuetze",5],["sporling",3],["schuetze+sporling",3],["glutgeist+schuetze",2],["golem",2]]
+
+=== max magier: Median Ebene 14, Siege 28/80, Big hits(>=50%maxHP) 0, One-shots from full 0
+Gold verdient 1096/Lauf, ausgegeben 623, Tränke gekauft 7.8, gefunden 30.3, Bomben gekauft 0.0, Gold übrig bei Sieg 837, Tode mit Boss in Sicht 3
+Eb  n  Tod  Züge  HPverl  Tränke Kills  Gold  Lvl  Atk  MaxHP  maxHit  medHit
+ 1  80   0   316     17   0.41  25.3    45  1.0  3.0    28      7      5
+ 2  80   0   286     20   0.72  22.9    50  3.9  4.0    39      8      5
+ 3  80   3   284     54   1.48  22.4    62  5.7  4.8    46      9      3
+ 4  77   2   296     56   1.27  22.8    67  7.5  5.7    53      9      3
+ 5  75   1   298     70   1.43  24.9    91  9.0  6.1    58     11      4
+ 6  74   2   266    101   2.61  27.1   152 10.7  6.6    65      9      4
+ 7  72   3   247    105   2.17  25.6   144 12.2  7.1    70     10      5
+ 8  69   1   227     75   1.26  24.2   143 13.5  7.5    75     12      5
+ 9  68   5   255    113   2.01  24.3   138 14.7  7.6    79     13      6
+10  63   3   290    192   3.87  30.3   158 15.8  7.9    84     18      7
+11  60  10   813    436   7.73  49.2   261 17.6  8.1    90     19      6
+12  48   6   487    498   8.63  52.6   289 20.2  8.6    99     19      7
+13  42   2   434    382   4.81  51.1   377 22.8  9.2   108     19      8
+14  40   7   638    457   5.67  48.3   479 24.8  9.3   115     20      8
+15  32   4   477    636   8.66  59.5   583 26.8  9.7   122     26     10
+Tod durch: [["schuetze",16],["golem+schuetze",5],["schuetze+sporling",4],["fuerst+glutgeist",3],["skelett",3],["skelett+sporling",3],["other",2],["schuetze+skelett+sporling",2]]
+
+=== Zusammenfassung (SEEDS=2, BUILD=arkan) ===
+neu magier      Siege 16/80  Median 10  Seelen/Lauf 731  Gaben 9.9  Ränge 3.8  Stufe RangII 7.9 RangIII 10.5  Restpunkt 12 %  Fähigkeiten/Lauf 122.2 / 31.2 / 60.3  Ressource vor Tod 2.1
+max magier      Siege 28/80  Median 14  Seelen/Lauf 1318  Gaben 14.0  Ränge 3.2  Stufe RangII 9.2 RangIII 14.3  Restpunkt 0 %  Fähigkeiten/Lauf 125.1 / 28.2 / 20.4  Ressource vor Tod 1.9
+
+Neue Zauber je Lauf:
+max magier       arkanschild 157.9  flammenwand 9.2
+
+Knoten (Anteil der Läufe):
+neu magier       n0_1 64%  n0_2a 64%  n0_4a 30%  n0_4b 25%  n1_1 53%  n1_2a 53%  n1_4a 20%  n1_4b 18%  n2_1 91%  n2_2a 91%  n2_4a 41%  n2_4b 39%
+max magier       n0_1 71%  n0_2a 71%  n0_2b 16%  n0_3 61%  n0_4a 26%  n0_4b 25%  n0_5 43%  n2_1 100%  n2_2a 100%  n2_2b 84%  n2_3 98%  n2_4a 49%  n2_4b 45%  n2_5 91%

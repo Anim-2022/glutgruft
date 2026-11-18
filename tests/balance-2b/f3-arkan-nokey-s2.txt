@@ -1,0 +1,51 @@
+
+=== neu magier: Median Ebene 10, Siege 16/80, Big hits(>=50%maxHP) 0, One-shots from full 0
+Gold verdient 656/Lauf, ausgegeben 284, Tränke gekauft 3.9, gefunden 19.0, Bomben gekauft 0.0, Gold übrig bei Sieg 1210, Tode mit Boss in Sicht 3
+Eb  n  Tod  Züge  HPverl  Tränke Kills  Gold  Lvl  Atk  MaxHP  maxHit  medHit
+ 1  80   8   313     16   0.72  23.5     0  1.0  3.0    18      7      5
+ 2  72   9   272     20   0.76  21.8    22  3.9  3.9    28      7      6
+ 3  63   6   296     63   2.89  22.6    46  5.8  4.4    35      9      3
+ 4  57   7   307     56   1.89  22.5    67  7.6  4.9    43      9      3
+ 5  50   4   273     69   1.80  23.3    83  9.1  5.6    49     11      4
+ 6  46   2   256     92   2.57  24.9   142 10.8  5.9    56     11      4
+ 7  44   2   247     75   1.57  24.0   135 12.2  6.1    61     10      4
+ 8  42   0   267     88   1.57  26.3   143 13.4  6.3    65     10      4
+ 9  42   1   253    129   2.88  24.3   155 14.7  6.5    70     13      5
+10  41  11   298    180   3.88  28.6   162 15.8  6.8    73     17      7
+11  30   7   426    379   7.00  46.7   269 17.7  7.1    80     17      7
+12  23   3   876    355   5.17  48.0   392 20.6  8.2    91     18      8
+13  19   2   448    284   2.21  52.8   520 22.9  8.7   100     18      7
+14  17   1   475    370   3.53  56.4   674 25.1  9.2   107     20      9
+15  16   0   452    415   4.38  57.5   934 27.3  9.6   115     25     10
+Tod durch: [["skelett",17],["schuetze",11],["schuetze+skelett",5],["golem+schuetze",5],["sporling",3],["schuetze+sporling",3],["glutgeist+schuetze",2],["golem",2]]
+
+=== max magier: Median Ebene 14, Siege 34/80, Big hits(>=50%maxHP) 0, One-shots from full 0
+Gold verdient 1250/Lauf, ausgegeben 691, Tränke gekauft 8.6, gefunden 32.5, Bomben gekauft 0.0, Gold übrig bei Sieg 964, Tode mit Boss in Sicht 2
+Eb  n  Tod  Züge  HPverl  Tränke Kills  Gold  Lvl  Atk  MaxHP  maxHit  medHit
+ 1  80   0   316     17   0.41  25.3    45  1.0  3.0    28      7      5
+ 2  80   0   286     20   0.72  22.9    50  3.9  4.0    39      8      5
+ 3  80   3   284     54   1.48  22.4    62  5.7  4.8    46      9      3
+ 4  77   2   296     56   1.27  22.8    67  7.5  5.7    53      9      3
+ 5  75   1   298     70   1.43  24.9    91  9.0  6.1    58     11      4
+ 6  74   3   271    104   2.65  27.3   152 10.7  6.6    65      9      4
+ 7  71   1   260     94   1.79  25.3   145 12.2  7.1    70     10      5
+ 8  70   3   252     89   1.36  25.6   155 13.5  7.3    75     11      4
+ 9  67   2   290    119   1.96  26.5   145 14.6  7.7    79     11      6
+10  65   6   282    168   3.23  28.9   159 15.9  7.8    84     17      7
+11  59   8   525    472   8.17  52.8   277 17.6  8.0    90     18      6
+12  51   5   500    481   6.69  54.0   358 20.5  8.4   101     19      8
+13  46   2   532    445   4.96  60.4   396 23.0  8.8   109     20      8
+14  44   5   497    462   5.30  55.8   495 25.3  9.2   117     21      9
+15  39   5   449    519   6.10  54.4   679 27.4  9.4   124     25     10
+Tod durch: [["schuetze",16],["golem+schuetze",4],["skelett",3],["other",3],["schuetze+sporling",2],["glutgeist+golem+schuetze+skelett",2],["glutgeist+golem+schuetze",2],["sporling",2]]
+
+=== Zusammenfassung (SEEDS=2, ohne T5, BUILD=arkan) ===
+neu magier      Siege 16/80  Median 10  Seelen/Lauf 731  Gaben 9.9  Ränge 3.8  Stufe RangII 7.9 RangIII 10.5  Restpunkt 12 %  Fähigkeiten/Lauf 122.2 / 31.2 / 60.3  Ressource vor Tod 2.1
+max magier      Siege 34/80  Median 14  Seelen/Lauf 1398  Gaben 14.5  Ränge 3.9  Stufe RangII 12.5 RangIII 13.9  Restpunkt 0 %  Fähigkeiten/Lauf 135.0 / 29.7 / 78.0  Ressource vor Tod 1.7
+
+Neue Zauber je Lauf:
+max magier       arkanschild 130.0  flammenwand 15.3  eislanze 1.9
+
+Knoten (Anteil der Läufe):
+neu magier       n0_1 64%  n0_2a 64%  n0_4a 30%  n0_4b 25%  n1_1 53%  n1_2a 53%  n1_4a 20%  n1_4b 18%  n2_1 91%  n2_2a 91%  n2_4a 41%  n2_4b 39%
+max magier       n0_1 83%  n0_2a 83%  n0_2b 58%  n0_3 74%  n0_4a 33%  n0_4b 31%  n1_1 51%  n1_2a 51%  n1_3 25%  n2_1 100%  n2_2a 100%  n2_2b 91%  n2_3 98%  n2_4a 49%  n2_4b 45%
