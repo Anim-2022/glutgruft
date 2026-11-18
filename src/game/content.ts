@@ -153,7 +153,7 @@ export const NEW_SKILLS: Record<string, SkillDef & { branch: number }> = {
   arkanschild: { name: 'Arkanschild', cost: 4, desc: 'Schild fängt 8 + Stufe Schaden ab, 5 Züge', branch: 2 },
   schildwurf: { name: 'Schildwurf', cost: 7, desc: 'Wurf auf einen Gegner bis 4 Felder', branch: 0 },
   sturmangriff: { name: 'Sturmangriff', cost: 7, desc: 'Sturm bis 4 Felder zum Gegner, schwerer Schlag', branch: 1 },
-  herausforderung: { name: 'Herausforderung', cost: 6, desc: 'Gegner im Umkreis 4 kommen zu dir, Schützen schießen 2 Züge nicht', branch: 2 },
+  herausforderung: { name: 'Herausforderung', cost: 6, desc: 'Gegner im Umkreis 4 kommen zu dir, Schützen schießen 1 Zug nicht', branch: 2 },
 };
 // Stellschrauben des Baums (balance.ts darf sie für Messungen überschreiben):
 // treePtsMax – Fertigkeitspunkte je Lauf, danach gibt es Gaben; kryoMana – Mana je Treffer
@@ -187,7 +187,7 @@ export const NODE_TEXT: Partial<Record<ClassId, Record<string, [string, string]>
     n1_5: ['Klingenrausch', 'Ein Sieg gibt einen freien Zug, höchstens alle 3 Züge'],
     n2_2a: ['Schmerzensgeld', 'Erlittene Nahkampftreffer geben +1 Wut zusätzlich'],
     n2_2b: ['Einschüchterung', 'Kriegsschrei: Gegner im Umkreis 2 haben –1 Angriff, solange er wirkt'],
-    n2_3: ['Herausforderung', 'Neue Fähigkeit, 6 Wut: Gegner im Umkreis 4 kommen zu dir, Schützen schießen 2 Züge nicht'],
+    n2_3: ['Herausforderung', 'Neue Fähigkeit, 6 Wut: Gegner im Umkreis 4 kommen zu dir, Schützen schießen 1 Zug nicht'],
     n2_5: ['Blutzorn', 'Fehlende Wut zahlst du mit Leben (2 je Wut); unter 50 % Leben +30 % Schaden'],
   },
 };

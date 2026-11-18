@@ -79,8 +79,9 @@ describe('Krieger-Baum', () => {
     act(r, { t: 'skill', i: 3 });
     expect(r.p.hp).toBe(hp);
     expect(s.x).toBe(33);
+    expect(s.st.taunt).toBe(1);
     act(r, { t: 'wait' });
-    expect(r.p.hp).toBe(hp);
+    expect(s.st.taunt ?? 0).toBe(0);
   });
 
   it('Schildwall: Warten im Kampf gibt Wut und Schutz', () => {

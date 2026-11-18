@@ -285,8 +285,8 @@ const EN: Record<string, string> = {
   'Klingenrausch': 'Blade Rush', 'Ein Sieg gibt einen freien Zug, höchstens alle 3 Züge': 'A kill grants a free turn, at most every 3 turns', 'Klingenrausch!': 'Blade rush!',
   'Schmerzensgeld': 'Blood Price', 'Erlittene Nahkampftreffer geben +1 Wut zusätzlich': 'Melee hits taken give +1 extra rage',
   'Einschüchterung': 'Intimidate', 'Kriegsschrei: Gegner im Umkreis 2 haben –1 Angriff, solange er wirkt': 'War Cry: enemies within 2 have –1 attack while it lasts',
-  'Herausforderung': 'Challenge', 'Neue Fähigkeit, 6 Wut: Gegner im Umkreis 4 kommen zu dir, Schützen schießen 2 Züge nicht': 'New skill, 6 rage: enemies within 4 come to you, archers do not shoot for 2 turns',
-  'Gegner im Umkreis 4 kommen zu dir, Schützen schießen 2 Züge nicht': 'Enemies within 4 come to you, archers do not shoot for 2 turns', 'Herausforderung!': 'Challenge!',
+  'Herausforderung': 'Challenge', 'Neue Fähigkeit, 6 Wut: Gegner im Umkreis 4 kommen zu dir, Schützen schießen 1 Zug nicht': 'New skill, 6 rage: enemies within 4 come to you, archers do not shoot for 1 turn',
+  'Gegner im Umkreis 4 kommen zu dir, Schützen schießen 1 Zug nicht': 'Enemies within 4 come to you, archers do not shoot for 1 turn', 'Herausforderung!': 'Challenge!',
   'Blutzorn': 'Blood Rage', 'Fehlende Wut zahlst du mit Leben (2 je Wut); unter 50 % Leben +30 % Schaden': 'Missing rage is paid with life (2 per rage); below 50 % life +30 % damage',
   'Neue Fähigkeit: ': 'New skill: ', 'Fähigkeiten (4–6: neue aus dem Baum)': 'Skills (4–6: new ones from the tree)',
   // Lehrgang

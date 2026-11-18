@@ -1275,7 +1275,7 @@ function castSpell(run: Run, id: string): boolean {
   if (id === 'herausforderung') {
     const ts = run.mobs.filter(m => cheb(m, p) <= 4 && run.vis[m.y * W + m.x]);
     if (!ts.length) { say(run, 'Kein Ziel in Reichweite.'); return false; }
-    for (const m of ts) { m.awake = true; m.st.taunt = 3; }
+    for (const m of ts) { m.awake = true; m.st.taunt = 2; } // Schützen schweigen einen Zug
     say(run, 'Herausforderung!');
     return true;
   }
