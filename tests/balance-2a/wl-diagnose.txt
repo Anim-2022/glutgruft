@@ -1,0 +1,16 @@
+Waldläufer neu, Code "2a + Bot + jede dritte Stufe", 3 Seed-Sätze × 80
+Tode: 238 von 240
+Ebene des Todes: 1:31 2:23 3:27 4:20 5:57 6:10 7:6 8:1 9:8 10:27 11:17 12:5 13:5 14:1
+Top-5 Ursachen: Skelett 73, König+Skelett 31, Schütze 27, Mutter+Sporling 19, Ratte+Skelett 11
+3 Züge vor dem Tod: HP 15,1 → 11,4 → 5,7 (max 54,1); Fokus 1,1 → 1,1 → 1,1 (max 9,5)
+Im letzten Kampf: Ausweichrolle 0,5, Falle 0,3; 67 % der Todeskämpfe ohne Rolle
+Ebene 1–5 je Kampfzug (ausgeteilt / erlitten / Gegner daneben / Abstand):
+  Waldläufer 3,34 / 0,65 / 23 % / 3,22
+  Krieger    3,37 / 0,59 / 38 % / 2,65
+  Magier     3,29 / 0,46 / 16 % / 3,32
+Bot-Varianten (Siege neu | max, Mittel über 3 Sätze):
+  aktuelle Regeln          0,7 | 23,7
+  ohne Falle/Rolle-Regeln  1,7 | 28,3
+  Rolle nur unter 60 % HP  1,0 | 22,7
+  Falle nur mit Fokus-Rest 0,7 | 22,7
+Leben (Siege neu | max): 22 → 0,7 | 23,7; 26 → 1,0 | 24,0; 32 → 2,7 | 25,0 (Krieger/Magier bitgleich)
