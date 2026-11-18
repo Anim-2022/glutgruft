@@ -1,9 +1,10 @@
 // Balance-Telemetrie: npm run balance
 // Umgebung: N (Seeds je Zelle, 40), SEEDS=0,1,2 (Sätze), BUILD=heur,eis,eis-nokey (Varianten; -nokey ohne T5),
+// Stellschrauben je Variante: BUILD=heur:treePtsMax=6:kryoRegen=0.75 (siehe TUNE in content.ts)
 // CLASS=magier (CLS geht auch), META=neu|max, PAR (Prozesse, Vorgabe Kerne − 1; 1 = alles hier nacheinander)
 import { defaultMeta } from '../src/core/save';
 import { newRun, act, Run, playerAtk, spellAt } from '../src/game/run';
-import { CLASS_ORDER, MOBS, treeNodes, ClassId } from '../src/game/content';
+import { CLASS_ORDER, MOBS, treeNodes, ClassId, TUNE } from '../src/game/content';
 import { botAction, setBuild, Build } from './bot';
 
 type Proc = { env: Record<string, string | undefined>; argv: string[]; execPath: string; stdout: { write(s: string): void }; getBuiltinModule(n: string): unknown };
@@ -21,7 +22,11 @@ type F = { turns: number; hpLost: number; potUsed: number; kills: number; goldIn
 type Cell = { variant: string; set: number; mname: string; cls: ClassId };
 type Result = { out: string[]; sum: string; su: Record<string, number>; freq: Record<string, number> };
 
-function runCell({ variant, set, mname, cls }: Cell): Result {
+const TUNE0 = { ...TUNE };
+function runCell({ variant: full, set, mname, cls }: Cell): Result {
+  const [variant, ...tunes] = full.split(':');
+  Object.assign(TUNE, TUNE0);
+  for (const t of tunes) { const [k, v] = t.split('='); (TUNE as Record<string, number>)[k] = +v; }
   const nokey = variant.endsWith('-nokey');
   setBuild(variant.replace('-nokey', '') as Build);
   const meta = mname === 'max' ? metaMax : defaultMeta();
@@ -132,7 +137,8 @@ runAll().then(res => {
   for (const variant of VARIANTS) for (const set of SETS) {
     const idx = cells.map((c, i) => [c, i] as const).filter(([c]) => c.variant === variant && c.set === set);
     for (const [, i] of idx) for (const l of res[i].out) console.log(l);
-    console.log(`\n=== Zusammenfassung (SEEDS=${set}${variant.endsWith('-nokey') ? ', ohne T5' : ''}, BUILD=${variant.replace('-nokey', '')}) ===`);
+    const [vb, ...vt] = variant.split(':');
+    console.log(`\n=== Zusammenfassung (SEEDS=${set}${vb.endsWith('-nokey') ? ', ohne T5' : ''}, BUILD=${vb.replace('-nokey', '')}${vt.length ? ', ' + vt.join(', ') : ''}) ===`);
     for (const [, i] of idx) console.log(res[i].sum);
     console.log('\nNeue Zauber je Lauf:');
     for (const [c, i] of idx) if (Object.keys(res[i].su).length) console.log(`${c.mname} ${c.cls}`.padEnd(16), Object.entries(res[i].su).map(([id, n]) => `${id} ${(n / N).toFixed(1)}`).join('  '));

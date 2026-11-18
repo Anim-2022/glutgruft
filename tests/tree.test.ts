@@ -2,7 +2,7 @@
 import { describe, it, expect } from 'vitest';
 import { defaultMeta, parseMeta } from '../src/core/save';
 import { newRun, act, checkLevel, availableNodes, serialize, deserialize, xpNeed, Run, TREE_EVERY } from '../src/game/run';
-import { treeNodes } from '../src/game/content';
+import { treeNodes, TUNE } from '../src/game/content';
 
 const ALL = treeNodes('krieger').map(n => n.id);
 function levelUp(run: Run) { run.p.exp = xpNeed(run.p.lvl); checkLevel(run); }
@@ -34,6 +34,25 @@ describe('Fertigkeitsbaum', () => {
     act(run, { t: 'perk', i: 0 });
     levelUp(run); // Stufe 6
     expect(run.mode).toBe('tree');
+  });
+
+  it('höchstens TUNE.treePtsMax Punkte je Lauf, danach Gaben', () => {
+    const keep = TUNE.treePtsMax;
+    TUNE.treePtsMax = 1;
+    try {
+      const run = fresh();
+      toPointLevel(run); // Stufe 3: erster Punkt
+      expect(run.mode).toBe('tree');
+      expect(run.p.ptsGot).toBe(1);
+      act(run, { t: 'learn', id: 'n0_1' });
+      const perks = run.p.perks.length;
+      toPointLevel(run); // Stufe 6: Grenze erreicht → Gabe statt Punkt
+      expect(run.mode).toBe('perk');
+      expect(run.p.pts).toBe(0);
+      expect(run.p.ptsGot).toBe(1);
+      act(run, { t: 'perk', i: 0 });
+      expect(run.p.perks.length).toBe(perks + 3); // Stufen 4, 5 und 6
+    } finally { TUNE.treePtsMax = keep; }
   });
 
   it('Rang III: A und B schließen sich aus, Voraussetzung ist Rang II', () => {

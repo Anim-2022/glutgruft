@@ -2,7 +2,7 @@ import { RNG } from '../core/rng';
 import type { Meta } from '../core/save';
 import { W, H, T, Room, genDungeon, center, walkable, opaque, los, computeFov, distMap } from './dungeon';
 import { VS, CRATE_TEMPLATES, mirror, genIce, slide } from './puzzles';
-import { CLASSES, ClassId, MOBS, PERKS, RELICS, Item, Offer, AFFIX, CONSUMABLES, UNIQUES, ULT, ULT_LEVEL, SKILL_UP, SYNERGIES, NEW_SKILLS, KRYO_MANA, KRYO_REGEN, treeNodes, treeNode, treePool, nodeText, BOSS_BY_BIOME, BIOME_NAMES, FLOORS_PER_BIOME, LAST_FLOOR, biomeOf, spawnTable } from './content';
+import { CLASSES, ClassId, MOBS, PERKS, RELICS, Item, Offer, AFFIX, CONSUMABLES, UNIQUES, ULT, ULT_LEVEL, SKILL_UP, SYNERGIES, NEW_SKILLS, TUNE, treeNodes, treeNode, treePool, nodeText, BOSS_BY_BIOME, BIOME_NAMES, FLOORS_PER_BIOME, LAST_FLOOR, biomeOf, spawnTable } from './content';
 
 export interface Actor {
   id: number; kind: string; name: string;
@@ -30,6 +30,7 @@ export interface Player extends Actor {
   resAcc?: number;             // angesammelte Bruchteile aus fokusOnHit
   spells?: string[];           // neue Zauber aus dem Baum, Plätze 4–6
   shield?: number;             // Arkanschild: verbleibender Schutz
+  ptsGot?: number;             // bisher erhaltene Fertigkeitspunkte (Grenze TUNE.treePtsMax)
 }
 
 export interface Puzzle {
@@ -766,8 +767,8 @@ function damage(run: Run, dst: Actor, amt: number, col = '#f4f4f4', crit = false
     if (!p.shield) delete p.st.schild;
     if (amt <= 0) { run.fx.push({ k: 'num', x: p.x, y: p.y, s: 'Schild', col: '#9a4fc0' }); return; }
   }
-  // Kryomant: Treffer gegen Betäubte und Bosse geben Mana (KRYO_MANA)
-  if (dst !== p && playerActing && p.cls === 'magier' && hasNode(p, 'n1_5') && (dst.st.stun || dst.boss)) gain(p, KRYO_MANA);
+  // Kryomant: Treffer gegen Betäubte und Bosse geben Mana (TUNE.kryoMana)
+  if (dst !== p && playerActing && p.cls === 'magier' && hasNode(p, 'n1_5') && (dst.st.stun || dst.boss)) gain(p, TUNE.kryoMana);
   dst.hp -= amt;
   run.fx.push({ k: 'flash', id: dst.id });
   run.fx.push({ k: 'num', x: dst.x, y: dst.y, s: crit ? `${amt}!` : `${amt}`, col: crit ? '#ffcd75' : col });
@@ -897,8 +898,9 @@ export function checkLevel(run: Run) {
   p.hp = Math.min(p.maxHp, p.hp + Math.ceil(p.maxHp * 0.2));
   say(run, `Stufe ${p.lvl} erreicht!`);
   // jede dritte Stufe (3, 6, 9 …) ein Fertigkeitspunkt, sonst eine Gabe
-  const point = p.lvl % TREE_EVERY === 0;
-  if (point) p.pts++; else run.perkQ++;
+  // höchstens TUNE.treePtsMax Punkte je Lauf, danach Gaben
+  const point = p.lvl % TREE_EVERY === 0 && (p.ptsGot ?? 0) < TUNE.treePtsMax;
+  if (point) { p.pts++; p.ptsGot = (p.ptsGot ?? 0) + 1; } else run.perkQ++;
   settlePoints(run);
   if (point && p.pts > 0) run.mode = 'tree';
   else nextChoice(run);
@@ -1560,7 +1562,7 @@ function endTurn(run: Run) {
   if (run.fire.has(p.y * W + p.x)) p.st.brand = Math.max(p.st.brand ?? 0, 2);
   for (const m of run.mobs) if (run.fire.has(m.y * W + m.x)) m.st.brand = Math.max(m.st.brand ?? 0, burnT(p, 2));
   tickDots(run, p);
-  if (p.cls === 'magier' && run.turn % (hasNode(p, 'n1_5') ? Math.round(3 / KRYO_REGEN) : 3) === 0) gain(p, 1); // Kryomant: langsamere Erholung
+  if (p.cls === 'magier' && run.turn % (hasNode(p, 'n1_5') ? Math.round(3 / TUNE.kryoRegen) : 3) === 0) gain(p, 1); // Kryomant: langsamere Erholung
   // Krieger: Wut wächst, solange ein sichtbarer Gegner direkt daneben steht
   if (p.cls === 'krieger' && run.mobs.some(m => cheb(m, p) <= 1 && run.vis[m.y * W + m.x])) gain(p, 1);
   const dist = distMap(run.tiles, p.x, p.y);
@@ -1634,6 +1636,7 @@ function migrateRun(o: { p: Player; pool?: string[]; perkQ?: number }) {
   const p = o.p;
   if (!p.tree) p.tree = nodesFromRanks(p.skillLvl, p.skillMod);
   p.pts ??= 0;
+  p.ptsGot ??= Math.floor(p.lvl / TREE_EVERY);
   p.rest ??= 0;
   o.pool ??= treeNodes(p.cls).filter(n => n.cost === 0).map(n => n.id);
   o.perkQ ??= 0;

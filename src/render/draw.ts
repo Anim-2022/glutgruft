@@ -7,7 +7,7 @@ import { drawItemIcon, drawIcon, PERK_ICON } from './icons';
 import { sfx } from '../core/audio';
 import { tr } from '../core/i18n';
 import { Run, Actor, xpNeed, skillCost, skillReady, spellAt, itemText, itemValue, itemScore, perkInfo, skillModName, shotRange, RANKS, SORT_NAMES, BAG_MAX, RUNE_NAMES, availableNodes } from '../game/run';
-import { ClassId, treeNodes, NEW_SKILLS, BRANCH_NAMES, SKILL_UP, treeNode, nodeText, CLASSES, MOBS, PERKS, RELICS, RARITY, RARITY_COL, BIOME_NAMES, biomeOf, Item, AFFIX, CONSUMABLES, SLOT_NAMES, ULT, ULT_LEVEL, USE_ORDER, SYNERGIES } from '../game/content';
+import { ClassId, treeNodes, NEW_SKILLS, TUNE, BRANCH_NAMES, SKILL_UP, treeNode, nodeText, CLASSES, MOBS, PERKS, RELICS, RARITY, RARITY_COL, BIOME_NAMES, biomeOf, Item, AFFIX, CONSUMABLES, SLOT_NAMES, ULT, ULT_LEVEL, USE_ORDER, SYNERGIES } from '../game/content';
 
 const pos = new Map<number, { x: number; y: number }>();
 const lunges = new Map<number, { dx: number; dy: number; t: number }>();
@@ -1185,7 +1185,7 @@ function treeOverlay(ctx: CanvasRenderingContext2D, run: Run) {
   const stateOf = (id: string): TreeState => p.tree.includes(id) ? 'learned' : av.includes(id) ? 'open' : 'locked';
   drawTree(ctx, p.cls, `STUFE ${p.lvl} – FERTIGKEITSPUNKT (${p.pts} frei)`, stateOf,
     id => ({ learned: 'gelernt', open: 'wählbar', locked: run.pool.includes(id) ? 'gesperrt' : 'erst im Lager' } as Record<string, string>)[stateOf(id)],
-    'Pfeile: wählen · ENTER: lernen · K: später',
+    `Punkte: ${p.ptsGot ?? 0}/${TUNE.treePtsMax} · Pfeile: wählen · ENTER: lernen · K: später`,
     id => {
       const st = stateOf(id), n = treeNode(p.cls, id)!;
       if (st !== 'locked') return st === 'learned' ? 'Schon gelernt.' : 'Kann jetzt gelernt werden.';

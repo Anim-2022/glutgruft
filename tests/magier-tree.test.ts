@@ -3,7 +3,7 @@ import { describe, it, expect } from 'vitest';
 import { defaultMeta } from '../src/core/save';
 import { newRun, act, availableNodes, Run, Actor, skillCost } from '../src/game/run';
 import { W, H, T, computeFov } from '../src/game/dungeon';
-import { MOBS, treeNodes, treePool, NODE_TEXT, NEW_SKILLS, KRYO_MANA, KRYO_REGEN } from '../src/game/content';
+import { MOBS, treeNodes, treePool, NODE_TEXT, NEW_SKILLS, TUNE } from '../src/game/content';
 import { tr, setLang } from '../src/core/i18n';
 
 function arena(meta = defaultMeta()): Run {
@@ -89,18 +89,18 @@ describe('Magier-Baum', () => {
     void s;
   });
 
-  it('Kryomant: halbe Mana-Erholung, Mana je Treffer gegen Bosse und Betäubte', () => {
+  it('Kryomant: langsamere Mana-Erholung, Mana je Treffer gegen Bosse und Betäubte', () => {
     const r = arena(allPaid()); learn(r, 'n1_1', 'n1_2a', 'n1_4a', 'n1_2b', 'n1_5');
     r.p.res = 5;
     const t0 = r.turn;
     for (let k = 0; k < 30; k++) act(r, { t: 'wait' });
-    const per = Math.round(3 / KRYO_REGEN), gained = Math.floor((r.turn) / per) - Math.floor(t0 / per);
+    const per = Math.round(3 / TUNE.kryoRegen), gained = Math.floor((r.turn) / per) - Math.floor(t0 / per);
     expect(r.p.res).toBe(5 + gained);
-    expect(gained).toBe(5); // halb so viel wie die üblichen 10 in 30 Zügen
+    expect(gained).toBeLessThan(10); // weniger als die üblichen 10 in 30 Zügen
     r.p.res = 5;
     const b = mob(r, 'koenig', 33, 6); b.hp = b.maxHp = 999;
     act(r, { t: 'shoot' });
-    expect(r.p.res).toBe(5 + KRYO_MANA);
+    expect(r.p.res).toBe(5 + TUNE.kryoMana);
   });
 
   it('Zeitriss: Blinzeln kostet keinen Zug, nie zwei Aktionen hintereinander ohne Gegnerzug', () => {
