@@ -4,21 +4,27 @@ export interface Meta {
   ranger: boolean;
   best: number;
   daily: { date: number; best: number };
+  tree: Record<string, string[]>; // je Klasse: im Lager freigeschaltete Knoten des Fertigkeitsbaums
 }
 
 const KEY = 'glutgruft.v1';
 
 export function defaultMeta(): Meta {
-  return { souls: 0, upg: { vit: 0, atk: 0, trank: 0, fokus: 0, gold: 0, bombe: 0, fund: 0, wahl: 0, erbe: 0 }, ranger: false, best: 0, daily: { date: 0, best: 0 } };
+  return { souls: 0, upg: { vit: 0, atk: 0, trank: 0, fokus: 0, gold: 0, bombe: 0, fund: 0, wahl: 0, erbe: 0 }, ranger: false, best: 0, daily: { date: 0, best: 0 }, tree: { krieger: [], magier: [], waldlaeufer: [] } };
+}
+
+// Ältere Stände ohne neue Felder bekommen die Vorgaben
+export function parseMeta(raw: string): Meta {
+  const d = defaultMeta();
+  const m = JSON.parse(raw);
+  return { ...d, ...m, upg: { ...d.upg, ...(m.upg || {}) }, daily: { ...d.daily, ...(m.daily || {}) }, tree: { ...d.tree, ...(m.tree || {}) } };
 }
 
 export function loadMeta(): Meta {
   try {
     const raw = localStorage.getItem(KEY);
     if (!raw) return defaultMeta();
-    const d = defaultMeta();
-    const m = JSON.parse(raw);
-    return { ...d, ...m, upg: { ...d.upg, ...(m.upg || {}) }, daily: { ...d.daily, ...(m.daily || {}) } };
+    return parseMeta(raw);
   } catch {
     return defaultMeta();
   }

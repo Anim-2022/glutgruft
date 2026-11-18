@@ -1,12 +1,12 @@
 import { drawIcon, UPG_ICON } from './render/icons';
 import { VW, VH, bake, sprites, tilesets, text, panel, wrap, figure } from './render/gfx';
 import { getLang, setLang } from './core/i18n';
-import { drawRun, resetView, setMouse, toggleMap, setTutorial, tileAt, getOverlay, setOverlay, invMove, invAction, invDrop, lootIndex, lootDone } from './render/draw';
+import { drawRun, drawTree, treeMove, treeFocus, treeCursor, resetView, setMouse, toggleMap, setTutorial, tileAt, getOverlay, setOverlay, invMove, invAction, invDrop, lootIndex, lootDone } from './render/draw';
 import { sfx, soundOn, toggleSound, wakeAudio } from './core/audio';
 import { loadMeta, saveMeta } from './core/save';
 import { W } from './game/dungeon';
-import { newRun, act, serialize, deserialize, Run, Action } from './game/run';
-import { CLASSES, CLASS_ORDER, UPGRADES, RANGER_COST, upgCost, LAST_FLOOR, USE_ORDER } from './game/content';
+import { newRun, act, serialize, deserialize, availableNodes, Run, Action } from './game/run';
+import { CLASSES, CLASS_ORDER, UPGRADES, RANGER_COST, upgCost, LAST_FLOOR, USE_ORDER, treeNode } from './game/content';
 
 const cv = document.getElementById('c') as HTMLCanvasElement;
 const ctx = cv.getContext('2d')!;
@@ -23,11 +23,11 @@ addEventListener('resize', resize);
 resize();
 bake();
 
-let scene: 'title' | 'lager' | 'run' = 'title';
+let scene: 'title' | 'lager' | 'baum' | 'run' = 'title';
 const meta = loadMeta();
 let run: Run | null = null;
 let row = 0, clsIdx = 0, note = '', noteT = 0;
-const ROWS = 3 + UPGRADES.length; // Klasse, Upgrades..., Tageslauf, Start
+const ROWS = 4 + UPGRADES.length; // Klasse, Fertigkeitsbaum, Upgrades..., Tageslauf, Start
 const RUN_KEY = 'glutgruft.lauf';
 const today = () => { const d = new Date(); return d.getFullYear() * 10000 + (d.getMonth() + 1) * 100 + d.getDate(); };
 
@@ -105,6 +105,20 @@ function onKey(k: string): boolean {
     if (k === 'l') { setLang(getLang() === 'de' ? 'en' : 'de'); return true; }
     return false;
   }
+  if (scene === 'baum') {
+    const mv = MOVES[k], cls = CLASS_ORDER[clsIdx];
+    if (mv) { treeMove(mv[0], mv[1]); return true; }
+    if (k === 'escape' || k === 'backspace') { scene = 'lager'; return true; }
+    if (k === 'enter') {
+      const n = treeNode(treeCursor())!, own = meta.tree[cls] ?? [];
+      if (!n.cost || own.includes(n.id)) flash(n.cost ? 'Schon freigeschaltet.' : 'Immer verfügbar.');
+      else if (n.parent && treeNode(n.parent)!.cost && !own.includes(n.parent)) flash('Erst den vorigen Knoten freischalten.');
+      else if (meta.souls < n.cost) flash('Nicht genug Seelensplitter.');
+      else { meta.souls -= n.cost; meta.tree[cls] = [...own, n.id]; saveMeta(meta); }
+      return true;
+    }
+    return false;
+  }
   if (scene === 'lager') {
     const mv = MOVES[k];
     if (mv) {
@@ -122,10 +136,11 @@ function onKey(k: string): boolean {
           if (meta.souls >= RANGER_COST) { meta.souls -= RANGER_COST; meta.ranger = true; saveMeta(meta); flash('Waldläufer freigeschaltet!'); }
           else flash('Nicht genug Seelensplitter.');
         }
-      } else if (row === ROWS - 1) startRun();
+      } else if (row === 1) { scene = 'baum'; treeFocus('n0_1'); }
+      else if (row === ROWS - 1) startRun();
       else if (row === ROWS - 2) startRun(true);
       else {
-        const u = UPGRADES[row - 1], lvl = meta.upg[u.id] ?? 0;
+        const u = UPGRADES[row - 2], lvl = meta.upg[u.id] ?? 0;
         if (lvl >= u.max) flash('Bereits auf höchster Stufe.');
         else if (meta.souls < upgCost(u, lvl)) flash('Nicht genug Seelensplitter.');
         else { meta.souls -= upgCost(u, lvl); meta.upg[u.id] = lvl + 1; saveMeta(meta); }
@@ -141,6 +156,11 @@ function onKey(k: string): boolean {
   }
   let a: Action | null = null;
   if (run.mode === 'perk') { if (k >= '1' && k <= '4') a = { t: 'perk', i: +k - 1 }; }
+  else if (run.mode === 'tree') {
+    if (MOVES[k]) { treeMove(MOVES[k][0], MOVES[k][1]); return true; }
+    if (k === 'enter' || k === ' ') a = { t: 'learn', id: treeCursor() };
+    else if (k === 'k' || k === 'escape') a = { t: 'later' };
+  }
   else if (run.mode === 'shop') {
     if (k >= '1' && k <= '9') a = { t: 'buy', i: +k - 1 };
     else if (k === ' ' || k === 'escape' || k === 'enter') a = { t: 'leave' };
@@ -155,6 +175,7 @@ function onKey(k: string): boolean {
   else if (MOVES[k]) a = { t: 'move', dx: MOVES[k][0], dy: MOVES[k][1] };
   else if (k === ' ' || k === '.') a = { t: 'wait' };
   else if (k === 'f') a = { t: 'shoot' };
+  else if (k === 'k') a = { t: 'tree' };
   else if (k === 'q') a = { t: 'potion' };
   else if (k === 'b') a = { t: 'bomb' };
   else if (k === 'e' || k === 'enter') a = { t: 'descend' };
@@ -165,10 +186,12 @@ function onKey(k: string): boolean {
   const before: string = run.mode, solved = !!run.puzzle?.solved, items = run.p.potions + run.p.bombs;
   act(run, a);
   const mode: string = run.mode;
+  // Baum: Auswahl auf den ersten lernbaren Knoten setzen
+  if (mode === 'tree' && (before !== 'tree' || !availableNodes(run).includes(treeCursor()))) { const av = availableNodes(run); if (av.length) treeFocus(av[0]); }
   if (mode !== before) {
     if (mode === 'dead') sfx('death');
     else if (mode === 'win' || (mode === 'perk' && !solved && run.puzzle?.solved)) sfx('solve');
-    else if (mode === 'perk') sfx('level');
+    else if (mode === 'perk' || mode === 'tree') sfx('level');
   } else if (run.p.potions + run.p.bombs > items) sfx('pick');
   storeRun();
   return true;
@@ -327,6 +350,11 @@ function drawLager(time: number, dt: number) {
     text(ctx, s.desc, 66, y + 13, '#94b0c2', 8);
     text(ctx, `${s.cost} ${c.resName}`, 298, y + 2, c.resCol, 8, 'right');
   });
+  // Fertigkeitsbaum der gewählten Klasse
+  const tsel = row === 1;
+  panel(ctx, 24, 315, 286, 16, tsel ? '#ffcd75' : '#566c86', tsel ? 'rgba(60,50,40,0.9)' : 'rgba(13,14,23,0.88)');
+  text(ctx, 'Fertigkeitsbaum', 34, 319, tsel ? '#ffcd75' : '#f4f4f4', 8);
+  text(ctx, `${(meta.tree[id] ?? []).length} freigeschaltet · ENTER`, 300, 319, '#94b0c2', 8, 'right');
   if (lock) {
     panel(ctx, 60, 96, 214, 36, '#b13e53', 'rgba(13,14,23,0.95)');
     text(ctx, 'GESPERRT', 167, 102, '#b13e53', 10, 'center');
@@ -336,7 +364,7 @@ function drawLager(time: number, dt: number) {
   const ux = 330, uw = VW - ux - 24;
   text(ctx, 'VERBESSERUNGEN', ux + 2, 58, '#94b0c2', 8);
   UPGRADES.forEach((u, i) => {
-    const y = 70 + i * 19, sel = row === i + 1, lvl = meta.upg[u.id] ?? 0, max = lvl >= u.max;
+    const y = 70 + i * 19, sel = row === i + 2, lvl = meta.upg[u.id] ?? 0, max = lvl >= u.max;
     panel(ctx, ux, y, uw, 16, sel ? '#ffcd75' : '#566c86', sel ? 'rgba(60,50,40,0.9)' : 'rgba(13,14,23,0.88)');
     drawIcon(ctx, UPG_ICON[u.id], ux + 5, y + 4, sel ? '#ffcd75' : '#94b0c2');
     text(ctx, u.name, ux + 18, y + 4, sel ? '#ffcd75' : '#f4f4f4', 8);
@@ -345,7 +373,7 @@ function drawLager(time: number, dt: number) {
     if (!max) ctx.drawImage(sprites.soul, ux + uw - 24 - `${upgCost(u, lvl)}`.length * 6, y + 2);
   });
   const ly = 70 + UPGRADES.length * 19 + 2;
-  if (row >= 1 && row <= UPGRADES.length) text(ctx, UPGRADES[row - 1].desc, ux + 2, ly, '#94b0c2', 8);
+  if (row >= 2 && row <= UPGRADES.length + 1) text(ctx, UPGRADES[row - 2].desc, ux + 2, ly, '#94b0c2', 8);
   const dy = ly + 13, dsel = row === ROWS - 2, dbest = meta.daily.date === today() ? meta.daily.best : 0;
   panel(ctx, ux, dy, uw, 26, dsel ? '#ffcd75' : '#566c86');
   text(ctx, 'Tageslauf', ux + 10, dy + 4, dsel ? '#ffcd75' : '#f4f4f4', 10);
@@ -361,12 +389,24 @@ function drawLager(time: number, dt: number) {
   text(ctx, 'Pfeile: wählen · ENTER: kaufen/bestätigen · LEERTASTE: Abstieg · V: Vollbild · M: Ton', VW / 2, 336, '#566c86', 8, 'center');
 }
 
+function drawLagerTree(time: number, dt: number) {
+  backdrop(time, dt);
+  const cls = CLASS_ORDER[clsIdx], own = meta.tree[cls] ?? [];
+  const stateOf = (id: string) => { const n = treeNode(id)!; return !n.cost ? 'free' : own.includes(id) ? 'owned' : meta.souls >= n.cost ? 'open' : 'buy'; };
+  drawTree(ctx, cls, `FERTIGKEITSBAUM – ${CLASSES[cls].name.toUpperCase()}`, stateOf,
+    id => { const n = treeNode(id)!; return !n.cost ? 'immer offen' : own.includes(id) ? 'freigeschaltet' : `${n.cost} Splitter`; },
+    `Pfeile: wählen · ENTER: freischalten · ESC: zurück · ${meta.souls} Seelensplitter`,
+    id => { const n = treeNode(id)!; return !n.cost ? 'Steht in jedem Lauf zur Wahl.' : own.includes(id) ? 'Steht in jedem Lauf zur Wahl.' : 'Freischalten: kommt in die Auswahl der Läufe.'; });
+  if (noteT > 0) { noteT -= dt; text(ctx, note, VW / 2, 346, '#ffcd75', 8, 'center'); }
+}
+
 let last = performance.now();
 function frame(now: number) {
   const dt = Math.min(0.05, (now - last) / 1000), time = now / 1000;
   last = now;
   if (scene === 'title') drawTitle(time, dt);
   else if (scene === 'lager') drawLager(time, dt);
+  else if (scene === 'baum') drawLagerTree(time, dt);
   else if (run) drawRun(ctx, run, dt, time);
   requestAnimationFrame(frame);
 }

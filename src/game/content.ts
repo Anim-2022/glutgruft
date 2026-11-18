@@ -6,6 +6,7 @@ export interface ClassDef {
   hp: number; atk: number; def: number;
   resName: string; resMax: number; resStart: number; resCol: string;
   range: number; // Reichweite des Grundangriffs (0 = nur Nahkampf)
+  fokusOnHit?: number; // Klassenressource je Treffer des Grundangriffs (Bruchteile sammeln sich)
   shot: string;
   skills: SkillDef[];
 }
@@ -33,7 +34,7 @@ export const CLASSES: Record<ClassId, ClassDef> = {
   },
   waldlaeufer: {
     id: 'waldlaeufer', name: 'Waldläufer', desc: 'Schütze mit Fallen. Fokus wächst beim Warten im Kampf und mit jedem besiegten Gegner.',
-    hp: 22, atk: 4, def: 1, resName: 'Fokus', resMax: 8, resStart: 2, resCol: '#a7f070', range: 5, shot: 'Schuss',
+    hp: 22, atk: 4, def: 1, resName: 'Fokus', resMax: 8, resStart: 2, resCol: '#a7f070', range: 5, fokusOnHit: 1, shot: 'Schuss',
     skills: [
       { name: 'Zielschuss', cost: 4, desc: 'Schwerer Schuss auf große Distanz' },
       { name: 'Falle', cost: 2, desc: 'Legt eine Falle: Schaden + Betäubung' },
@@ -127,6 +128,38 @@ export const SKILL_UP: Record<string, SkillUp> = {
   waldlaeufer1: { r2: 'Falle: +30 % Schaden', a: ['Bärenfalle', '+60 % Schaden, betäubt länger'], b: ['Fallenreihe', 'Legt drei Fallen in Blickrichtung'] },
   waldlaeufer2: { r2: 'rollt 3 Felder', a: ['Hechtrolle', 'Rollt 4 Felder, 2 Züge Ausweichen'], b: ['Rollschuss', 'Schießt nach der Rolle auf den nächsten Gegner'] },
 };
+// Fertigkeitsbaum (docs/skill-tree.md): je Fähigkeit ein Zweig. Schritt 2a enthält nur die
+// vorhandenen Ränge: T1 = Rang II, T4a/T4b = Rang III mit Ausprägung A oder B.
+export interface TreeNode {
+  id: string; branch: number; tier: string;
+  parent?: string;  // muss gelernt sein
+  minPts: number;   // so viele Punkte müssen schon im Zweig stecken
+  cost: number;     // Seelensplitter im Lager, 0 = immer offen
+  excl?: string;    // schließt diesen Knoten aus
+  key?: boolean;    // Schlüsselknoten
+}
+export const BRANCH_NAMES: Record<ClassId, string[]> = {
+  krieger: ['Schild', 'Klinge', 'Schlachtruf'],
+  magier: ['Feuer', 'Eis', 'Arkan'],
+  waldlaeufer: ['Scharfschütze', 'Fallensteller', 'Pirscher'],
+};
+export const TREE_NODES: TreeNode[] = [0, 1, 2].flatMap(b => [
+  { id: `n${b}_1`, branch: b, tier: '1', minPts: 0, cost: 0 },
+  { id: `n${b}_4a`, branch: b, tier: '4a', parent: `n${b}_1`, minPts: 1, cost: 0, excl: `n${b}_4b` },
+  { id: `n${b}_4b`, branch: b, tier: '4b', parent: `n${b}_1`, minPts: 1, cost: 0, excl: `n${b}_4a` },
+]);
+export const treeNode = (id: string) => TREE_NODES.find(n => n.id === id);
+// Name und Wirkung eines Knotens, aus den Texten der Ränge
+export function nodeText(cls: ClassId, id: string): { name: string; desc: string } {
+  const n = treeNode(id)!, sk = CLASSES[cls].skills[n.branch], up = SKILL_UP[`${cls}${n.branch}`];
+  if (n.tier === '1') return { name: `${sk.name} II`, desc: up.r2 };
+  const [name, desc] = n.tier === '4a' ? up.a : up.b;
+  return { name: `${sk.name} III: ${name}`, desc };
+}
+// Knoten, die in einem Lauf dieser Klasse zur Wahl stehen können
+export const treePool = (cls: ClassId, meta: { tree?: Partial<Record<ClassId, string[]>> }) =>
+  TREE_NODES.filter(n => n.cost === 0 || (meta.tree?.[cls] ?? []).includes(n.id)).map(n => n.id);
+
 // Zwei bestimmte Gaben zusammen ergeben eine zusätzliche Wirkung
 export interface Synergy { id: string; need: [string, string]; name: string; desc: string; }
 export const SYNERGIES: Synergy[] = [
