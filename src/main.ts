@@ -330,8 +330,8 @@ function drawTitle(time: number, dt: number) {
   // Menü
   const items = ['SPIEL STARTEN', 'SPRACHE: DEUTSCH', soundOn() ? 'TON: AN' : 'TON: AUS', meta.tutOff ? 'LEHRGANG: AUS' : 'LEHRGANG: AN', 'LEHRGANG NEU BEGINNEN', 'VOLLBILD'];
   items.forEach((label, i) => {
-    const y = 246 + i * 14, sel = i === tRow;
-    if (sel) { panel(ctx, VW / 2 - 100, y - 4, 200, 16, '#ffcd75', 'rgba(177,62,83,0.45)'); text(ctx, '>', VW / 2 - 92, y, '#ffcd75'); text(ctx, '<', VW / 2 + 88, y, '#ffcd75'); }
+    const y = 258 + i * 13, sel = i === tRow;
+    if (sel) { panel(ctx, VW / 2 - 100, y - 3, 200, 14, '#ffcd75', 'rgba(177,62,83,0.45)'); text(ctx, '>', VW / 2 - 92, y, '#ffcd75'); text(ctx, '<', VW / 2 + 88, y, '#ffcd75'); }
     text(ctx, label, VW / 2, y, sel ? '#ffcd75' : '#94b0c2', 10, 'center');
   });
   text(ctx, 'Pfeile wählen · ENTER bestätigen', VW / 2, 336, '#566c86', 8, 'center');

@@ -53,7 +53,7 @@ export const setTutorial = (on: boolean) => { tutorial = on; };
 let tutStep: { text: string; k: number; n: number } | null = null;
 export const setTutStep = (s: typeof tutStep) => { tutStep = s; };
 export function drawCard(ctx: CanvasRenderingContext2D, card: { title: string; lines: string[] }) {
-  const lines = card.lines.flatMap(l => wrapText(l, 60)), w = 380, h = 52 + lines.length * 12, x = (VW - w) >> 1, y = (VH - h) >> 1;
+  const lines = card.lines.flatMap(l => wrapText(l, 66)), w = 420, h = 52 + lines.length * 12, x = (VW - w) >> 1, y = (VH - h) >> 1;
   ctx.fillStyle = 'rgba(13,14,23,0.7)'; ctx.fillRect(0, 0, VW, VH);
   panel(ctx, x, y, w, h, '#73eff7');
   text(ctx, 'LEHRGANG', x + 10, y + 8, '#566c86', 8);
