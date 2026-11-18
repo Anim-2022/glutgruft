@@ -1164,7 +1164,7 @@ export function drawTree(ctx: CanvasRenderingContext2D, cls: ClassId, title: str
         text(ctx, cut(`${mark}${mark ? ' ' : ''}${tr(shortName(cls, id))}`, Math.floor((w - 6) / 6)), x + w / 2, y + 5, st === 'locked' ? '#566c86' : '#f4f4f4', 8, 'center');
         const tg = tag(id);
         if (tg === '#free') freeMark(ctx, x + w / 2 - 4, y + 16, col);
-        else if (tg) text(ctx, tg, x + w / 2, y + 15, col, 8, 'center');
+        else if (tg) text(ctx, cut(tg, Math.floor((w - 6) / 6)), x + w / 2, y + 15, col, 8, 'center');
       });
     });
   }
@@ -1181,7 +1181,7 @@ function treeOverlay(ctx: CanvasRenderingContext2D, run: Run) {
   const p = run.p, av = availableNodes(run);
   const stateOf = (id: string): TreeState => p.tree.includes(id) ? 'learned' : av.includes(id) ? 'open' : 'locked';
   drawTree(ctx, p.cls, `STUFE ${p.lvl} – FERTIGKEITSPUNKT (${p.pts} frei)`, stateOf,
-    id => ({ learned: 'gelernt', open: 'wählbar', locked: run.pool.includes(id) ? 'gesperrt' : 'nicht freigeschaltet' } as Record<string, string>)[stateOf(id)],
+    id => ({ learned: 'gelernt', open: 'wählbar', locked: run.pool.includes(id) ? 'gesperrt' : 'erst im Lager' } as Record<string, string>)[stateOf(id)],
     'Pfeile: wählen · ENTER: lernen · K: später',
     id => {
       const st = stateOf(id), n = treeNode(p.cls, id)!;
