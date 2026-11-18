@@ -1,7 +1,7 @@
 // Balance-Telemetrie: npm run balance (N=40 Seeds je Klasse und Meta)
 import { defaultMeta } from '../src/core/save';
-import { newRun, act, Run, playerAtk } from '../src/game/run';
-import { CLASS_ORDER, MOBS } from '../src/game/content';
+import { newRun, act, Run, playerAtk, spellAt } from '../src/game/run';
+import { CLASS_ORDER, MOBS, treeNodes, ClassId } from '../src/game/content';
 import { botAction } from './bot';
 
 // Zusammenfassung je Klasse und Meta (am Ende ausgegeben)
@@ -11,10 +11,17 @@ const nodeFreq: Record<string, Record<string, number>> = {};
 // SEEDS=k wählt einen anderen Satz Seeds (0 = bisheriger Satz)
 const SET = +((globalThis as { process?: { env: Record<string, string | undefined> } }).process?.env.SEEDS ?? 0);
 const N = +((globalThis as { process?: { env: Record<string, string | undefined> } }).process?.env.N ?? 40);
-const metaMax = { ...defaultMeta(), upg: { vit: 5, atk: 2, trank: 3, fokus: 3, gold: 3, bombe: 2, fund: 3, wahl: 1, erbe: 0 } };
+const ENV = (globalThis as { process?: { env: Record<string, string | undefined> } }).process?.env ?? {};
+// max: alle Verbesserungen und alle Knoten des Baums im Lager freigeschaltet
+const metaMax = { ...defaultMeta(), upg: { vit: 5, atk: 2, trank: 3, fokus: 3, gold: 3, bombe: 2, fund: 3, wahl: 1, erbe: 0 },
+  tree: Object.fromEntries(CLASS_ORDER.map(c => [c, treeNodes(c).filter(n => n.cost).map(n => n.id)])) };
+// CLS=magier: nur diese Klassen; NOKEY=1: Schlüsselknoten (T5) aus dem Pool nehmen
+const ONLY = ENV.CLS ? ENV.CLS.split(',') : null, NOKEY = ENV.NOKEY === '1';
+const spellUse: Record<string, Record<string, number>> = {};
 type F = { turns: number; hpLost: number; potUsed: number; kills: number; goldIn: number; lvlIn: number; atkIn: number; maxHpIn: number; n: number; deaths: number; shopVisits: number; goldAtShop: number; dmgTaken: number[]; };
 for (const [mname, meta] of [['neu', defaultMeta()], ['max', metaMax]] as const) {
-  for (const cls of CLASS_ORDER) {
+  for (const cls of CLASS_ORDER.filter(c => !ONLY || ONLY.includes(c)) as ClassId[]) {
+    const su = spellUse[`${mname} ${cls}`] = {} as Record<string, number>;
     const fl: Record<number, F> = {};
     const killers: Record<string, number> = {};
     const perkPick: Record<string, number> = {};
@@ -24,6 +31,7 @@ for (const [mname, meta] of [['neu', defaultMeta()], ['max', metaMax]] as const)
     let goldTotal = 0, goldSpent = 0, potBought = 0, potFound = 0, bombBought = 0, goldLeft = 0, bossDeaths = 0;
     for (let s = 1; s <= N; s++) {
       const run = newRun(s * 7919 + 13 + SET * 1000003, cls, meta);
+      if (NOKEY) run.pool = run.pool.filter(id => !id.endsWith('_5'));
       let cur = -1, F0: F | null = null; const resHist: number[] = [];
       for (let i = 0; i < 14000 && run.mode !== 'dead' && run.mode !== 'win'; i++) {
         if (run.floor !== cur) {
@@ -36,7 +44,8 @@ for (const [mname, meta] of [['neu', defaultMeta()], ['max', metaMax]] as const)
         const sk0 = run.p.skillLvl.slice(), res0 = run.p.res;
         act(run, a);
         run.p.skillLvl.forEach((v, k) => { if (v > sk0[k]) rankLvl[v - 1].push(run.p.lvl); });
-        if (a.t === 'skill' && run.turn > t0) uses[a.i]++;
+        if (a.t === 'skill' && a.i < 3 && run.turn > t0) uses[a.i]++;
+        if (a.t === 'skill' && a.i >= 3 && run.turn > t0) { const id = spellAt(run.p, a.i)!; su[id] = (su[id] ?? 0) + 1; }
         if (run.turn > t0) { resHist.push(res0); if (resHist.length > 3) resHist.shift(); }
         if ((run.mode as string) === 'dead') resEnd.push(resHist.reduce((q, w) => q + w, 0) / Math.max(1, resHist.length));
                 if (a.t === 'perk' && mode0 === 'perk') perkPick[run.p.perks[run.p.perks.length - 1] ?? '?']=(perkPick[run.p.perks[run.p.perks.length - 1] ?? '?']??0)+1;
@@ -80,8 +89,10 @@ for (const [mname, meta] of [['neu', defaultMeta()], ['max', metaMax]] as const)
     console.log('Tod durch:', JSON.stringify(Object.entries(killers).sort((a,b)=>b[1]-a[1]).slice(0,8)));
   }
 }
-console.log(`\n=== Zusammenfassung (SEEDS=${SET}, BUILD=${(globalThis as { process?: { env: Record<string, string | undefined> } }).process?.env.BUILD ?? 'heur'}) ===`);
+console.log(`\n=== Zusammenfassung (SEEDS=${SET}${NOKEY ? ', ohne T5' : ''}, BUILD=${(globalThis as { process?: { env: Record<string, string | undefined> } }).process?.env.BUILD ?? 'heur'}) ===`);
 for (const l of summary) console.log(l);
+console.log('\nNeue Zauber je Lauf:');
+for (const [k, f] of Object.entries(spellUse)) if (Object.keys(f).length) console.log(k.padEnd(16), Object.entries(f).map(([id, n]) => `${id} ${(n / N).toFixed(1)}`).join('  '));
 console.log('\nKnoten (Anteil der Läufe):');
 for (const [k, f] of Object.entries(nodeFreq)) console.log(k.padEnd(16), Object.entries(f).sort().map(([id, n]) => `${id} ${(100 * n / N).toFixed(0)}%`).join('  '));
 void MOBS; void playerAtk;

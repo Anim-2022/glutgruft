@@ -2,7 +2,7 @@ import { RNG } from '../core/rng';
 import type { Meta } from '../core/save';
 import { W, H, T, Room, genDungeon, center, walkable, opaque, los, computeFov, distMap } from './dungeon';
 import { VS, CRATE_TEMPLATES, mirror, genIce, slide } from './puzzles';
-import { CLASSES, ClassId, MOBS, PERKS, RELICS, Item, Offer, AFFIX, CONSUMABLES, UNIQUES, ULT, ULT_LEVEL, SKILL_UP, SYNERGIES, TREE_NODES, treeNode, treePool, BOSS_BY_BIOME, BIOME_NAMES, FLOORS_PER_BIOME, LAST_FLOOR, biomeOf, spawnTable } from './content';
+import { CLASSES, ClassId, MOBS, PERKS, RELICS, Item, Offer, AFFIX, CONSUMABLES, UNIQUES, ULT, ULT_LEVEL, SKILL_UP, SYNERGIES, NEW_SKILLS, treeNodes, treeNode, treePool, nodeText, BOSS_BY_BIOME, BIOME_NAMES, FLOORS_PER_BIOME, LAST_FLOOR, biomeOf, spawnTable } from './content';
 
 export interface Actor {
   id: number; kind: string; name: string;
@@ -28,6 +28,8 @@ export interface Player extends Actor {
   pts: number;                 // offene Fertigkeitspunkte
   rest: number;                // Punkte, die mangels Knoten zu Gaben wurden
   resAcc?: number;             // angesammelte Bruchteile aus fokusOnHit
+  spells?: string[];           // neue Zauber aus dem Baum, Plätze 4–6
+  shield?: number;             // Arkanschild: verbleibender Schutz
 }
 
 export interface Puzzle {
@@ -71,6 +73,7 @@ export interface Run {
   perkChoices: string[];
   pool: string[];  // Knoten, die in diesem Lauf lernbar sind (Lager)
   perkQ: number;   // noch ausstehende Wahl einer Gabe
+  runeUsed?: boolean; // Schutzrune auf dieser Ebene verbraucht
   souls: number; kills: number; turn: number; nextId: number;
 }
 
@@ -361,7 +364,12 @@ function stock(run: Run): Offer[] {
 export const MAX_TRAPS = 3;
 export const RUNE_NAMES = ['Sonne', 'Mond', 'Stern', 'Auge'];
 const has = (p: Player, id: string) => p.relics.includes(id);
-export const skillCost = (p: Player, i: number) => Math.max(1, CLASSES[p.cls].skills[i].cost - (has(p, 'echo') ? 1 : 0) - (p.cls === 'krieger' && i === 0 && p.skillMod[0] === 1 ? 1 : 0) - (p.aff.erz ? 1 : 0));
+export const hasNode = (p: Player, id: string) => p.tree.includes(id);
+export const spellAt = (p: Player, i: number) => (i >= 3 ? p.spells?.[i - 3] : undefined);
+const baseCost = (p: Player, i: number) => (i < 3 ? CLASSES[p.cls].skills[i].cost : NEW_SKILLS[spellAt(p, i)!]?.cost ?? 99);
+export const skillCost = (p: Player, i: number) => Math.max(1, baseCost(p, i) - (has(p, 'echo') ? 1 : 0) - (p.cls === 'krieger' && i === 0 && p.skillMod[0] === 1 ? 1 : 0) - (p.aff.erz ? 1 : 0) - (p.st.nachhall && !(p.cls === 'magier' && i === 2) ? 2 : 0));
+// Fähigkeit jetzt einsetzbar (Ressource, Abklingzeit des Zeitrisses)
+export const skillReady = (p: Player, i: number) => (i < 3 || !!spellAt(p, i)) && p.res >= skillCost(p, i) && !(p.cls === 'magier' && i === 2 && p.st.riss);
 export const shotRange = (p: Player) => CLASSES[p.cls].range + (p.aff.weite ?? 0);
 export const RANKS = ['I', 'II', 'III'];
 // Name und Beschreibung einer Wahl beim Stufenaufstieg: Gabe, Reliquie oder Fähigkeitsrang
@@ -591,6 +599,7 @@ function nextFloor(run: Run) {
   run.traps = [];
   run.fire = new Map(); run.fuses = new Map(); run.cracks = new Map();
   run.puzzle = null; run.willUsed = false;
+  if (run.runeUsed) run.runeUsed = false;
   run.p.keys = 0;
   if (has(run.p, 'sprengmeister') && run.floor > 1) run.p.bombs++;
   [run.p.x, run.p.y] = center(rooms[0]);
@@ -743,13 +752,49 @@ function stun(run: Run, a: Actor, turns: number) {
 }
 
 
+// true, solange die eigene Aktion des Spielers ausgeführt wird (für Kryomant)
+let playerActing = false;
+
 function damage(run: Run, dst: Actor, amt: number, col = '#f4f4f4', crit = false) {
+  const p = run.p;
   if (dst.st.sproede) amt *= 1.5;
+  if (dst !== p && dst.st.stun && hasNode(p, 'n1_2a') && p.cls === 'magier') amt *= 1.25; // Raureif
   amt = Math.max(1, Math.round(amt));
+  if (dst === p && p.shield) {
+    const ab = Math.min(p.shield, amt);
+    p.shield -= ab; amt -= ab;
+    if (!p.shield) delete p.st.schild;
+    if (amt <= 0) { run.fx.push({ k: 'num', x: p.x, y: p.y, s: 'Schild', col: '#9a4fc0' }); return; }
+  }
+  // Kryomant: Treffer gegen Betäubte und Bosse geben Mana
+  if (dst !== p && playerActing && p.cls === 'magier' && hasNode(p, 'n1_5') && (dst.st.stun || dst.boss)) gain(p, 2);
   dst.hp -= amt;
   run.fx.push({ k: 'flash', id: dst.id });
   run.fx.push({ k: 'num', x: dst.x, y: dst.y, s: crit ? `${amt}!` : `${amt}`, col: crit ? '#ffcd75' : col });
   if (dst !== run.p && dst.hp <= 0) kill(run, dst);
+  // Schutzrune: einmal je Ebene ein Blinzeln, wenn das Leben knapp wird
+  if (dst === p && p.hp > 0 && p.hp < p.maxHp * 0.3 && p.cls === 'magier' && hasNode(p, 'n2_2b') && !run.runeUsed) {
+    const spot = blinkSpot(run);
+    if (spot) { run.runeUsed = true; [p.x, p.y] = spot; say(run, 'Die Schutzrune reißt dich fort!'); }
+  }
+}
+
+// Brand durch den Magier hält mit Schwelbrand einen Zug länger
+const burnT = (p: Player, n: number) => n + (p.cls === 'magier' && hasNode(p, 'n0_2b') ? 1 : 0);
+
+// Bester Zielpunkt für Blinzeln: möglichst weit weg von sichtbaren Gegnern
+function blinkSpot(run: Run): [number, number] | null {
+  const p = run.p;
+  let best: [number, number] | null = null, bs = -1;
+  for (let y = p.y - 6; y <= p.y + 6; y++) for (let x = p.x - 6; x <= p.x + 6; x++) {
+    if (!isFree(run, x, y) || !run.vis[y * W + x]) continue;
+    let s = cheb({ x, y }, p) * 0.1;
+    let near = 99;
+    for (const m of run.mobs) if (run.vis[m.y * W + m.x]) near = Math.min(near, cheb(m, { x, y }));
+    s += near === 99 ? cheb({ x, y }, p) : near;
+    if (s > bs) { bs = s; best = [x, y]; }
+  }
+  return best;
 }
 
 function playerHit(run: Run, dst: Actor, base: number, sure = false) {
@@ -812,6 +857,15 @@ function kill(run: Run, m: Actor) {
     run.fx.push({ k: 'boom', x: m.x, y: m.y, r: 1 });
     for (const o of run.mobs.filter(o => cheb(o, m) <= 1)) damage(run, o, 4 + p.lvl, '#ef7d57');
   }
+  if (p.cls === 'magier' && m.st.brand && hasNode(p, 'n0_5')) {
+    // Flächenbrand: brennende Gegner explodieren und stecken Nachbarn an
+    run.fx.push({ k: 'boom', x: m.x, y: m.y, r: 1 });
+    for (const o of run.mobs.filter(o => cheb(o, m) <= 1)) {
+      if (o.hp <= 0) continue;
+      o.st.brand = Math.max(o.st.brand ?? 0, burnT(p, 2));
+      damage(run, o, 4 + p.lvl, '#ef7d57');
+    }
+  }
   if (run.target === m.id) run.target = 0;
   if (p.vamp) p.hp = Math.min(p.maxHp, p.hp + p.vamp);
   if (p.cls === 'waldlaeufer') gain(p, 1);
@@ -854,9 +908,10 @@ export function checkLevel(run: Run) {
 export function availableNodes(run: Run): string[] {
   const p = run.p;
   return run.pool.filter(id => {
-    const n = treeNode(id);
+    const n = treeNode(p.cls, id);
     if (!n || p.tree.includes(id) || (n.parent && !p.tree.includes(n.parent)) || (n.excl && p.tree.includes(n.excl))) return false;
-    return p.tree.filter(q => treeNode(q)?.branch === n.branch).length >= n.minPts;
+    if (n.needAny && !n.needAny.some(q => p.tree.includes(q))) return false;
+    return p.tree.filter(q => treeNode(p.cls, q)?.branch === n.branch).length >= n.minPts;
   });
 }
 
@@ -875,9 +930,13 @@ function nextChoice(run: Run) {
   offerPerks(run);
 }
 
+const nodeName = (p: Player, id: string) => nodeText(p.cls, id).name;
+
 function learnNode(run: Run, id: string) {
-  const p = run.p, n = treeNode(id)!, i = n.branch;
+  const p = run.p, n = treeNode(p.cls, id)!, i = n.branch;
   p.tree.push(id);
+  if (n.spell) { (p.spells ??= []).push(n.spell); say(run, `Neuer Zauber: ${NEW_SKILLS[n.spell].name} [${2 + p.spells.length}]`); return; }
+  if (n.tier !== '1' && n.tier !== '4a' && n.tier !== '4b') { say(run, `Gelernt: ${nodeName(p, id)}`); return; }
   if (n.tier === '1') p.skillLvl[i] = Math.max(1, p.skillLvl[i]);
   else if (n.tier === '4a' || n.tier === '4b') { p.skillLvl[i] = 2; p.skillMod[i] = n.tier === '4a' ? 1 : 2; }
   say(run, `${CLASSES[p.cls].skills[i].name}: Rang ${RANKS[p.skillLvl[i]]}${p.skillMod[i] ? ` – ${skillModName(p, i)}` : ''}`);
@@ -978,10 +1037,17 @@ function openChest(run: Run, i: number) {
 }
 
 function useSkill(run: Run, i: number): boolean {
-  const p = run.p, sk = CLASSES[p.cls].skills[i];
+  const p = run.p, sk = i < 3 ? CLASSES[p.cls].skills[i] : NEW_SKILLS[spellAt(p, i) ?? ''];
   if (!sk) return false;
+  if (p.cls === 'magier' && i === 2 && p.st.riss) { say(run, `Zeitriss: noch ${p.st.riss} Züge.`); return false; }
   const cost = skillCost(p, i);
   if (p.res < cost) { say(run, `Nicht genug ${CLASSES[p.cls].resName}.`); return false; }
+  if (i >= 3) {
+    if (!castSpell(run, spellAt(p, i)!)) return false;
+    p.res -= cost;
+    delete p.st.nachhall;
+    return true;
+  }
   const atk = playerAtk(p), L = p.skillLvl[i], mod = p.skillMod[i], sp = p.pow * (1 + 0.3 * L);
   const around = (r: number) => run.mobs.filter(m => cheb(m, p) <= r && run.vis[m.y * W + m.x]);
   const noTarget = () => { say(run, 'Kein Ziel in Reichweite.'); return false; };
@@ -1021,14 +1087,14 @@ function useSkill(run: Run, i: number): boolean {
       run.fx.push({ k: 'fireball', x0: p.x, y0: p.y, x1: t.x, y1: t.y, r: mod === 1 ? 2 : 1 }, { k: 'shake', n: 3 });
       for (let y = t.y - 1; y <= t.y + 1; y++) for (let x = t.x - 1; x <= t.x + 1; x++) ignite(run, x, y, 2);
       for (const m of run.mobs.filter(m => cheb(m, t) <= (mod === 1 ? 2 : 1))) {
-        m.st.brand = 2;
+        m.st.brand = burnT(p, 2);
         damage(run, m, (m === t ? atk * 0.8 + p.lvl * 0.3 : 3) * sp - m.def, '#ef7d57');
       }
       if (mod === 2) {
         const o = run.mobs.filter(m => m !== t && run.vis[m.y * W + m.x] && cheb(m, p) <= 7).sort((a, b) => cheb(a, p) - cheb(b, p))[0];
         if (o) {
           run.fx.push({ k: 'fireball', x0: p.x, y0: p.y, x1: o.x, y1: o.y, r: 0 });
-          o.st.brand = 2;
+          o.st.brand = burnT(p, 2);
           damage(run, o, (atk * 0.8 + p.lvl * 0.3) * sp * 0.6 - o.def, '#ef7d57');
         }
       }
@@ -1040,18 +1106,11 @@ function useSkill(run: Run, i: number): boolean {
       run.fx.push({ k: 'nova', x: p.x, y: p.y, r: mod === 1 ? 3 : 2 });
       for (const i of [...run.fire.keys()]) if (cheb({ x: i % W, y: (i / W) | 0 }, p) <= 2) run.fire.delete(i);
       for (const t of ts) { stun(run, t, L ? 2 : 1); delete t.st.brand; damage(run, t, 3 * sp, '#73eff7'); if (mod === 2 && t.hp > 0) t.st.sproede = 4; }
+      if (hasNode(p, 'n1_2b')) p.st.eis = 2; // Eisrüstung
       break;
     }
     case 'magier2': {
-      let best: [number, number] | null = null, bs = -1;
-      for (let y = p.y - 6; y <= p.y + 6; y++) for (let x = p.x - 6; x <= p.x + 6; x++) {
-        if (!isFree(run, x, y) || !run.vis[y * W + x]) continue;
-        let s = cheb({ x, y }, p) * 0.1;
-        let near = 99;
-        for (const m of run.mobs) if (run.vis[m.y * W + m.x]) near = Math.min(near, cheb(m, { x, y }));
-        s += near === 99 ? cheb({ x, y }, p) : near;
-        if (s > bs) { bs = s; best = [x, y]; }
-      }
+      const best = blinkSpot(run);
       if (!best) return noTarget();
       const from = { x: p.x, y: p.y };
       [p.x, p.y] = best;
@@ -1061,7 +1120,11 @@ function useSkill(run: Run, i: number): boolean {
         run.fx.push({ k: 'boom', x: from.x, y: from.y, r: 1 });
         for (const m of run.mobs.filter(m => cheb(m, from) <= 1)) damage(run, m, 5 * p.pow, '#9a4fc0');
       }
-      break;
+      if (hasNode(p, 'n2_2a')) p.st.nachhall = 1;
+      // Zeitriss: kein Zug, danach Abklingzeit
+      if (hasNode(p, 'n2_5')) { p.st.riss = 3; freeTurn = true; }
+      p.res -= cost;
+      return true;
     }
     case 'waldlaeufer0': {
       const t = nearestMob(run, 8);
@@ -1102,7 +1165,61 @@ function useSkill(run: Run, i: number): boolean {
     }
   }
   p.res -= cost;
+  delete p.st.nachhall;
   return true;
+}
+
+// Zeitriss: die nächste Aktion lässt die Gegner aus
+let freeTurn = false;
+
+// Gerade Linie (Bresenham) vom Spieler zum Ziel und darüber hinaus, bis zur Wand
+function lineFrom(run: Run, tx: number, ty: number, len: number): [number, number][] {
+  const p = run.p, out: [number, number][] = [];
+  const dx = tx - p.x, dy = ty - p.y, n = Math.max(Math.abs(dx), Math.abs(dy));
+  if (!n) return out;
+  for (let k = 1; k <= len; k++) {
+    const x = p.x + Math.round((dx * k) / n), y = p.y + Math.round((dy * k) / n);
+    if (x < 0 || y < 0 || x >= W || y >= H || !walkable(run.tiles[y * W + x])) break;
+    out.push([x, y]);
+  }
+  return out;
+}
+
+// Neue Zauber des Magiers (Plätze 4–6)
+function castSpell(run: Run, id: string): boolean {
+  const p = run.p, atk = playerAtk(p);
+  if (id === 'flammenwand') {
+    const t = nearestMob(run, 7);
+    if (!t) { say(run, 'Kein Ziel in Reichweite.'); return false; }
+    const dx = t.x - p.x, dy = t.y - p.y;
+    const s: [number, number] = Math.abs(dx) >= Math.abs(dy) ? [Math.sign(dx), 0] : [0, Math.sign(dy)];
+    const k = Math.max(1, Math.min(2, cheb(t, p) - 1)), cx = p.x + s[0] * k, cy = p.y + s[1] * k;
+    for (const o of [-1, 0, 1]) ignite(run, cx - s[1] * o, cy + s[0] * o, 4);
+    run.fx.push({ k: 'boom', x: cx, y: cy, r: 0 });
+    say(run, 'Flammenwand!');
+    return true;
+  }
+  if (id === 'eislanze') {
+    const t = nearestMob(run, 6);
+    if (!t) { say(run, 'Kein Ziel in Reichweite.'); return false; }
+    const path = lineFrom(run, t.x, t.y, 6), end = path[path.length - 1] ?? [t.x, t.y];
+    run.fx.push({ k: 'bolt', x0: p.x, y0: p.y, x1: end[0], y1: end[1], col: '#73eff7' });
+    for (const [x, y] of path) {
+      const m = mobAt(run, x, y);
+      if (!m) continue;
+      const stunned = !!m.st.stun;
+      damage(run, m, (atk * 0.9 + p.lvl * 0.4) * p.pow * (stunned ? 2 : 1) - m.def, '#73eff7');
+      if (stunned && m.hp > 0) { delete m.st.stun; m.st.immun = 3; } // „Zerschmettern“
+    }
+    return true;
+  }
+  if (id === 'arkanschild') {
+    p.shield = 8 + p.lvl;
+    p.st.schild = 5;
+    say(run, 'Arkanschild!');
+    return true;
+  }
+  return false;
 }
 
 function useUlt(run: Run): boolean {
@@ -1189,6 +1306,7 @@ export function act(run: Run, a: Action): void {
     return;
   }
   let used = false;
+  playerActing = true; freeTurn = false;
   switch (a.t) {
     case 'move': {
       const nx = p.x + a.dx, ny = p.y + a.dy;
@@ -1285,6 +1403,7 @@ export function act(run: Run, a: Action): void {
       const base = playerAtk(p) * (p.cls === 'waldlaeufer' ? 0.7 : 1);
       playerHit(run, t, base);
       sideHits(run, t, base, c.resCol);
+      if (p.cls === 'magier' && hasNode(p, 'n0_2a') && t.hp > 0 && run.rng.chance(0.3)) t.st.brand = Math.max(t.st.brand ?? 0, burnT(p, 2)); // Zunder
       if (c.fokusOnHit) {
         p.resAcc = (p.resAcc ?? 0) + c.fokusOnHit;
         const n = Math.floor(p.resAcc + 1e-9);
@@ -1333,6 +1452,8 @@ export function act(run: Run, a: Action): void {
       used = useUlt(run);
       break;
   }
+  playerActing = false;
+  if (used && freeTurn) { freeTurn = false; computeFov(run.tiles, p.x, p.y, fovR(run), run.vis, run.seen); return; }
   if (used) endTurn(run);
 }
 
@@ -1344,7 +1465,7 @@ function hitPlayer(run: Run, m: Actor, melee: boolean) {
   if (melee) run.fx.push({ k: 'lunge', id: m.id, dx: Math.sign(p.x - m.x), dy: Math.sign(p.y - m.y) }, { k: 'swipe', x: p.x, y: p.y, dx: Math.sign(p.x - m.x), dy: Math.sign(p.y - m.y), big: !!m.boss });
   if (p.st.dodge || (p.aff.flink && run.rng.chance(Math.min(40, p.aff.flink) / 100))) { run.fx.push({ k: 'num', x: p.x, y: p.y, s: 'verfehlt', col: '#94b0c2' }); if (p.aff.konter) p.st.konter = 1; return; }
   const atk = melee ? m.atk : Math.round(m.atk * 0.7); // Fernschüsse treffen schwächer
-  damage(run, p, Math.max(Math.ceil(atk * 0.3), atk - p.def - (p.st.wall ? 3 : 0)) - (has(p, 'steinhaut') ? 1 : 0), '#b13e53');
+  damage(run, p, Math.max(Math.ceil(atk * 0.3), atk - p.def - (p.st.wall ? 3 : 0) - (p.st.eis ? 2 : 0)) - (has(p, 'steinhaut') ? 1 : 0), '#b13e53');
   run.fx.push({ k: 'shake', n: m.boss ? 5 : 2 });
   if (p.cls === 'krieger') gain(p, 1);
   if (d.poison && run.rng.chance(0.5)) p.st.gift = 4;
@@ -1425,7 +1546,7 @@ function tickDots(run: Run, a: Actor) {
     a.st.brand--;
     if (a === run.p && has(run.p, 'glutherz')) {
       if (a.hp < a.maxHp) { a.hp++; run.fx.push({ k: 'num', x: a.x, y: a.y, s: '+1', col: '#a7f070' }); }
-    } else damage(run, a, 2, '#ef7d57');
+    } else damage(run, a, a !== run.p && run.p.cls === 'magier' && hasNode(run.p, 'n0_2b') ? 3 : 2, '#ef7d57');
   }
 }
 
@@ -1435,9 +1556,9 @@ function endTurn(run: Run) {
   run.turn++;
   tickWorld(run);
   if (run.fire.has(p.y * W + p.x)) p.st.brand = Math.max(p.st.brand ?? 0, 2);
-  for (const m of run.mobs) if (run.fire.has(m.y * W + m.x)) m.st.brand = Math.max(m.st.brand ?? 0, 2);
+  for (const m of run.mobs) if (run.fire.has(m.y * W + m.x)) m.st.brand = Math.max(m.st.brand ?? 0, burnT(p, 2));
   tickDots(run, p);
-  if (p.cls === 'magier' && run.turn % 3 === 0) gain(p, 1);
+  if (p.cls === 'magier' && run.turn % 3 === 0 && !hasNode(p, 'n1_5')) gain(p, 1); // Kryomant: keine Erholung
   // Krieger: Wut wächst, solange ein sichtbarer Gegner direkt daneben steht
   if (p.cls === 'krieger' && run.mobs.some(m => cheb(m, p) <= 1 && run.vis[m.y * W + m.x])) gain(p, 1);
   const dist = distMap(run.tiles, p.x, p.y);
@@ -1456,6 +1577,9 @@ function endTurn(run: Run) {
   if (p.st.stark) p.st.stark--;
   if (p.st.wall) p.st.wall--;
   if (p.st.dodge) p.st.dodge--;
+  if (p.st.eis) p.st.eis--;
+  if (p.st.riss) p.st.riss--;
+  if (p.st.schild && !--p.st.schild) { delete p.st.schild; p.shield = 0; }
   if (p.ultCd) p.ultCd--;
   if (p.aff.regen && run.turn % 6 === 0 && p.hp > 0 && p.hp < p.maxHp) p.hp = Math.min(p.maxHp, p.hp + p.aff.regen);
   const z = run.puzzle;
@@ -1509,6 +1633,6 @@ function migrateRun(o: { p: Player; pool?: string[]; perkQ?: number }) {
   if (!p.tree) p.tree = nodesFromRanks(p.skillLvl, p.skillMod);
   p.pts ??= 0;
   p.rest ??= 0;
-  o.pool ??= TREE_NODES.filter(n => n.cost === 0).map(n => n.id);
+  o.pool ??= treeNodes(p.cls).filter(n => n.cost === 0).map(n => n.id);
   o.perkQ ??= 0;
 }

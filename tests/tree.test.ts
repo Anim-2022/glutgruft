@@ -2,13 +2,13 @@
 import { describe, it, expect } from 'vitest';
 import { defaultMeta, parseMeta } from '../src/core/save';
 import { newRun, act, checkLevel, availableNodes, serialize, deserialize, xpNeed, Run, TREE_EVERY } from '../src/game/run';
-import { TREE_NODES } from '../src/game/content';
+import { treeNodes } from '../src/game/content';
 
-const ALL = TREE_NODES.map(n => n.id);
+const ALL = treeNodes('krieger').map(n => n.id);
 function levelUp(run: Run) { run.p.exp = xpNeed(run.p.lvl); checkLevel(run); }
 // bis kurz vor die nächste Punktstufe aufsteigen, die Gaben unterwegs wählen
 function toPointLevel(run: Run) { while ((run.p.lvl + 1) % TREE_EVERY) { levelUp(run); while (run.mode === 'perk') act(run, { t: 'perk', i: 0 }); } levelUp(run); }
-const fresh = () => { const r = newRun(11, 'magier', defaultMeta()); r.mode = 'play'; return r; };
+const fresh = () => { const r = newRun(11, 'krieger', defaultMeta()); r.mode = 'play'; return r; };
 
 describe('Fertigkeitsbaum', () => {
   it('jede dritte Stufe: Punkt und Baum, sonst Gabe', () => {

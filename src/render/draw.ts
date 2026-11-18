@@ -6,8 +6,8 @@ import { onDeath, drawDecals, drawDying, resetDeaths, reducedFx } from './deaths
 import { drawItemIcon, drawIcon, PERK_ICON } from './icons';
 import { sfx } from '../core/audio';
 import { tr } from '../core/i18n';
-import { Run, Actor, xpNeed, skillCost, itemText, itemValue, itemScore, perkInfo, skillModName, shotRange, RANKS, SORT_NAMES, BAG_MAX, RUNE_NAMES, availableNodes } from '../game/run';
-import { ClassId, TREE_NODES, BRANCH_NAMES, SKILL_UP, treeNode, nodeText, CLASSES, MOBS, PERKS, RELICS, RARITY, RARITY_COL, BIOME_NAMES, biomeOf, Item, AFFIX, CONSUMABLES, SLOT_NAMES, ULT, ULT_LEVEL, USE_ORDER, SYNERGIES } from '../game/content';
+import { Run, Actor, xpNeed, skillCost, skillReady, spellAt, itemText, itemValue, itemScore, perkInfo, skillModName, shotRange, RANKS, SORT_NAMES, BAG_MAX, RUNE_NAMES, availableNodes } from '../game/run';
+import { ClassId, treeNodes, NEW_SKILLS, BRANCH_NAMES, SKILL_UP, treeNode, nodeText, CLASSES, MOBS, PERKS, RELICS, RARITY, RARITY_COL, BIOME_NAMES, biomeOf, Item, AFFIX, CONSUMABLES, SLOT_NAMES, ULT, ULT_LEVEL, USE_ORDER, SYNERGIES } from '../game/content';
 
 const pos = new Map<number, { x: number; y: number }>();
 const lunges = new Map<number, { dx: number; dy: number; t: number }>();
@@ -591,17 +591,18 @@ let overlay: Overlay = 'none';
 export const getOverlay = () => overlay;
 export const setOverlay = (o: Overlay) => { overlay = o; };
 
-interface Slot { key: string; icon: string; name: string; desc: string; cost: string; count: string; ok: boolean; }
+interface Slot { key: string; icon: string; name: string; desc: string; cost: string; count: string; ok: boolean; gap?: number; }
 
 function slots(run: Run): Slot[] {
   const p = run.p, c = CLASSES[p.cls], out: Slot[] = [];
   if (c.range) out.push({ key: 'F', icon: `i_${p.cls}_shot`, name: c.shot, desc: `Fernangriff, ${shotRange(p)} Felder. Kostet nichts.`, cost: '', count: '', ok: true });
-  c.skills.forEach((s, k) => out.push({ key: `${k + 1}`, icon: `i_${p.cls}${k}`, name: p.skillLvl[k] ? `${s.name} ${RANKS[p.skillLvl[k]]}` : s.name, desc: `${s.desc}.${skillModName(p, k) ? ` ${tr(skillModName(p, k))}.` : ''} Kostet ${skillCost(p, k)} ${c.resName}.`, cost: `${skillCost(p, k)}`, count: '', ok: p.res >= skillCost(p, k) }));
-  if (p.lvl >= ULT_LEVEL) out.push({ key: '4', icon: 'ult', name: ULT[p.cls].name, desc: `${ULT[p.cls].desc}. Danach ${ULT[p.cls].cost} Züge Pause.`, cost: '', count: p.ultCd ? `${p.ultCd}` : '', ok: !p.ultCd });
-  out.push({ key: 'Q', icon: 'potion', name: 'Heiltrank', desc: 'Heilt einen großen Teil deines Lebens, löscht Gift und Brand.', cost: '', count: `${p.potions}`, ok: p.potions > 0 });
-  out.push({ key: 'B', icon: 'bomb', name: 'Bombe', desc: 'Sprengt Gegner, rissige Wände und Säulen. Halte Abstand.', cost: '', count: `${p.bombs}`, ok: p.bombs > 0 });
+  c.skills.forEach((s, k) => out.push({ key: `${k + 1}`, icon: `i_${p.cls}${k}`, name: p.skillLvl[k] ? `${s.name} ${RANKS[p.skillLvl[k]]}` : s.name, desc: `${s.desc}.${skillModName(p, k) ? ` ${tr(skillModName(p, k))}.` : ''} Kostet ${skillCost(p, k)} ${c.resName}.`, cost: `${skillCost(p, k)}`, count: '', ok: skillReady(p, k) }));
+  (p.spells ?? []).forEach((id, k) => { const sp = NEW_SKILLS[id], i = 3 + k; out.push({ key: `${4 + k}`, icon: `i_${p.cls}${sp.branch}`, name: sp.name, desc: `${sp.desc}. Kostet ${skillCost(p, i)} ${c.resName}.`, cost: `${skillCost(p, i)}`, count: '', ok: skillReady(p, i) }); });
+  if (p.lvl >= ULT_LEVEL) out.push({ key: 'U', gap: 5, icon: 'ult', name: ULT[p.cls].name, desc: `${ULT[p.cls].desc}. Danach ${ULT[p.cls].cost} Züge Pause.`, cost: '', count: p.ultCd ? `${p.ultCd}` : '', ok: !p.ultCd });
+  out.push({ key: 'Q', gap: 5, icon: 'potion', name: 'Heiltrank', desc: 'Heilt einen großen Teil deines Lebens, löscht Gift und Brand.', cost: '', count: `${p.potions}`, ok: p.potions > 0 });
+  out.push({ key: 'B', gap: 5, icon: 'bomb', name: 'Bombe', desc: 'Sprengt Gegner, rissige Wände und Säulen. Halte Abstand.', cost: '', count: `${p.bombs}`, ok: p.bombs > 0 });
   // Verbrauchsgegenstände erscheinen nur, solange man welche trägt
-  USE_ORDER.forEach((id, k) => { const n = p.bag.filter(it => it.use === id).length; if (n) out.push({ key: `${k + 5}`, icon: `i_${id}`, name: CONSUMABLES[id].name, desc: `${CONSUMABLES[id].desc}.`, cost: '', count: `${n}`, ok: true }); });
+  USE_ORDER.forEach((id, k) => { const n = p.bag.filter(it => it.use === id).length; if (n) out.push({ key: `${(k + 7) % 10}`, gap: 10, icon: `i_${id}`, name: CONSUMABLES[id].name, desc: `${CONSUMABLES[id].desc}.`, cost: '', count: `${n}`, ok: true }); });
   return out;
 }
 
@@ -660,7 +661,7 @@ function hud(ctx: CanvasRenderingContext2D, run: Run, time: number) {
   const sl = slots(run), S = 22, gap = 3, x0 = (VW - sl.length * S - (sl.length - 1) * gap) >> 1, y0 = VH - S - 4;
   let hover: Slot | null = null;
   sl.forEach((s, i) => {
-    const x = x0 + i * (S + gap) + (s.key === 'Q' || s.key === 'B' ? 5 : s.key >= '5' && s.key <= '8' ? 10 : 0);
+    const x = x0 + i * (S + gap) + (s.gap ?? 0);
     const over = mouse.x >= x && mouse.x < x + S && mouse.y >= y0 && mouse.y < y0 + S;
     if (over) hover = s;
     panel(ctx, x, y0, S, S, over ? '#ffcd75' : s.ok ? '#566c86' : '#333c57', s.ok ? 'rgba(28,32,51,0.92)' : 'rgba(13,14,23,0.92)');
@@ -917,7 +918,7 @@ function charSheet(ctx: CanvasRenderingContext2D, run: Run) {
 }
 
 const HELP: [string, string][] = [
-  ['Pfeile / WASD', 'bewegen, in Gegner laufen greift an'], ['Leertaste', 'einen Zug warten'], ['1  2  3', 'Fähigkeiten'], ['4', 'Ultimative Fähigkeit ab Stufe 5'], ['5 6 7 8', 'Rollen und Tränke benutzen'], ['R', 'letzten Fund anlegen'], ['K', 'Fertigkeitsbaum: Punkt vergeben'], ['F', 'Fernangriff (Magier, Waldläufer)'],
+  ['Pfeile / WASD', 'bewegen, in Gegner laufen greift an'], ['Leertaste', 'einen Zug warten'], ['1 bis 6', 'Fähigkeiten (4–6: neue Zauber aus dem Baum)'], ['U', 'Ultimative Fähigkeit ab Stufe 5'], ['7 8 9 0', 'Rollen und Tränke benutzen'], ['R', 'letzten Fund anlegen'], ['K', 'Fertigkeitsbaum: Punkt vergeben'], ['F', 'Fernangriff (Magier, Waldläufer)'],
   ['Q', 'Heiltrank trinken'], ['B', 'Bombe werfen'], ['E', 'Treppe hinabsteigen'], ['Klick / Tab', 'Ziel wählen'], ['Maus', 'über etwas halten zeigt Details'],
   ['I', 'Rucksack: anlegen, benutzen, verkaufen'], ['C', 'Charakter, Reliquien, Gaben'], ['N', 'Karte: klein, groß, aus'], ['M', 'Ton ein/aus'], ['V', 'Vollbild'], ['J', 'Journal: alle Meldungen nachlesen'], ['H', 'diese Hilfe'],
 ];
@@ -1109,56 +1110,68 @@ function endOverlay(ctx: CanvasRenderingContext2D, run: Run) {
 // ---- Fertigkeitsbaum (Lager und Lauf) ----
 export type TreeState = 'learned' | 'open' | 'locked' | 'buy' | 'owned' | 'free';
 const TREE_COL: Record<TreeState, string> = { learned: '#a7f070', open: '#ffcd75', locked: '#333c57', buy: '#b13e53', owned: '#73eff7', free: '#73eff7' };
-// Reihen: 0 = Rang II, 1 = Rang III (A und B nebeneinander)
-const ROW_IDS = [TREE_NODES.filter(n => n.tier === '1').map(n => n.id), TREE_NODES.filter(n => n.tier !== '1').map(n => n.id)];
+// Reihen eines Zweigs von oben nach unten; es werden nur vorhandene gezeigt
+const TIER_ROWS = [['1'], ['2a', '2b'], ['3'], ['4a', '4b'], ['5']];
+const rowsOf = (cls: ClassId) => TIER_ROWS.filter(r => treeNodes(cls).some(n => n.branch === 0 && r.includes(n.tier)));
+const tierOf = (cls: ClassId, id: string) => treeNode(cls, id)!.tier;
 let treeSel = 'n0_1';
 export const treeCursor = () => treeSel;
-export function treeFocus(id: string) { if (treeNode(id)) treeSel = id; }
-export function treeMove(dx: number, dy: number) {
-  const n = treeNode(treeSel)!, r = n.tier === '1' ? 0 : 1;
+export function treeFocus(cls: ClassId, id: string) { if (treeNode(cls, id)) treeSel = id; }
+export function treeMove(cls: ClassId, dx: number, dy: number) {
+  const rows = rowsOf(cls), n = treeNode(cls, treeSel) ?? treeNode(cls, 'n0_1')!, r = rows.findIndex(q => q.includes(n.tier));
   if (dy) {
-    const r2 = Math.max(0, Math.min(1, r + dy));
-    treeSel = r2 === r ? treeSel : r2 === 0 ? `n${n.branch}_1` : `n${n.branch}_4a`;
+    const r2 = Math.max(0, Math.min(rows.length - 1, r + dy));
+    treeSel = `n${n.branch}_${rows[r2][0]}`;
     return;
   }
-  const row = ROW_IDS[r], i = row.indexOf(treeSel);
-  treeSel = row[(i + dx + row.length) % row.length];
+  const flat = [0, 1, 2].flatMap(b => rows[r].map(t => `n${b}_${t}`)), i = flat.indexOf(treeSel);
+  treeSel = flat[(i + dx + flat.length) % flat.length];
 }
 
 const shortName = (cls: ClassId, id: string) => {
-  const n = treeNode(id)!;
-  return n.tier === '1' ? CLASSES[cls].skills[n.branch].name : SKILL_UP[`${cls}${n.branch}`][n.tier === '4a' ? 'a' : 'b'][0];
+  const n = treeNode(cls, id)!;
+  if (n.tier === '1') return CLASSES[cls].skills[n.branch].name;
+  if (n.tier === '4a' || n.tier === '4b') return SKILL_UP[`${cls}${n.branch}`][n.tier === '4a' ? 'a' : 'b'][0];
+  return nodeText(cls, id).name;
 };
+
+// Kleiner Haken: Knoten ist ohne Seelensplitter verfügbar
+function freeMark(ctx: CanvasRenderingContext2D, x: number, y: number, col: string) {
+  ctx.fillStyle = col;
+  for (const [px, py] of [[0, 3], [1, 4], [2, 5], [3, 4], [4, 3], [5, 2], [6, 1], [7, 0]]) ctx.fillRect(x + px, y + py, 1, 2);
+}
 
 export function drawTree(ctx: CanvasRenderingContext2D, cls: ClassId, title: string, stateOf: (id: string) => TreeState, tag: (id: string) => string, foot: string, status: (id: string) => string) {
   ctx.fillStyle = 'rgba(13,14,23,0.88)'; ctx.fillRect(0, 0, VW, VH);
-  text(ctx, title, VW / 2, 18, '#ffcd75', 16, 'center');
-  const colW = 196, gap = 6, x0 = (VW - 3 * colW - 2 * gap) >> 1;
+  text(ctx, title, VW / 2, 14, '#ffcd75', 16, 'center');
+  const colW = 196, gap = 6, x0 = (VW - 3 * colW - 2 * gap) >> 1, rows = rowsOf(cls);
+  const rowH = 26, step = rows.length > 2 ? 32 : 60, top = 62;
   for (let b = 0; b < 3; b++) {
     const cx = x0 + b * (colW + gap), mid = cx + colW / 2;
-    panel(ctx, cx, 44, colW, 196, '#333c57', 'rgba(20,22,36,0.9)');
-    text(ctx, tr(BRANCH_NAMES[cls][b]).toUpperCase(), mid, 52, '#94b0c2', 10, 'center');
-    ctx.drawImage(sprites[`i_${cls}${b}`], mid - 6, 68);
-    const boxes: [string, number, number, number][] = [[`n${b}_1`, cx + 13, 90, colW - 26], [`n${b}_4a`, cx + 4, 168, (colW - 14) / 2], [`n${b}_4b`, cx + 10 + (colW - 14) / 2, 168, (colW - 14) / 2]];
-    // Verbindungen
+    panel(ctx, cx, 36, colW, 206, '#333c57', 'rgba(20,22,36,0.9)');
+    ctx.drawImage(sprites[`i_${cls}${b}`], cx + 8, 42);
+    text(ctx, tr(BRANCH_NAMES[cls][b]).toUpperCase(), mid, 45, '#94b0c2', 10, 'center');
     ctx.fillStyle = '#566c86';
-    ctx.fillRect(mid, 130, 1, 22); ctx.fillRect(cx + colW / 4, 152, colW / 2, 1);
-    ctx.fillRect(cx + colW / 4, 152, 1, 16); ctx.fillRect(cx + (3 * colW) / 4, 152, 1, 16);
-    text(ctx, 'A oder B', mid, 216, '#566c86', 8, 'center');
-    for (const [id, x, y, w] of boxes) {
-      const st = stateOf(id), col = TREE_COL[st], sel = id === treeSel;
-      panel(ctx, x, y, w, 40, sel ? '#f4f4f4' : col, sel ? 'rgba(60,50,40,0.95)' : st === 'locked' ? 'rgba(13,14,23,0.9)' : 'rgba(28,32,51,0.95)');
-      const mark = st === 'learned' ? '+' : '';
-      text(ctx, `${mark ? mark + ' ' : ''}${shortName(cls, id)}`, x + w / 2, y + 7, st === 'locked' ? '#566c86' : '#f4f4f4', 8, 'center');
-      text(ctx, treeNode(id)!.tier === '1' ? 'Rang II' : 'Rang III', x + w / 2, y + 18, '#94b0c2', 8, 'center');
-      const t = tag(id);
-      if (t) text(ctx, t, x + w / 2, y + 29, col, 8, 'center');
-    }
+    ctx.fillRect(mid, top + rowH, 1, (rows.length - 1) * step - rowH);
+    rows.forEach((row, r) => {
+      const y = top + r * step, w = row.length > 1 ? (colW - 14) / 2 : colW - 26;
+      if (row.length > 1) { ctx.fillStyle = '#566c86'; ctx.fillRect(cx + colW / 4, y - 3, colW / 2, 1); }
+      row.forEach((t, k) => {
+        const id = `n${b}_${t}`, x = row.length > 1 ? cx + 4 + k * (w + 6) : cx + 13;
+        const st = stateOf(id), col = TREE_COL[st], sel = id === treeSel, node = treeNode(cls, id)!;
+        panel(ctx, x, y, w, rowH, sel ? '#f4f4f4' : col, sel ? 'rgba(60,50,40,0.95)' : st === 'locked' ? 'rgba(13,14,23,0.9)' : 'rgba(28,32,51,0.95)');
+        const mark = (st === 'learned' ? '+' : '') + (node.key ? '*' : '');
+        text(ctx, cut(`${mark}${mark ? ' ' : ''}${tr(shortName(cls, id))}`, Math.floor((w - 6) / 6)), x + w / 2, y + 5, st === 'locked' ? '#566c86' : '#f4f4f4', 8, 'center');
+        const tg = tag(id);
+        if (tg === '#free') freeMark(ctx, x + w / 2 - 4, y + 16, col);
+        else if (tg) text(ctx, tg, x + w / 2, y + 15, col, 8, 'center');
+      });
+    });
   }
   // Beschreibung des gewählten Knotens
-  const nt = nodeText(cls, treeSel), lines = wrapText(nt.desc, 90);
+  const nt = nodeText(cls, treeSel), lines = wrapText(nt.desc, 90), node = treeNode(cls, treeSel)!;
   panel(ctx, x0, 248, 3 * colW + 2 * gap, 74, '#566c86');
-  text(ctx, nt.name, x0 + 10, 256, '#ffcd75', 10);
+  text(ctx, `${nt.name}${node.key ? ' – Schlüsselknoten' : ''}`, x0 + 10, 256, '#ffcd75', 10);
   lines.forEach((l, k) => text(ctx, l, x0 + 10, 272 + k * 10, '#f4f4f4', 8));
   text(ctx, status(treeSel), x0 + 10, 308, TREE_COL[stateOf(treeSel)], 8);
   text(ctx, foot, VW / 2, 334, '#94b0c2', 8, 'center');
@@ -1171,10 +1184,12 @@ function treeOverlay(ctx: CanvasRenderingContext2D, run: Run) {
     id => ({ learned: 'gelernt', open: 'wählbar', locked: run.pool.includes(id) ? 'gesperrt' : 'nicht freigeschaltet' } as Record<string, string>)[stateOf(id)],
     'Pfeile: wählen · ENTER: lernen · K: später',
     id => {
-      const st = stateOf(id), n = treeNode(id)!;
+      const st = stateOf(id), n = treeNode(p.cls, id)!;
       if (st !== 'locked') return st === 'learned' ? 'Schon gelernt.' : 'Kann jetzt gelernt werden.';
       if (!run.pool.includes(id)) return 'Im Lager noch nicht freigeschaltet.';
       if (n.excl && p.tree.includes(n.excl)) return 'Die andere Ausprägung ist schon gewählt.';
-      return 'Erst Rang II lernen.';
+      if (n.parent && !p.tree.includes(n.parent)) return 'Erst Rang II lernen.';
+      if (n.needAny && !n.needAny.some(q => p.tree.includes(q))) return 'Braucht Rang III und 4 Punkte im Zweig.';
+      return `Braucht ${n.minPts} Punkte im Zweig.`;
     });
 }
