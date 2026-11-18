@@ -16,7 +16,7 @@ export const CLASS_ORDER: ClassId[] = ['krieger', 'magier', 'waldlaeufer'];
 export const CLASSES: Record<ClassId, ClassDef> = {
   krieger: {
     id: 'krieger', name: 'Krieger', desc: 'Zäher Nahkämpfer. Wut entsteht durch Treffer und Schmerz.',
-    hp: 34, atk: 5, def: 2, resName: 'Wut', resMax: 10, resStart: 0, resCol: '#ef7d57', range: 0, shot: '',
+    hp: 30, atk: 5, def: 2, resName: 'Wut', resMax: 10, resStart: 0, resCol: '#ef7d57', range: 0, shot: '',
     skills: [
       { name: 'Schildstoß', cost: 2, desc: 'Schaden + betäubt 2 Züge' },
       { name: 'Wirbelschlag', cost: 5, desc: 'Trifft alle Gegner ringsum' },
