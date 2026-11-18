@@ -106,7 +106,7 @@ export function newRun(seed: number, cls: ClassId, meta: Meta): Run {
     st: {}, xp: 0, cd: 0, awake: true,
     cls, lvl: 1, exp: 0, res: c.resStart, resMax: c.resMax + u('fokus'), potions: 1 + u('trank'), bombs: 1 + u('bombe'),
     crit: 0.05, pow: 1, vamp: 0, thorns: 0, soulMul: 1, dir: [1, 0], perks: [], relics: [], hits: 0, gold: 15 * u('gold'), gear: [null, null, null, null], bag: [], keys: 0,
-    aff: { fund: 5 * u('fund') }, skillLvl: [0, 0, 0], ultCd: 0, picks: 3 + u('wahl'), skillMod: [0, 0, 0], syn: [], sort: 0, tree: [], pts: 0, rest: 0,
+    aff: { fund: 5 * u('fund') }, skillLvl: [0, 0, 0], ultCd: 0, picks: 3 + u('wahl'), skillMod: [0, 0, 0], syn: [], sort: 0, tree: [], pts: 0, rest: 0, ptsGot: 0,
   };
   const run: Run = {
     seed, rng: new RNG(seed), floor: 0,
