@@ -1,14 +1,14 @@
-// Fertigkeitsbaum, Schritt 2a: Punkte, Gaben im Wechsel, Restpunkt, Spielstände
+// Fertigkeitsbaum, Schritt 2a: Punkte, Gaben im Wechsel, Restpunkt, Spielstände (am Waldläufer: noch der Baum aus den Rängen)
 import { describe, it, expect } from 'vitest';
 import { defaultMeta, parseMeta } from '../src/core/save';
 import { newRun, act, checkLevel, availableNodes, serialize, deserialize, xpNeed, Run, TREE_EVERY } from '../src/game/run';
 import { treeNodes, TUNE } from '../src/game/content';
 
-const ALL = treeNodes('krieger').map(n => n.id);
+const ALL = treeNodes('waldlaeufer').map(n => n.id);
 function levelUp(run: Run) { run.p.exp = xpNeed(run.p.lvl); checkLevel(run); }
 // bis kurz vor die nächste Punktstufe aufsteigen, die Gaben unterwegs wählen
 function toPointLevel(run: Run) { while ((run.p.lvl + 1) % TREE_EVERY) { levelUp(run); while (run.mode === 'perk') act(run, { t: 'perk', i: 0 }); } levelUp(run); }
-const fresh = () => { const r = newRun(11, 'krieger', defaultMeta()); r.mode = 'play'; return r; };
+const fresh = () => { const r = newRun(11, 'waldlaeufer', defaultMeta()); r.mode = 'play'; return r; };
 
 describe('Fertigkeitsbaum', () => {
   it('jede dritte Stufe: Punkt und Baum, sonst Gabe', () => {
