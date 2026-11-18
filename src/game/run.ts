@@ -2,7 +2,7 @@ import { RNG } from '../core/rng';
 import type { Meta } from '../core/save';
 import { W, H, T, Room, genDungeon, center, walkable, opaque, los, computeFov, distMap } from './dungeon';
 import { VS, CRATE_TEMPLATES, mirror, genIce, slide } from './puzzles';
-import { CLASSES, ClassId, MOBS, PERKS, RELICS, Item, Offer, AFFIX, CONSUMABLES, UNIQUES, ULT, ULT_LEVEL, SKILL_UP, SYNERGIES, NEW_SKILLS, treeNodes, treeNode, treePool, nodeText, BOSS_BY_BIOME, BIOME_NAMES, FLOORS_PER_BIOME, LAST_FLOOR, biomeOf, spawnTable } from './content';
+import { CLASSES, ClassId, MOBS, PERKS, RELICS, Item, Offer, AFFIX, CONSUMABLES, UNIQUES, ULT, ULT_LEVEL, SKILL_UP, SYNERGIES, NEW_SKILLS, KRYO_MANA, treeNodes, treeNode, treePool, nodeText, BOSS_BY_BIOME, BIOME_NAMES, FLOORS_PER_BIOME, LAST_FLOOR, biomeOf, spawnTable } from './content';
 
 export interface Actor {
   id: number; kind: string; name: string;
@@ -766,8 +766,8 @@ function damage(run: Run, dst: Actor, amt: number, col = '#f4f4f4', crit = false
     if (!p.shield) delete p.st.schild;
     if (amt <= 0) { run.fx.push({ k: 'num', x: p.x, y: p.y, s: 'Schild', col: '#9a4fc0' }); return; }
   }
-  // Kryomant: Treffer gegen Betäubte und Bosse geben Mana
-  if (dst !== p && playerActing && p.cls === 'magier' && hasNode(p, 'n1_5') && (dst.st.stun || dst.boss)) gain(p, 2);
+  // Kryomant: Treffer gegen Betäubte und Bosse geben Mana (KRYO_MANA)
+  if (dst !== p && playerActing && p.cls === 'magier' && hasNode(p, 'n1_5') && (dst.st.stun || dst.boss)) gain(p, KRYO_MANA);
   dst.hp -= amt;
   run.fx.push({ k: 'flash', id: dst.id });
   run.fx.push({ k: 'num', x: dst.x, y: dst.y, s: crit ? `${amt}!` : `${amt}`, col: crit ? '#ffcd75' : col });

@@ -261,7 +261,7 @@ const EN: Record<string, string> = {
   'Eisrüstung': 'Ice Armor', 'Nach der Frostnova 2 Züge +2 Verteidigung': 'After Frost Nova +2 defense for 2 turns',
   'Eislanze': 'Ice Lance', 'Neuer Zauber, 4 Mana: Strahl bis 6 Felder, durchbohrt; Betäubte erleiden doppelten Schaden': 'New spell, 4 mana: beam up to 6 tiles, pierces; stunned targets take double damage',
   'Strahl bis 6 Felder, durchbohrt; Betäubte erleiden doppelten Schaden': 'Beam up to 6 tiles, pierces; stunned targets take double damage',
-  'Kryomant': 'Cryomancer', 'Mana kehrt nicht mehr von selbst zurück; +2 Mana je Treffer gegen Betäubte und Bosse': 'Mana no longer returns on its own; +2 mana per hit on stunned enemies and bosses',
+  'Kryomant': 'Cryomancer', 'Mana kehrt nicht mehr von selbst zurück; +4 Mana je Treffer gegen Betäubte und Bosse': 'Mana no longer returns on its own; +4 mana per hit on stunned enemies and bosses',
   'Nachhall': 'Afterglow', 'Nach dem Blinzeln kostet der nächste Zauber 2 Mana weniger': 'After Blink your next spell costs 2 mana less',
   'Schutzrune': 'Ward Rune', 'Einmal je Ebene: unter 30 % Leben blinzelst du von selbst': 'Once per floor: below 30 % life you blink on your own',
   'Die Schutzrune reißt dich fort!': 'The ward rune pulls you away!',

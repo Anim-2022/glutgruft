@@ -3,7 +3,7 @@ import { describe, it, expect } from 'vitest';
 import { defaultMeta } from '../src/core/save';
 import { newRun, act, availableNodes, Run, Actor, skillCost } from '../src/game/run';
 import { W, H, T, computeFov } from '../src/game/dungeon';
-import { MOBS, treeNodes, treePool, NODE_TEXT, NEW_SKILLS } from '../src/game/content';
+import { MOBS, treeNodes, treePool, NODE_TEXT, NEW_SKILLS, KRYO_MANA } from '../src/game/content';
 import { tr, setLang } from '../src/core/i18n';
 
 function arena(meta = defaultMeta()): Run {
@@ -86,14 +86,14 @@ describe('Magier-Baum', () => {
     void s;
   });
 
-  it('Kryomant: keine Mana-Erholung, +2 je Treffer gegen Bosse und Betäubte', () => {
+  it('Kryomant: keine Mana-Erholung, Mana je Treffer gegen Bosse und Betäubte', () => {
     const r = arena(allPaid()); learn(r, 'n1_1', 'n1_2a', 'n1_4a', 'n1_2b', 'n1_5');
     r.p.res = 5;
     for (let k = 0; k < 6; k++) act(r, { t: 'wait' });
     expect(r.p.res).toBe(5);
     const b = mob(r, 'koenig', 33, 6); b.hp = b.maxHp = 999;
     act(r, { t: 'shoot' });
-    expect(r.p.res).toBe(7);
+    expect(r.p.res).toBe(5 + KRYO_MANA);
   });
 
   it('Zeitriss: Blinzeln kostet keinen Zug, nie zwei Aktionen hintereinander ohne Gegnerzug', () => {
