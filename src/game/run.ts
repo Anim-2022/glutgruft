@@ -367,7 +367,7 @@ export const RUNE_NAMES = ['Sonne', 'Mond', 'Stern', 'Auge'];
 const has = (p: Player, id: string) => p.relics.includes(id);
 export const hasNode = (p: Player, id: string) => p.tree.includes(id);
 export const spellAt = (p: Player, i: number) => (i >= 3 ? p.spells?.[i - 3] : undefined);
-const baseCost = (p: Player, i: number) => (i < 3 ? CLASSES[p.cls].skills[i].cost : NEW_SKILLS[spellAt(p, i)!]?.cost ?? 99);
+const baseCost = (p: Player, i: number) => (i < 3 ? CLASSES[p.cls].skills[i].cost : (NEW_SKILLS[spellAt(p, i)!]?.cost ?? 99) + (p.cls === 'krieger' ? TUNE.kCost : 0));
 export const skillCost = (p: Player, i: number) => Math.max(1, baseCost(p, i) - (has(p, 'echo') ? 1 : 0) - (p.cls === 'krieger' && i === 0 && p.skillMod[0] === 1 ? 1 : 0) - (p.aff.erz ? 1 : 0) - (p.st.nachhall && !(p.cls === 'magier' && i === 2) ? 2 : 0));
 // Fähigkeit jetzt einsetzbar (Ressource, Abklingzeit des Zeitrisses)
 export const skillReady = (p: Player, i: number) => (i < 3 || !!spellAt(p, i)) && canPay(p, skillCost(p, i)) && !(p.cls === 'magier' && i === 2 && p.st.riss);
@@ -1250,7 +1250,7 @@ function castSpell(run: Run, id: string): boolean {
     const t = nearestMob(run, 4);
     if (!t) { say(run, 'Kein Ziel in Reichweite.'); return false; }
     run.fx.push({ k: 'arrow', x0: p.x, y0: p.y, x1: t.x, y1: t.y, col: '#94b0c2', heavy: true });
-    stun(run, t, 1);
+    if (TUNE.kStun) stun(run, t, 1);
     playerHit(run, t, atk * 0.9 * p.pow);
     return true;
   }
@@ -1270,7 +1270,7 @@ function castSpell(run: Run, id: string): boolean {
     }
     p.dir = [Math.sign(t.x - p.x), Math.sign(t.y - p.y)];
     run.fx.push({ k: 'lunge', id: 0, dx: p.dir[0], dy: p.dir[1] });
-    stun(run, t, 1);
+    if (TUNE.kStun) stun(run, t, 1);
     playerHit(run, t, atk * 1.2 * p.pow);
     return true;
   }

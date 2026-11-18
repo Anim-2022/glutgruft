@@ -158,7 +158,8 @@ export const NEW_SKILLS: Record<string, SkillDef & { branch: number }> = {
 // Stellschrauben des Baums (balance.ts darf sie für Messungen überschreiben):
 // treePtsMax – Fertigkeitspunkte je Lauf, danach gibt es Gaben; kryoMana – Mana je Treffer
 // gegen Betäubte und Bosse; kryoRegen – Anteil der normalen Mana-Erholung mit Kryomant
-export const TUNE = { treePtsMax: 6, kryoMana: 2, kryoRegen: 0.75 };
+// kCost – Aufschlag auf die neuen Fähigkeiten des Kriegers; kStun – Betäubung durch Schildwurf und Sturmangriff
+export const TUNE = { treePtsMax: 6, kryoMana: 2, kryoRegen: 0.75, kCost: 0, kStun: 1 };
 // Texte der Knoten T2a, T2b, T3, T5 (2b: Magier, 2c: Krieger)
 export const NODE_TEXT: Partial<Record<ClassId, Record<string, [string, string]>>> = {
   magier: {
