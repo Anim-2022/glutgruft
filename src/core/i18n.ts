@@ -248,6 +248,19 @@ const EN: Record<string, string> = {
   'SPIEL STARTEN': 'START GAME', 'SPRACHE: DEUTSCH': 'LANGUAGE: ENGLISH', 'TON: AN': 'SOUND: ON', 'TON: AUS': 'SOUND: OFF', 'VOLLBILD': 'FULLSCREEN',
   'Pfeile wählen · ENTER bestätigen': 'Arrows select · ENTER confirm',
   'Bewegen: Pfeile/WASD · Fähigkeiten: 1-3 · Rucksack: I · Hilfe: H': 'Move: arrows/WASD · Skills: 1-3 · Backpack: I · Help: H',
+  // Fertigkeitsbaum
+  'Schild': 'Shield', 'Klinge': 'Blade', 'Schlachtruf': 'Battle Cry', 'Eis': 'Ice', 'Arkan': 'Arcane',
+  'Scharfschütze': 'Marksman', 'Fallensteller': 'Trapper', 'Pirscher': 'Stalker',
+  'STUFE ': 'LEVEL ', 'FERTIGKEITSBAUM – ': 'SKILL TREE – ', 'FERTIGKEITSPUNKT': 'SKILL POINT', 'Fertigkeitsbaum': 'Skill tree', ' frei)': ' free)',
+  'Fertigkeitspunkte': 'skill points', 'Fertigkeitspunkt': 'skill point', 'Fertigkeitsbaum: Punkt vergeben': 'Skill tree: spend a point',
+  'Rang III': 'Rank III', 'Rang II': 'Rank II', 'Rang ': 'Rank ', 'A oder B': 'A or B', 'gelernt': 'learned', 'wählbar': 'available', 'gesperrt': 'locked',
+  'nicht freigeschaltet': 'not unlocked', 'freigeschaltet · ENTER': 'unlocked · ENTER', 'immer offen': 'always open',
+  'Pfeile: wählen · ENTER: lernen · K: später': 'Arrows: select · ENTER: learn · K: later',
+  'Pfeile: wählen · ENTER: freischalten · ESC: zurück · ': 'Arrows: select · ENTER: unlock · ESC: back · ',
+  'Schon gelernt.': 'Already learned.', 'Kann jetzt gelernt werden.': 'Can be learned now.', 'Im Lager noch nicht freigeschaltet.': 'Not unlocked in camp yet.',
+  'Die andere Ausprägung ist schon gewählt.': 'The other variant is already chosen.', 'Erst Rang II lernen.': 'Learn rank II first.',
+  'Steht in jedem Lauf zur Wahl.': 'Available in every run.', 'Freischalten: kommt in die Auswahl der Läufe.': 'Unlock: adds it to the choices of your runs.',
+  'Schon freigeschaltet.': 'Already unlocked.', 'Immer verfügbar.': 'Always available.', 'Erst den vorigen Knoten freischalten.': 'Unlock the previous node first.',
 };
 
 const exact = new Map(Object.entries(EN));

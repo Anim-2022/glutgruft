@@ -6,8 +6,8 @@ import { onDeath, drawDecals, drawDying, resetDeaths, reducedFx } from './deaths
 import { drawItemIcon, drawIcon, PERK_ICON } from './icons';
 import { sfx } from '../core/audio';
 import { tr } from '../core/i18n';
-import { Run, Actor, xpNeed, skillCost, itemText, itemValue, itemScore, perkInfo, skillModName, shotRange, RANKS, SORT_NAMES, BAG_MAX, RUNE_NAMES } from '../game/run';
-import { CLASSES, MOBS, PERKS, RELICS, RARITY, RARITY_COL, BIOME_NAMES, biomeOf, Item, AFFIX, CONSUMABLES, SLOT_NAMES, ULT, ULT_LEVEL, USE_ORDER, SYNERGIES } from '../game/content';
+import { Run, Actor, xpNeed, skillCost, itemText, itemValue, itemScore, perkInfo, skillModName, shotRange, RANKS, SORT_NAMES, BAG_MAX, RUNE_NAMES, availableNodes } from '../game/run';
+import { ClassId, TREE_NODES, BRANCH_NAMES, SKILL_UP, treeNode, nodeText, CLASSES, MOBS, PERKS, RELICS, RARITY, RARITY_COL, BIOME_NAMES, biomeOf, Item, AFFIX, CONSUMABLES, SLOT_NAMES, ULT, ULT_LEVEL, USE_ORDER, SYNERGIES } from '../game/content';
 
 const pos = new Map<number, { x: number; y: number }>();
 const lunges = new Map<number, { dx: number; dy: number; t: number }>();
@@ -572,6 +572,7 @@ export function drawRun(ctx: CanvasRenderingContext2D, run: Run, dt: number, tim
   else if (overlay === 'log') logSheet(ctx, run);
   else if (overlay === 'inv') invSheet(ctx, run, time);
   if (run.mode === 'perk') perkOverlay(ctx, run);
+  if (run.mode === 'tree') treeOverlay(ctx, run);
   if (run.mode === 'shop') shopOverlay(ctx, run);
   if (deathT >= 0 && run.mode === 'dead') {
     deathT += dt;
@@ -622,6 +623,11 @@ function hud(ctx: CanvasRenderingContext2D, run: Run, time: number) {
   bar(ctx, 23, 16, 148, 2, p.exp / xpNeed(p.lvl), '#ffcd75');
   text(ctx, `St.${p.lvl}`, 201, 7, '#ffcd75', 8, 'right');
   ctx.globalAlpha = 1;
+  if (p.pts > 0 && run.mode === 'play') {
+    const label = tr(`[K] ${p.pts} Fertigkeitspunkt${p.pts > 1 ? 'e' : ''}`), w = label.length * 6 + 10;
+    panel(ctx, 208, 2, w, 18, '#a7f070', `rgba(13,14,23,${0.75 + 0.2 * Math.sin(time * 4)})`);
+    text(ctx, label, 213, 7, '#a7f070', 8);
+  }
   // Zustände als kleine Marken
   let sx = 3;
   for (const [id, name, col] of STATUS) {
@@ -911,7 +917,7 @@ function charSheet(ctx: CanvasRenderingContext2D, run: Run) {
 }
 
 const HELP: [string, string][] = [
-  ['Pfeile / WASD', 'bewegen, in Gegner laufen greift an'], ['Leertaste', 'einen Zug warten'], ['1  2  3', 'Fähigkeiten'], ['4', 'Ultimative Fähigkeit ab Stufe 5'], ['5 6 7 8', 'Rollen und Tränke benutzen'], ['R', 'letzten Fund anlegen'], ['F', 'Fernangriff (Magier, Waldläufer)'],
+  ['Pfeile / WASD', 'bewegen, in Gegner laufen greift an'], ['Leertaste', 'einen Zug warten'], ['1  2  3', 'Fähigkeiten'], ['4', 'Ultimative Fähigkeit ab Stufe 5'], ['5 6 7 8', 'Rollen und Tränke benutzen'], ['R', 'letzten Fund anlegen'], ['K', 'Fertigkeitsbaum: Punkt vergeben'], ['F', 'Fernangriff (Magier, Waldläufer)'],
   ['Q', 'Heiltrank trinken'], ['B', 'Bombe werfen'], ['E', 'Treppe hinabsteigen'], ['Klick / Tab', 'Ziel wählen'], ['Maus', 'über etwas halten zeigt Details'],
   ['I', 'Rucksack: anlegen, benutzen, verkaufen'], ['C', 'Charakter, Reliquien, Gaben'], ['N', 'Karte: klein, groß, aus'], ['M', 'Ton ein/aus'], ['V', 'Vollbild'], ['J', 'Journal: alle Meldungen nachlesen'], ['H', 'diese Hilfe'],
 ];
@@ -1098,4 +1104,77 @@ function endOverlay(ctx: CanvasRenderingContext2D, run: Run) {
   text(ctx, `Stufe: ${run.p.lvl}`, VW / 2, y + 86, '#94b0c2', 10, 'center');
   text(ctx, `+${run.souls} Seelensplitter`, VW / 2, y + 106, '#73eff7', 10, 'center');
   text(ctx, '[LEERTASTE] zurück zum Lager', VW / 2, y + 132, '#ffcd75', 8, 'center');
+}
+
+// ---- Fertigkeitsbaum (Lager und Lauf) ----
+export type TreeState = 'learned' | 'open' | 'locked' | 'buy' | 'owned' | 'free';
+const TREE_COL: Record<TreeState, string> = { learned: '#a7f070', open: '#ffcd75', locked: '#333c57', buy: '#b13e53', owned: '#73eff7', free: '#73eff7' };
+// Reihen: 0 = Rang II, 1 = Rang III (A und B nebeneinander)
+const ROW_IDS = [TREE_NODES.filter(n => n.tier === '1').map(n => n.id), TREE_NODES.filter(n => n.tier !== '1').map(n => n.id)];
+let treeSel = 'n0_1';
+export const treeCursor = () => treeSel;
+export function treeFocus(id: string) { if (treeNode(id)) treeSel = id; }
+export function treeMove(dx: number, dy: number) {
+  const n = treeNode(treeSel)!, r = n.tier === '1' ? 0 : 1;
+  if (dy) {
+    const r2 = Math.max(0, Math.min(1, r + dy));
+    treeSel = r2 === r ? treeSel : r2 === 0 ? `n${n.branch}_1` : `n${n.branch}_4a`;
+    return;
+  }
+  const row = ROW_IDS[r], i = row.indexOf(treeSel);
+  treeSel = row[(i + dx + row.length) % row.length];
+}
+
+const shortName = (cls: ClassId, id: string) => {
+  const n = treeNode(id)!;
+  return n.tier === '1' ? CLASSES[cls].skills[n.branch].name : SKILL_UP[`${cls}${n.branch}`][n.tier === '4a' ? 'a' : 'b'][0];
+};
+
+export function drawTree(ctx: CanvasRenderingContext2D, cls: ClassId, title: string, stateOf: (id: string) => TreeState, tag: (id: string) => string, foot: string, status: (id: string) => string) {
+  ctx.fillStyle = 'rgba(13,14,23,0.88)'; ctx.fillRect(0, 0, VW, VH);
+  text(ctx, title, VW / 2, 18, '#ffcd75', 16, 'center');
+  const colW = 196, gap = 6, x0 = (VW - 3 * colW - 2 * gap) >> 1;
+  for (let b = 0; b < 3; b++) {
+    const cx = x0 + b * (colW + gap), mid = cx + colW / 2;
+    panel(ctx, cx, 44, colW, 196, '#333c57', 'rgba(20,22,36,0.9)');
+    text(ctx, tr(BRANCH_NAMES[cls][b]).toUpperCase(), mid, 52, '#94b0c2', 10, 'center');
+    ctx.drawImage(sprites[`i_${cls}${b}`], mid - 6, 68);
+    const boxes: [string, number, number, number][] = [[`n${b}_1`, cx + 13, 90, colW - 26], [`n${b}_4a`, cx + 4, 168, (colW - 14) / 2], [`n${b}_4b`, cx + 10 + (colW - 14) / 2, 168, (colW - 14) / 2]];
+    // Verbindungen
+    ctx.fillStyle = '#566c86';
+    ctx.fillRect(mid, 130, 1, 22); ctx.fillRect(cx + colW / 4, 152, colW / 2, 1);
+    ctx.fillRect(cx + colW / 4, 152, 1, 16); ctx.fillRect(cx + (3 * colW) / 4, 152, 1, 16);
+    text(ctx, 'A oder B', mid, 216, '#566c86', 8, 'center');
+    for (const [id, x, y, w] of boxes) {
+      const st = stateOf(id), col = TREE_COL[st], sel = id === treeSel;
+      panel(ctx, x, y, w, 40, sel ? '#f4f4f4' : col, sel ? 'rgba(60,50,40,0.95)' : st === 'locked' ? 'rgba(13,14,23,0.9)' : 'rgba(28,32,51,0.95)');
+      const mark = st === 'learned' ? '+' : '';
+      text(ctx, `${mark ? mark + ' ' : ''}${shortName(cls, id)}`, x + w / 2, y + 7, st === 'locked' ? '#566c86' : '#f4f4f4', 8, 'center');
+      text(ctx, treeNode(id)!.tier === '1' ? 'Rang II' : 'Rang III', x + w / 2, y + 18, '#94b0c2', 8, 'center');
+      const t = tag(id);
+      if (t) text(ctx, t, x + w / 2, y + 29, col, 8, 'center');
+    }
+  }
+  // Beschreibung des gewählten Knotens
+  const nt = nodeText(cls, treeSel), lines = wrapText(nt.desc, 90);
+  panel(ctx, x0, 248, 3 * colW + 2 * gap, 74, '#566c86');
+  text(ctx, nt.name, x0 + 10, 256, '#ffcd75', 10);
+  lines.forEach((l, k) => text(ctx, l, x0 + 10, 272 + k * 10, '#f4f4f4', 8));
+  text(ctx, status(treeSel), x0 + 10, 308, TREE_COL[stateOf(treeSel)], 8);
+  text(ctx, foot, VW / 2, 334, '#94b0c2', 8, 'center');
+}
+
+function treeOverlay(ctx: CanvasRenderingContext2D, run: Run) {
+  const p = run.p, av = availableNodes(run);
+  const stateOf = (id: string): TreeState => p.tree.includes(id) ? 'learned' : av.includes(id) ? 'open' : 'locked';
+  drawTree(ctx, p.cls, `STUFE ${p.lvl} – FERTIGKEITSPUNKT (${p.pts} frei)`, stateOf,
+    id => ({ learned: 'gelernt', open: 'wählbar', locked: run.pool.includes(id) ? 'gesperrt' : 'nicht freigeschaltet' } as Record<string, string>)[stateOf(id)],
+    'Pfeile: wählen · ENTER: lernen · K: später',
+    id => {
+      const st = stateOf(id), n = treeNode(id)!;
+      if (st !== 'locked') return st === 'learned' ? 'Schon gelernt.' : 'Kann jetzt gelernt werden.';
+      if (!run.pool.includes(id)) return 'Im Lager noch nicht freigeschaltet.';
+      if (n.excl && p.tree.includes(n.excl)) return 'Die andere Ausprägung ist schon gewählt.';
+      return 'Erst Rang II lernen.';
+    });
 }

@@ -2,7 +2,7 @@ import { RNG } from '../core/rng';
 import type { Meta } from '../core/save';
 import { W, H, T, Room, genDungeon, center, walkable, opaque, los, computeFov, distMap } from './dungeon';
 import { VS, CRATE_TEMPLATES, mirror, genIce, slide } from './puzzles';
-import { CLASSES, ClassId, MOBS, PERKS, RELICS, Item, Offer, AFFIX, CONSUMABLES, UNIQUES, ULT, ULT_LEVEL, SKILL_UP, SYNERGIES, BOSS_BY_BIOME, BIOME_NAMES, FLOORS_PER_BIOME, LAST_FLOOR, biomeOf, spawnTable } from './content';
+import { CLASSES, ClassId, MOBS, PERKS, RELICS, Item, Offer, AFFIX, CONSUMABLES, UNIQUES, ULT, ULT_LEVEL, SKILL_UP, SYNERGIES, TREE_NODES, treeNode, treePool, BOSS_BY_BIOME, BIOME_NAMES, FLOORS_PER_BIOME, LAST_FLOOR, biomeOf, spawnTable } from './content';
 
 export interface Actor {
   id: number; kind: string; name: string;
@@ -24,6 +24,9 @@ export interface Player extends Actor {
   skillMod: number[];          // Ausprägung bei Rang III: 0 keine, 1 = A, 2 = B
   syn: string[];               // aktive Synergien
   sort: number;                // Ordnung im Rucksack
+  tree: string[];              // gelernte Knoten des Fertigkeitsbaums
+  pts: number;                 // offene Fertigkeitspunkte
+  rest: number;                // Punkte, die mangels Knoten zu Gaben wurden
 }
 
 export interface Puzzle {
@@ -63,8 +66,10 @@ export interface Run {
   puzzle: Puzzle | null; willUsed: boolean;
   shop: Offer[]; target: number; daily: boolean;
   log: string[]; fx: Fx[];
-  mode: 'play' | 'perk' | 'shop' | 'dead' | 'win';
+  mode: 'play' | 'perk' | 'tree' | 'shop' | 'dead' | 'win';
   perkChoices: string[];
+  pool: string[];  // Knoten, die in diesem Lauf lernbar sind (Lager)
+  perkQ: number;   // noch ausstehende Wahl einer Gabe
   souls: number; kills: number; turn: number; nextId: number;
 }
 
@@ -72,6 +77,7 @@ export type Action =
   | { t: 'move'; dx: number; dy: number }
   | { t: 'wait' } | { t: 'shoot' } | { t: 'potion' } | { t: 'descend' } | { t: 'bomb' } | { t: 'ult' } | { t: 'use'; id: string } | { t: 'drop'; i: number } | { t: 'sort' }
   | { t: 'skill'; i: number } | { t: 'perk'; i: number }
+  | { t: 'tree' } | { t: 'learn'; id: string } | { t: 'later' }
   | { t: 'buy'; i: number } | { t: 'leave' } | { t: 'target'; x: number; y: number }
   | { t: 'equip'; i: number } | { t: 'unequip'; slot: number } | { t: 'sell'; i: number };
 
@@ -95,12 +101,12 @@ export function newRun(seed: number, cls: ClassId, meta: Meta): Run {
     st: {}, xp: 0, cd: 0, awake: true,
     cls, lvl: 1, exp: 0, res: c.resStart, resMax: c.resMax + u('fokus'), potions: 1 + u('trank'), bombs: 1 + u('bombe'),
     crit: 0.05, pow: 1, vamp: 0, thorns: 0, soulMul: 1, dir: [1, 0], perks: [], relics: [], hits: 0, gold: 15 * u('gold'), gear: [null, null, null, null], bag: [], keys: 0,
-    aff: { fund: 5 * u('fund') }, skillLvl: [0, 0, 0], ultCd: 0, picks: 3 + u('wahl'), skillMod: [0, 0, 0], syn: [], sort: 0,
+    aff: { fund: 5 * u('fund') }, skillLvl: [0, 0, 0], ultCd: 0, picks: 3 + u('wahl'), skillMod: [0, 0, 0], syn: [], sort: 0, tree: [], pts: 0, rest: 0,
   };
   const run: Run = {
     seed, rng: new RNG(seed), floor: 0,
     tiles: new Uint8Array(W * H), seen: new Uint8Array(W * H), vis: new Uint8Array(W * H),
-    p, mobs: [], traps: [], fire: new Map(), fuses: new Map(), cracks: new Map(), puzzle: null, willUsed: false, shop: [], target: 0, daily: false, log: [], fx: [], mode: 'play', perkChoices: [],
+    p, mobs: [], traps: [], fire: new Map(), fuses: new Map(), cracks: new Map(), puzzle: null, willUsed: false, shop: [], target: 0, daily: false, log: [], fx: [], mode: 'play', perkChoices: [], pool: treePool(cls, meta), perkQ: 0,
     souls: 0, kills: 0, turn: 0, nextId: 1,
   };
   if (u('erbe')) applyPerk(run, run.rng.pick(Object.keys(RELICS)));
@@ -826,7 +832,7 @@ function kill(run: Run, m: Actor) {
   checkLevel(run);
 }
 
-function checkLevel(run: Run) {
+export function checkLevel(run: Run) {
   const p = run.p;
   if (run.mode !== 'play' || p.exp < xpNeed(p.lvl)) return;
   p.exp -= xpNeed(p.lvl);
@@ -834,20 +840,49 @@ function checkLevel(run: Run) {
   p.maxHp += 3;
   p.hp = Math.min(p.maxHp, p.hp + Math.ceil(p.maxHp * 0.2));
   say(run, `Stufe ${p.lvl} erreicht!`);
+  // gerade Stufen: ein Fertigkeitspunkt, ungerade: eine Gabe
+  if (p.lvl % 2 === 0) p.pts++; else run.perkQ++;
+  settlePoints(run);
+  if (p.lvl % 2 === 0 && p.pts > 0) run.mode = 'tree';
+  else nextChoice(run);
+}
+
+// Knoten, die jetzt gelernt werden können
+export function availableNodes(run: Run): string[] {
+  const p = run.p;
+  return run.pool.filter(id => {
+    const n = treeNode(id);
+    if (!n || p.tree.includes(id) || (n.parent && !p.tree.includes(n.parent)) || (n.excl && p.tree.includes(n.excl))) return false;
+    return p.tree.filter(q => treeNode(q)?.branch === n.branch).length >= n.minPts;
+  });
+}
+
+// Restpunkt: Punkte, für die es keinen Knoten mehr gibt, werden zu Gaben
+function settlePoints(run: Run) {
+  const p = run.p;
+  if (p.pts <= 0 || availableNodes(run).length) return;
+  run.perkQ += p.pts;
+  p.rest += p.pts;
+  p.pts = 0;
+}
+
+function nextChoice(run: Run) {
+  if (run.mode !== 'play' || run.perkQ <= 0) return;
+  run.perkQ--;
   offerPerks(run);
+}
+
+function learnNode(run: Run, id: string) {
+  const p = run.p, n = treeNode(id)!, i = n.branch;
+  p.tree.push(id);
+  if (n.tier === '1') p.skillLvl[i] = Math.max(1, p.skillLvl[i]);
+  else if (n.tier === '4a' || n.tier === '4b') { p.skillLvl[i] = 2; p.skillMod[i] = n.tier === '4a' ? 1 : 2; }
+  say(run, `${CLASSES[p.cls].skills[i].name}: Rang ${RANKS[p.skillLvl[i]]}${p.skillMod[i] ? ` – ${skillModName(p, i)}` : ''}`);
 }
 
 function offerPerks(run: Run) {
   const p = run.p, n = p.picks;
   const ch = run.rng.shuffle(Object.keys(PERKS).filter(id => (!PERKS[id].cls || PERKS[id].cls === p.cls) && p.perks.filter(q => q === id).length < 3)).slice(0, n);
-  // oft ist eine der Karten ein höherer Rang für eine Fähigkeit
-  const ups = [0, 1, 2].filter(i => p.skillLvl[i] < 2);
-  if (ups.length && run.rng.chance(0.6)) {
-    const i = run.rng.pick(ups);
-    // Rang III: beide Ausprägungen stehen zur Wahl
-    if (p.skillLvl[i] === 0) ch[n - 1] = `skill${i}`;
-    else { ch[n - 2] = `skill${i}a`; ch[n - 1] = `skill${i}b`; }
-  }
   run.perkChoices = ch;
   run.mode = 'perk';
 }
@@ -862,8 +897,10 @@ function applyPerk(run: Run, id: string) {
   }
   if (id.startsWith('skill')) {
     const i = +id[5];
+    // Karte aus einem älteren Spielstand: auch im Baum vermerken
     if (id[6]) { p.skillLvl[i] = 2; p.skillMod[i] = id[6] === 'a' ? 1 : 2; }
     else p.skillLvl[i] = Math.max(1, p.skillLvl[i]);
+    p.tree = [...new Set([...p.tree, ...nodesFromRanks(p.skillLvl, p.skillMod)])];
     say(run, `${CLASSES[p.cls].skills[i].name}: Rang ${RANKS[p.skillLvl[i]]}${id[6] ? ` – ${skillModName(p, i)}` : ''}`);
     return;
   }
@@ -1098,8 +1135,28 @@ export function act(run: Run, a: Action): void {
     if (a.t === 'perk' && run.perkChoices[a.i]) {
       applyPerk(run, run.perkChoices[a.i]);
       run.mode = 'play';
+      nextChoice(run);
       checkLevel(run);
     }
+    return;
+  }
+  if (run.mode === 'tree') {
+    if (a.t === 'learn' && p.pts > 0 && availableNodes(run).includes(a.id)) {
+      learnNode(run, a.id);
+      p.pts--;
+      settlePoints(run);
+      if (p.pts > 0) return;
+    } else if (a.t !== 'later') return;
+    run.mode = 'play';
+    nextChoice(run);
+    checkLevel(run);
+    return;
+  }
+  if (a.t === 'tree') {
+    // Baum öffnen kostet keinen Zug; unverwendbare Punkte werden jetzt zu Gaben
+    settlePoints(run);
+    if (p.pts > 0) run.mode = 'tree';
+    else nextChoice(run);
     return;
   }
   if (run.mode === 'shop') {
@@ -1418,6 +1475,7 @@ export function deserialize(json: string): Run | null {
     const o = JSON.parse(json);
     if (o.v !== SAVE_VERSION) return null;
     delete o.v;
+    migrateRun(o);
     return {
       ...o, rng: new RNG(o.rng), fx: [],
       tiles: Uint8Array.from(o.tiles), seen: Uint8Array.from(o.seen), vis: Uint8Array.from(o.vis),
@@ -1426,4 +1484,23 @@ export function deserialize(json: string): Run | null {
   } catch {
     return null;
   }
+}
+
+// Knoten, die den Rängen entsprechen (für Spielstände von vor dem Baum)
+export function nodesFromRanks(lvl: number[], mod: number[]): string[] {
+  const out: string[] = [];
+  lvl.forEach((l, i) => {
+    if (l >= 1) out.push(`n${i}_1`);
+    if (l >= 2 && mod[i]) out.push(`n${i}_4${mod[i] === 1 ? 'a' : 'b'}`);
+  });
+  return out;
+}
+
+function migrateRun(o: { p: Player; pool?: string[]; perkQ?: number }) {
+  const p = o.p;
+  if (!p.tree) p.tree = nodesFromRanks(p.skillLvl, p.skillMod);
+  p.pts ??= 0;
+  p.rest ??= 0;
+  o.pool ??= TREE_NODES.filter(n => n.cost === 0).map(n => n.id);
+  o.perkQ ??= 0;
 }
