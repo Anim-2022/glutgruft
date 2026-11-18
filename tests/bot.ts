@@ -1,6 +1,6 @@
 // Einfacher Autospieler für Balance- und Stabilitätsläufe.
 import { W, H, T, walkable } from '../src/game/dungeon';
-import { Run, Action, act, playerAtk, itemScore, availableNodes } from '../src/game/run';
+import { Run, Action, act, playerAtk, itemScore, availableNodes, MAX_TRAPS } from '../src/game/run';
 import { CLASSES, MOBS } from '../src/game/content';
 
 const DIRS = [[1, 0], [-1, 0], [0, 1], [0, -1]];
@@ -97,7 +97,18 @@ function decide(run: Run): Action {
     if (near.boss && carries('kraft') && !p.st.stark) return { t: 'use', id: 'kraft' };
     if (p.res < 2 && carries('quell')) return { t: 'use', id: 'quell' };
     if (p.lvl >= 5 && !p.ultCd && (near.boss || vis.length >= 3) && d <= (p.cls === 'krieger' ? 2 : 7)) return { t: 'ult' };
+    const free = (x: number, y: number) => x >= 0 && y >= 0 && x < W && y < H && walkable(run.tiles[y * W + x]) && !run.mobs.some(m => m.x === x && m.y === y);
+    // ein Schritt weg vom Gegner (vierseitig), sonst null
+    const away = (): [number, number] | null => {
+      const sx = Math.sign(p.x - near.x), sy = Math.sign(p.y - near.y);
+      for (const [dx, dy] of [[sx, 0], [0, sy], [0, sx ? 1 : 0], [0, sx ? -1 : 0], [sy ? 1 : 0, 0], [sy ? -1 : 0, 0]] as [number, number][]) {
+        if ((dx || dy) && free(p.x + dx, p.y + dy) && Math.max(Math.abs(p.x + dx - near.x), Math.abs(p.y + dy - near.y)) >= d) return [dx, dy];
+      }
+      return null;
+    };
     if (p.cls === 'krieger') {
+      // Kriegsschrei zu Beginn eines Kampfs gegen mehrere oder einen Boss
+      if (!p.st.stark && can(2) && (vis.filter(m => dist(m) <= 3).length >= 2 || (near.boss && d <= 3))) return { t: 'skill', i: 2 };
       if (d <= 1 && vis.filter(m => dist(m) <= 1).length >= 2 && can(1)) return { t: 'skill', i: 1 };
       if (d <= 1 && can(0) && !near.st.stun && near.hp > playerAtk(p)) return { t: 'skill', i: 0 };
       if (adj) return { t: 'move', dx: near.x - p.x, dy: near.y - p.y };
@@ -107,6 +118,18 @@ function decide(run: Run): Action {
       if (d <= 1 && can(2) && !near.st.stun) return { t: 'skill', i: 2 };
       if (d <= c.range) return { t: 'shoot' };
     } else {
+      const onTrap = run.traps.some(t => t.x === p.x && t.y === p.y);
+      // Ausweichrolle: Gegner direkt daneben, wenig Leben oder genug Fokus für Rolle und Zielschuss
+      if (d <= 1 && can(2) && (p.hp < p.maxHp * 0.6 || p.res >= c.skills[2].cost + c.skills[0].cost)) {
+        const fx = p.x + p.dir[0], fy = p.y + p.dir[1];
+        if (Math.max(Math.abs(fx - near.x), Math.abs(fy - near.y)) > d && free(fx, fy)) return { t: 'skill', i: 2 };
+        const st = away();
+        if (st) return { t: 'move', dx: st[0], dy: st[1] }; // Blickrichtung weg vom Gegner, dann rollen
+      }
+      // Falle: ein wacher Gegner kommt in gerader Linie auf 2–4 Felder heran
+      if (!onTrap && near.awake && d >= 2 && d <= 4 && (near.x === p.x || near.y === p.y) && run.traps.length < MAX_TRAPS && can(1)) return { t: 'skill', i: 1 };
+      // auf der eigenen Falle: einen Schritt zurück, damit der Gegner hineinläuft
+      if (onTrap && near.awake && d >= 2 && d <= 3) { const st = away(); if (st) return { t: 'move', dx: st[0], dy: st[1] }; }
       if (d <= 8 && can(0)) return { t: 'skill', i: 0 };
       if (d <= c.range) return { t: 'shoot' };
     }
