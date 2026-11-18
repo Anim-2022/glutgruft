@@ -27,8 +27,10 @@ function runCell({ variant: full, set, mname, cls }: Cell): Result {
   const [variant, ...tunes] = full.split(':');
   Object.assign(TUNE, TUNE0);
   for (const t of tunes) { const [k, v] = t.split('='); (TUNE as Record<string, number>)[k] = +v; }
-  const nokey = variant.endsWith('-nokey');
-  setBuild(variant.replace('-nokey', '') as Build);
+  // Zusätze: -nokey ohne T5, -x3 / -x2a / -x2b ohne diese Stufe, -xn1_3 ohne diesen Knoten (zur Ursachensuche)
+  const [vbuild, ...flags] = variant.split('-');
+  const drop = flags.map(f => f === 'nokey' ? '5' : f.slice(1)); // x3 = Stufe 3 aller Zweige, xn1_3 = ein Knoten
+  setBuild(vbuild as Build);
   const meta = mname === 'max' ? metaMax : defaultMeta();
   const out: string[] = [];
     const su: Record<string, number> = {};
@@ -41,7 +43,7 @@ function runCell({ variant: full, set, mname, cls }: Cell): Result {
     let goldTotal = 0, goldSpent = 0, potBought = 0, potFound = 0, bombBought = 0, goldLeft = 0, bossDeaths = 0;
     for (let s = 1; s <= N; s++) {
       const run = newRun(s * 7919 + 13 + set * 1000003, cls, meta);
-      if (nokey) run.pool = run.pool.filter(id => !id.endsWith('_5'));
+      if (drop.length) run.pool = run.pool.filter(id => !drop.some(d => id === d || id.endsWith(`_${d}`)));
       let cur = -1, F0: F | null = null; const resHist: number[] = [];
       for (let i = 0; i < 14000 && run.mode !== 'dead' && run.mode !== 'win'; i++) {
         if (run.floor !== cur) {

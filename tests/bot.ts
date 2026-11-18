@@ -1,6 +1,6 @@
 // Einfacher Autospieler für Balance- und Stabilitätsläufe.
 import { W, H, T, walkable } from '../src/game/dungeon';
-import { Run, Action, act, playerAtk, itemScore, availableNodes, MAX_TRAPS, skillReady, lineFrom } from '../src/game/run';
+import { Run, Action, act, playerAtk, itemScore, availableNodes, MAX_TRAPS, skillReady, skillCost, lineFrom } from '../src/game/run';
 import { CLASSES, MOBS } from '../src/game/content';
 
 const DIRS = [[1, 0], [-1, 0], [0, 1], [0, -1]];
@@ -33,9 +33,9 @@ function stepTo(run: Run, goal: (x: number, y: number, i: number) => boolean, av
 }
 
 // Wahl im Fertigkeitsbaum: BUILD=heur (Zweig nach Seed, erst in die Tiefe) oder BUILD=random
-// BUILD=feuer|eis|arkan: fester Zweig für alle Seeds (Magier)
-export type Build = 'heur' | 'random' | 'feuer' | 'eis' | 'arkan';
-const FORCED: Record<string, number> = { feuer: 0, eis: 1, arkan: 2 };
+// BUILD=feuer|eis|arkan (Magier), schild|klinge|schlachtruf (Krieger): fester Zweig für alle Seeds
+export type Build = 'heur' | 'random' | 'feuer' | 'eis' | 'arkan' | 'schild' | 'klinge' | 'schlachtruf';
+const FORCED: Record<string, [string, number]> = { feuer: ['magier', 0], eis: ['magier', 1], arkan: ['magier', 2], schild: ['krieger', 0], klinge: ['krieger', 1], schlachtruf: ['krieger', 2] };
 const envBuild = (globalThis as { process?: { env: Record<string, string | undefined> } }).process?.env.BUILD ?? 'heur';
 let build: Build = (envBuild in FORCED || envBuild === 'random' ? envBuild : 'heur') as Build;
 export const setBuild = (b: Build) => { build = b; };
@@ -48,7 +48,7 @@ export function pickNode(run: Run): string {
     const h = (Math.imul(run.seed, 73856093) ^ Math.imul(run.p.lvl, 19349663) ^ Math.imul(run.p.tree.length + 1, 83492791)) >>> 0;
     return av[h % av.length];
   }
-  const focus = build in FORCED && run.p.cls === 'magier' ? FORCED[build] : run.seed % 3, ab = Math.floor(run.seed / 3) % 2 ? 'b' : 'a';
+  const focus = build in FORCED && run.p.cls === FORCED[build][0] ? FORCED[build][1] : run.seed % 3, ab = Math.floor(run.seed / 3) % 2 ? 'b' : 'a';
   for (let k = 0; k < 3; k++) for (const t of TIER_ORDER(ab)) { const id = `n${(focus + k) % 3}_${t}`; if (av.includes(id)) return id; }
   return av[0];
 }
@@ -56,13 +56,17 @@ export function pickNode(run: Run): string {
 const shopped = new Set<number>();
 const trail: number[] = [];
 let visitFloor = 0, wander = 0, loops = 0;
+// fehlgeschlagene neue Fähigkeit (kein Ziel, kein Weg): in diesem Zug nicht noch einmal
+let failTurn = -1, failSkill = -1, lastTurn = -1, lastSkill = -1;
 
 export function botAction(run: Run): Action {
   if (run.mode === 'shop') shopped.add(run.floor);
   if (run.turn === 0) shopped.clear();
   if (run.turn === 0 || visitFloor !== run.floor) { trail.length = 0; wander = 0; loops = 0; visitFloor = run.floor; }
   if (wander > 0 && run.mode === 'play') { wander--; const d = DIRS[(wander * 7 + run.turn) % 4]; return { t: 'move', dx: d[0], dy: d[1] }; }
+  if (lastSkill >= 0 && run.turn === lastTurn) { failTurn = run.turn; failSkill = lastSkill; }
   const a = decide(run);
+  lastTurn = run.turn; lastSkill = a.t === 'skill' && a.i >= 3 ? a.i : -1;
   // Gegen Pendeln: wechselt der Bot nur noch zwischen zwei Feldern, läuft er kurz ziellos
   if (a.t === 'move' && run.mode === 'play') {
     trail.push(run.p.y * W + run.p.x);
@@ -110,10 +114,28 @@ function decide(run: Run): Action {
       return null;
     };
     if (p.cls === 'krieger') {
+      const node = (id: string) => p.tree.includes(id);
+      // Blutzorn: mit Leben zahlen nur oberhalb von 40 % Leben
+      const kc = (i: number) => p.res >= skillCost(p, i) || (node('n2_5') && skillReady(p, i) && p.hp - 2 * (skillCost(p, i) - p.res) > p.maxHp * 0.4);
+      const kcan = (i: number) => (node('n2_5') ? kc(i) : can(i));
+      const spell = (id: string) => { const k = (p.spells ?? []).indexOf(id); return k >= 0 && kc(3 + k) && !(failTurn === run.turn && failSkill === 3 + k) ? 3 + k : -1; };
+      const ranged = vis.filter(m => m.awake && MOBS[m.kind].range && dist(m) <= 6);
+      const adjN = vis.filter(m => dist(m) <= 1).length;
       // Kriegsschrei zu Beginn eines Kampfs gegen mehrere oder einen Boss
-      if (!p.st.stark && can(2) && (vis.filter(m => dist(m) <= 3).length >= 2 || (near.boss && d <= 3))) return { t: 'skill', i: 2 };
-      if (d <= 1 && vis.filter(m => dist(m) <= 1).length >= 2 && can(1)) return { t: 'skill', i: 1 };
-      if (d <= 1 && can(0) && !near.st.stun && near.hp > playerAtk(p)) return { t: 'skill', i: 0 };
+      if (!p.st.stark && kcan(2) && (vis.filter(m => dist(m) <= 3).length >= 2 || (near.boss && d <= 3))) return { t: 'skill', i: 2 };
+      // Herausforderung: Schützen in Sicht, noch niemand direkt daneben
+      const hf = spell('herausforderung');
+      if (hf >= 0 && ranged.some(m => dist(m) <= 4) && adjN === 0 && !ranged.some(m => m.st.taunt)) return { t: 'skill', i: hf };
+      // Schildwurf: Schütze auf 2–4 Feldern
+      const sw = spell('schildwurf');
+      if (sw >= 0) { const t = ranged.filter(m => dist(m) >= 2 && dist(m) <= 4 && !m.st.stun)[0]; if (t) { if (run.target !== t.id) return { t: 'target', x: t.x, y: t.y }; return { t: 'skill', i: sw }; } }
+      // Sturmangriff: wacher Gegner auf 2–5 Feldern
+      const sa = spell('sturmangriff');
+      if (sa >= 0 && d >= 2 && d <= 5 && near.awake) return { t: 'skill', i: sa };
+      // Vergelter: Schildstoß betäubt alle Nachbarn
+      if (node('n0_5') && adjN >= 2 && kcan(0) && !near.st.stun) return { t: 'skill', i: 0 };
+      if (d <= 1 && adjN >= 2 && kcan(1)) return { t: 'skill', i: 1 };
+      if (d <= 1 && kcan(0) && !near.st.stun && near.hp > playerAtk(p)) return { t: 'skill', i: 0 };
       if (adj) return { t: 'move', dx: near.x - p.x, dy: near.y - p.y };
     } else if (p.cls === 'magier') {
       const ready = (i: number) => skillReady(p, i), node = (id: string) => p.tree.includes(id);

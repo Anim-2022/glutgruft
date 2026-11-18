@@ -367,10 +367,20 @@ export const RUNE_NAMES = ['Sonne', 'Mond', 'Stern', 'Auge'];
 const has = (p: Player, id: string) => p.relics.includes(id);
 export const hasNode = (p: Player, id: string) => p.tree.includes(id);
 export const spellAt = (p: Player, i: number) => (i >= 3 ? p.spells?.[i - 3] : undefined);
-const baseCost = (p: Player, i: number) => (i < 3 ? CLASSES[p.cls].skills[i].cost : NEW_SKILLS[spellAt(p, i)!]?.cost ?? 99);
+const baseCost = (p: Player, i: number) => (i < 3 ? CLASSES[p.cls].skills[i].cost : (NEW_SKILLS[spellAt(p, i)!]?.cost ?? 99) + (p.cls === 'krieger' ? TUNE.kCost : 0));
 export const skillCost = (p: Player, i: number) => Math.max(1, baseCost(p, i) - (has(p, 'echo') ? 1 : 0) - (p.cls === 'krieger' && i === 0 && p.skillMod[0] === 1 ? 1 : 0) - (p.aff.erz ? 1 : 0) - (p.st.nachhall && !(p.cls === 'magier' && i === 2) ? 2 : 0));
 // Fähigkeit jetzt einsetzbar (Ressource, Abklingzeit des Zeitrisses)
-export const skillReady = (p: Player, i: number) => (i < 3 || !!spellAt(p, i)) && p.res >= skillCost(p, i) && !(p.cls === 'magier' && i === 2 && p.st.riss);
+export const skillReady = (p: Player, i: number) => (i < 3 || !!spellAt(p, i)) && canPay(p, skillCost(p, i)) && !(p.cls === 'magier' && i === 2 && p.st.riss);
+// Blutzorn (Krieger): fehlende Wut wird mit Leben bezahlt, 2 je Wut; man stirbt nicht daran
+const blutzorn = (p: Player) => p.cls === 'krieger' && hasNode(p, 'n2_5');
+export const canPay = (p: Player, cost: number) => p.res >= cost || (blutzorn(p) && p.hp - 2 * (cost - p.res) >= 1);
+function payRes(run: Run, cost: number) {
+  const p = run.p;
+  if (p.res >= cost) { p.res -= cost; return; }
+  const n = 2 * (cost - p.res);
+  p.hp -= n; p.res = 0;
+  run.fx.push({ k: 'num', x: p.x, y: p.y, s: `-${n}`, col: '#b13e53' });
+}
 export const shotRange = (p: Player) => CLASSES[p.cls].range + (p.aff.weite ?? 0);
 export const RANKS = ['I', 'II', 'III'];
 // Name und Beschreibung einer Wahl beim Stufenaufstieg: Gabe, Reliquie oder Fähigkeitsrang
@@ -804,6 +814,7 @@ function playerHit(run: Run, dst: Actor, base: number, sure = false) {
   if (p.st.konter) { sure = true; delete p.st.konter; }
   if (dst.boss) base *= (has(p, 'jaeger') ? 1.5 : 1) * (1 + (a.boss ?? 0) / 100);
   if (a.henker && dst.hp * 2 < dst.maxHp) base *= 1 + a.henker / 100;
+  if (blutzorn(p) && p.hp * 2 < p.maxHp) base *= 1.3;
   const crit = sure || run.rng.chance(p.crit);
   if (has(p, 'giftzahn')) dst.st.gift = 3;
   if (a.gift && run.rng.chance(a.gift / 100)) dst.st.gift = 3;
@@ -858,6 +869,8 @@ function kill(run: Run, m: Actor) {
     run.fx.push({ k: 'boom', x: m.x, y: m.y, r: 1 });
     for (const o of run.mobs.filter(o => cheb(o, m) <= 1)) damage(run, o, 4 + p.lvl, '#ef7d57');
   }
+  // Klingenrausch: ein Sieg gibt einen freien Zug, höchstens alle 3 Züge
+  if (p.cls === 'krieger' && playerActing && hasNode(p, 'n1_5') && !p.st.rausch) { p.st.rausch = 3; freeTurn = true; say(run, 'Klingenrausch!'); }
   if (p.cls === 'magier' && m.st.brand && hasNode(p, 'n0_5')) {
     // Flächenbrand: brennende Gegner explodieren und stecken Nachbarn an
     run.fx.push({ k: 'boom', x: m.x, y: m.y, r: 1 });
@@ -939,7 +952,7 @@ function learnNode(run: Run, id: string) {
   p.tree.push(id);
   // gebündelte Knoten (T2a) kommen mit
   for (const b of treeNodes(p.cls)) if (b.bundled && b.parent === id && run.pool.includes(b.id) && !p.tree.includes(b.id)) { p.tree.push(b.id); say(run, `Dazu: ${nodeName(p, b.id)}`); }
-  if (n.spell) { (p.spells ??= []).push(n.spell); say(run, `Neuer Zauber: ${NEW_SKILLS[n.spell].name} [${2 + p.spells.length}]`); return; }
+  if (n.spell) { (p.spells ??= []).push(n.spell); say(run, `${p.cls === 'magier' ? 'Neuer Zauber' : 'Neue Fähigkeit'}: ${NEW_SKILLS[n.spell].name} [${2 + p.spells.length}]`); return; }
   if (n.tier !== '1' && n.tier !== '4a' && n.tier !== '4b') { say(run, `Gelernt: ${nodeName(p, id)}`); return; }
   if (n.tier === '1') p.skillLvl[i] = Math.max(1, p.skillLvl[i]);
   else if (n.tier === '4a' || n.tier === '4b') { p.skillLvl[i] = 2; p.skillMod[i] = n.tier === '4a' ? 1 : 2; }
@@ -1045,16 +1058,17 @@ function useSkill(run: Run, i: number): boolean {
   if (!sk) return false;
   if (p.cls === 'magier' && i === 2 && p.st.riss) { say(run, `Zeitriss: noch ${p.st.riss} Züge.`); return false; }
   const cost = skillCost(p, i);
-  if (p.res < cost) { say(run, `Nicht genug ${CLASSES[p.cls].resName}.`); return false; }
+  if (!canPay(p, cost)) { say(run, `Nicht genug ${CLASSES[p.cls].resName}.`); return false; }
   if (i >= 3) {
     if (!castSpell(run, spellAt(p, i)!)) return false;
-    p.res -= cost;
+    payRes(run, cost);
     delete p.st.nachhall;
     return true;
   }
   const atk = playerAtk(p), L = p.skillLvl[i], mod = p.skillMod[i], sp = p.pow * (1 + 0.3 * L);
   const around = (r: number) => run.mobs.filter(m => cheb(m, p) <= r && run.vis[m.y * W + m.x]);
   const noTarget = () => { say(run, 'Kein Ziel in Reichweite.'); return false; };
+  let refund = 0; // Wut, die erst nach dem Bezahlen gutgeschrieben wird
   switch (`${p.cls}${i}`) {
     case 'krieger0': {
       const t = nearestMob(run, 1);
@@ -1069,12 +1083,18 @@ function useSkill(run: Run, i: number): boolean {
         while (k < 2 && isFree(run, t.x + dx, t.y + dy)) { moveMob(run, t, t.x + dx, t.y + dy); k++; if (t.hp <= 0) break; }
         if (k < 2 && t.hp > 0) damage(run, t, 4 + p.lvl, '#ffcd75');
       }
+      // Vergelter: betäubt alle Nachbarn
+      if (hasNode(p, 'n0_5')) for (const o of around(1)) if (o !== t) stun(run, o, 2);
       break;
     }
     case 'krieger1': {
       const ts = around(mod === 1 ? 2 : 1);
       if (!ts.length) return noTarget();
-      for (const t of ts) playerHit(run, t, atk * 1.7 * sp);
+      for (const t of ts) {
+        playerHit(run, t, atk * 1.7 * sp);
+        if (hasNode(p, 'n1_2b') && t.hp > 0) t.st.gift = 3; // Gezackte Klinge
+      }
+      if (hasNode(p, 'n1_2a')) refund = ts.length; // Schwungkraft
       if (mod === 2) { const n = Math.min(p.maxHp - p.hp, 2 * ts.length); if (n > 0) { p.hp += n; run.fx.push({ k: 'num', x: p.x, y: p.y, s: `+${n}`, col: '#a7f070' }); } }
       run.fx.push({ k: 'shake', n: 3 });
       break;
@@ -1083,6 +1103,8 @@ function useSkill(run: Run, i: number): boolean {
       p.st.stark = 7 + 3 * L;
       if (mod === 1) for (const t of around(1)) stun(run, t, 1);
       if (mod === 2) p.st.wall = p.st.stark;
+      // Einschüchterung: Gegner ringsum schlagen schwächer, solange der Schrei wirkt
+      if (hasNode(p, 'n2_2b')) for (const t of around(2)) t.st.schwach = p.st.stark + 1;
       say(run, 'Kriegsschrei!');
       break;
     case 'magier0': {
@@ -1127,7 +1149,7 @@ function useSkill(run: Run, i: number): boolean {
       if (hasNode(p, 'n2_2a')) p.st.nachhall = 1;
       // Zeitriss: kein Zug, danach Abklingzeit
       if (hasNode(p, 'n2_5')) { p.st.riss = 3; freeTurn = true; }
-      p.res -= cost;
+      payRes(run, cost);
       return true;
     }
     case 'waldlaeufer0': {
@@ -1168,7 +1190,8 @@ function useSkill(run: Run, i: number): boolean {
       break;
     }
   }
-  p.res -= cost;
+  payRes(run, cost);
+  if (refund) gain(p, refund);
   delete p.st.nachhall;
   return true;
 }
@@ -1189,7 +1212,7 @@ export function lineFrom(run: Run, tx: number, ty: number, len: number): [number
   return out;
 }
 
-// Neue Zauber des Magiers (Plätze 4–6)
+// Neue Fähigkeiten aus dem Baum (Plätze 4–6)
 function castSpell(run: Run, id: string): boolean {
   const p = run.p, atk = playerAtk(p);
   if (id === 'flammenwand') {
@@ -1221,6 +1244,39 @@ function castSpell(run: Run, id: string): boolean {
     p.shield = 8 + p.lvl;
     p.st.schild = 5;
     say(run, 'Arkanschild!');
+    return true;
+  }
+  if (id === 'schildwurf') {
+    const t = nearestMob(run, 4);
+    if (!t) { say(run, 'Kein Ziel in Reichweite.'); return false; }
+    run.fx.push({ k: 'arrow', x0: p.x, y0: p.y, x1: t.x, y1: t.y, col: '#94b0c2', heavy: true });
+    playerHit(run, t, atk * 0.9 * p.pow);
+    return true;
+  }
+  if (id === 'sturmangriff') {
+    // Sturm in gerader Linie bis neben das Ziel; ohne freien Weg kein Sturm
+    const t = nearestMob(run, 5);
+    if (!t) { say(run, 'Kein Ziel in Reichweite.'); return false; }
+    let stop = -1;
+    const path = lineFrom(run, t.x, t.y, 5);
+    if (cheb(t, p) > 1) {
+      for (let k = 0; k < path.length && k < 4; k++) {
+        if (!isFree(run, path[k][0], path[k][1])) break;
+        if (cheb(t, { x: path[k][0], y: path[k][1] }) <= 1) { stop = k; break; }
+      }
+      if (stop < 0) { say(run, 'Kein freier Weg zum Ziel.'); return false; }
+      [p.x, p.y] = path[stop];
+    }
+    p.dir = [Math.sign(t.x - p.x), Math.sign(t.y - p.y)];
+    run.fx.push({ k: 'lunge', id: 0, dx: p.dir[0], dy: p.dir[1] });
+    playerHit(run, t, atk * 1.2 * p.pow);
+    return true;
+  }
+  if (id === 'herausforderung') {
+    const ts = run.mobs.filter(m => cheb(m, p) <= 4 && run.vis[m.y * W + m.x]);
+    if (!ts.length) { say(run, 'Kein Ziel in Reichweite.'); return false; }
+    for (const m of ts) { m.awake = true; m.st.taunt = 2; } // Schützen schweigen einen Zug
+    say(run, 'Herausforderung!');
     return true;
   }
   return false;
@@ -1322,7 +1378,7 @@ export function act(run: Run, a: Action): void {
         const base = playerAtk(p) * (CLASSES[p.cls].range ? 0.6 : 1);
         playerHit(run, m, base);
         sideHits(run, m, base, '#f4f4f4');
-        if (p.cls === 'krieger') gain(p, 2);
+        if (p.cls === 'krieger' && !hasNode(p, 'n0_5')) gain(p, 2); // Vergelter: keine Wut aus eigenen Schlägen
         used = true;
       } else if (t === T.CHEST || t === T.CURSED) { openChest(run, i); used = true; }
       else if (t === T.FOUNTAIN) {
@@ -1394,6 +1450,8 @@ export function act(run: Run, a: Action): void {
       break;
     }
     case 'wait':
+      // Schildwall: Warten im Kampf schützt und gibt Wut
+      if (a.t === 'wait' && p.cls === 'krieger' && hasNode(p, 'n0_2a') && run.mobs.some(m => m.awake && run.vis[m.y * W + m.x])) { p.st.sw = 1; gain(p, 1); }
       // Fokus sammelt sich nur, wenn ein wacher Gegner in Sicht ist
       if (p.cls === 'waldlaeufer' && run.mobs.some(m => m.awake && run.vis[m.y * W + m.x])) gain(p, 1);
       used = true;
@@ -1468,10 +1526,16 @@ function hitPlayer(run: Run, m: Actor, melee: boolean) {
   m.f = Math.abs(p.x - m.x) >= Math.abs(p.y - m.y) ? [Math.sign(p.x - m.x), 0] : [0, Math.sign(p.y - m.y)];
   if (melee) run.fx.push({ k: 'lunge', id: m.id, dx: Math.sign(p.x - m.x), dy: Math.sign(p.y - m.y) }, { k: 'swipe', x: p.x, y: p.y, dx: Math.sign(p.x - m.x), dy: Math.sign(p.y - m.y), big: !!m.boss });
   if (p.st.dodge || (p.aff.flink && run.rng.chance(Math.min(40, p.aff.flink) / 100))) { run.fx.push({ k: 'num', x: p.x, y: p.y, s: 'verfehlt', col: '#94b0c2' }); if (p.aff.konter) p.st.konter = 1; return; }
-  const atk = melee ? m.atk : Math.round(m.atk * 0.7); // Fernschüsse treffen schwächer
-  damage(run, p, Math.max(Math.ceil(atk * 0.3), atk - p.def - (p.st.wall ? 3 : 0) - (p.st.eis ? 2 : 0)) - (has(p, 'steinhaut') ? 1 : 0), '#b13e53');
+  const atk = Math.max(1, (melee ? m.atk : Math.round(m.atk * 0.7)) - (m.st.schwach ? 1 : 0)); // Fernschüsse treffen schwächer
+  damage(run, p, Math.max(Math.ceil(atk * 0.3), atk - p.def - (p.st.wall ? 3 : 0) - (p.st.eis ? 2 : 0) - (p.st.sw ? 2 : 0)) - (has(p, 'steinhaut') ? 1 : 0), '#b13e53');
   run.fx.push({ k: 'shake', n: m.boss ? 5 : 2 });
-  if (p.cls === 'krieger') gain(p, 1);
+  // Krieger: Wut aus Treffern; Vergelter doppelt, Schmerzensgeld +1 im Nahkampf
+  if (p.cls === 'krieger') gain(p, (hasNode(p, 'n0_5') ? 2 : 1) + (melee && hasNode(p, 'n2_2a') ? 1 : 0));
+  // Gegenschlag
+  if (melee && p.cls === 'krieger' && hasNode(p, 'n0_2b') && p.hp > 0 && m.hp > 0 && run.rng.chance(0.25)) {
+    run.fx.push({ k: 'lunge', id: 0, dx: Math.sign(m.x - p.x), dy: Math.sign(m.y - p.y) });
+    playerHit(run, m, playerAtk(p));
+  }
   if (d.poison && run.rng.chance(0.5)) p.st.gift = 4;
   if (d.burn && run.rng.chance(0.5)) p.st.brand = 3;
   if (melee && p.thorns) damage(run, m, p.thorns * (p.aff.stachel ? 2 : 1), '#a7f070');
@@ -1506,7 +1570,7 @@ function mobAct(run: Run, m: Actor, dist: Int16Array) {
   }
   if (man === 1) {
     // Schützen weichen oft einen Schritt zurück, wenn Platz ist
-    if (d.range && run.rng.chance(0.5)) {
+    if (d.range && !m.st.taunt && run.rng.chance(0.5)) {
       const back = [[1, 0], [-1, 0], [0, 1], [0, -1]].map(([ox, oy]) => [m.x + ox, m.y + oy]).find(([x, y]) => isFree(run, x, y) && Math.abs(p.x - x) + Math.abs(p.y - y) === 2);
       if (back) { moveMob(run, m, back[0], back[1]); return; }
     }
@@ -1515,7 +1579,7 @@ function mobAct(run: Run, m: Actor, dist: Int16Array) {
     hitPlayer(run, m, true);
     return;
   }
-  if (d.range && cheb(m, p) <= d.range && los(run.tiles, m.x, m.y, p.x, p.y)) {
+  if (d.range && !m.st.taunt && cheb(m, p) <= d.range && los(run.tiles, m.x, m.y, p.x, p.y)) {
     run.fx.push({ k: 'arrow', x0: m.x, y0: m.y, x1: p.x, y1: p.y, col: '#c9d4dc', heavy: false });
     hitPlayer(run, m, false);
     return;
@@ -1571,6 +1635,8 @@ function endTurn(run: Run) {
     if (m.hp <= 0) continue;
     tickDots(run, m);
     if (m.hp <= 0) continue;
+    if (m.st.schwach) m.st.schwach--;
+    if (m.st.taunt) m.st.taunt--;
     if (m.st.stun) { if (--m.st.stun === 0) m.st.immun = 3; continue; }
     if (m.st.immun) m.st.immun--;
     if (m.st.sproede) m.st.sproede--;
@@ -1583,6 +1649,8 @@ function endTurn(run: Run) {
   if (p.st.dodge) p.st.dodge--;
   if (p.st.eis) p.st.eis--;
   if (p.st.riss) p.st.riss--;
+  if (p.st.sw) p.st.sw--;
+  if (p.st.rausch) p.st.rausch--;
   if (p.st.schild && !--p.st.schild) { delete p.st.schild; p.shield = 0; }
   if (p.ultCd) p.ultCd--;
   if (p.aff.regen && run.turn % 6 === 0 && p.hp > 0 && p.hp < p.maxHp) p.hp = Math.min(p.maxHp, p.hp + p.aff.regen);

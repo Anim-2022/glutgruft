@@ -1,0 +1,51 @@
+
+=== neu krieger: Median Ebene 11, Siege 9/40, Big hits(>=50%maxHP) 0, One-shots from full 0
+Gold verdient 792/Lauf, ausgegeben 431, Tränke gekauft 5.3, gefunden 26.2, Bomben gekauft 0.0, Gold übrig bei Sieg 812, Tode mit Boss in Sicht 0
+Eb  n  Tod  Züge  HPverl  Tränke Kills  Gold  Lvl  Atk  MaxHP  maxHit  medHit
+ 1  40   0   273     21   0.00  22.7     0  1.0  5.0    34      5      2
+ 2  40   0   296     34   0.53  25.8    23  3.6  6.0    43      7      2
+ 3  40   2   243     70   1.93  21.2    45  5.7  6.7    50      6      2
+ 4  38   1   281     92   2.26  23.6    63  7.4  7.4    57      6      2
+ 5  37   1   252     86   1.86  23.0    87  8.9  7.6    63     10      3
+ 6  36   3   238    137   2.86  25.6   140 10.5  8.1    68      8      3
+ 7  33   4   231    141   2.97  25.1   131 12.2  8.0    74      8      3
+ 8  29   1   250    150   2.69  27.3   143 13.4  8.3    78      9      2
+ 9  28   3   229    189   3.57  24.6   137 14.8  8.6    83     11      4
+10  25   3   186    210   4.32  22.4   153 15.8  8.9    86     15      4
+11  22   5   352    408   5.91  51.2   226 17.4  9.1    92     16      4
+12  17   3   331    429   5.35  49.1   292 20.5  9.5   104     16      5
+13  14   2   316    377   2.93  49.8   409 22.6 10.1   112     17      5
+14  12   0  1134    509   4.25  59.9   407 25.1 10.0   120     17      5
+15  11   2   328    465   3.27  48.9   501 27.3 10.0   129     22      6
+Tod durch: [["schuetze",7],["schuetze+sporling",6],["schuetze+skelett",3],["golem+schuetze",3],["ratte+schuetze",2],["fledermaus",1],["skelett",1],["glutgeist+golem",1]]
+
+=== max krieger: Median Ebene 15, Siege 30/40, Big hits(>=50%maxHP) 0, One-shots from full 0
+Gold verdient 1694/Lauf, ausgegeben 874, Tränke gekauft 10.0, gefunden 38.5, Bomben gekauft 0.0, Gold übrig bei Sieg 1006, Tode mit Boss in Sicht 0
+Eb  n  Tod  Züge  HPverl  Tränke Kills  Gold  Lvl  Atk  MaxHP  maxHit  medHit
+ 1  40   0   246     18   0.00  22.1    45  1.0  7.0    44      4      2
+ 2  40   0   246     26   0.05  22.1    52  3.6  8.2    53      7      2
+ 3  40   0   258     45   0.55  22.9    63  5.3  9.3    61      7      2
+ 4  40   0   254     46   0.30  23.3    73  7.2  9.7    68      8      2
+ 5  40   0   262     57   0.57  24.4    90  8.7  9.9    74      9      3
+ 6  40   0   221     77   0.88  26.3   151 10.4 10.4    81      7      4
+ 7  40   0   207     88   1.13  25.6   148 11.9 10.7    85      8      4
+ 8  40   0   216     96   1.13  27.7   156 13.2 11.2    90     10      4
+ 9  40   1   223    133   2.00  26.1   152 14.4 11.4    95     10      5
+10  39   0   208    167   2.62  25.7   160 15.6 11.6    99     15      6
+11  39   2   529    349   4.82  48.4   271 17.3 11.9   105     16      5
+12  36   3   332    374   4.33  54.9   309 19.7 12.3   113     17      7
+13  33   1   342    351   2.97  58.5   449 22.3 12.6   124     17      6
+14  32   1   312    345   2.66  55.1   532 24.7 13.2   132     17      7
+15  31   1   342    432   3.39  56.0   654 26.7 13.4   139     23      8
+Tod durch: [["schuetze",2],["glutgeist*",1],["schuetze+skelett",1],["glutgeist+schuetze",1],["sporling",1],["golem+schuetze+sporling",1],["glutgeist+golem",1],["golem",1]]
+
+=== Zusammenfassung (SEEDS=0, BUILD=heur) ===
+neu krieger     Siege  9/40  Median 11  Seelen/Lauf 974  Gaben 13.1  Ränge 5.0  Stufe RangII 8.3 RangIII 10.7  Restpunkt 0 %  Fähigkeiten/Lauf 249.8 / 22.8 / 71.2  Ressource vor Tod 13.5
+max krieger     Siege 30/40  Median 15  Seelen/Lauf 1679  Gaben 19.7  Ränge 3.0  Stufe RangII 10.4 RangIII 9.0  Restpunkt 0 %  Fähigkeiten/Lauf 294.6 / 21.9 / 90.7  Ressource vor Tod 12.7
+
+Neue Zauber je Lauf:
+max krieger      schildwurf 52.4  herausforderung 34.5  sturmangriff 88.7
+
+Knoten (Anteil der Läufe):
+neu krieger      n0_1 90%  n0_2a 90%  n0_4a 40%  n0_4b 40%  n1_1 93%  n1_2a 93%  n1_4a 33%  n1_4b 48%  n2_1 80%  n2_2a 80%  n2_4a 33%  n2_4b 40%
+max krieger      n0_1 68%  n0_2a 68%  n0_2b 35%  n0_3 35%  n0_4a 18%  n0_4b 18%  n0_5 35%  n1_1 65%  n1_2a 65%  n1_2b 33%  n1_3 33%  n1_4a 15%  n1_4b 18%  n1_5 33%  n2_1 65%  n2_2a 65%  n2_2b 33%  n2_3 33%  n2_4a 15%  n2_4b 18%  n2_5 33%

@@ -16,7 +16,7 @@ export const CLASS_ORDER: ClassId[] = ['krieger', 'magier', 'waldlaeufer'];
 export const CLASSES: Record<ClassId, ClassDef> = {
   krieger: {
     id: 'krieger', name: 'Krieger', desc: 'Zäher Nahkämpfer. Wut entsteht durch Treffer und Schmerz.',
-    hp: 40, atk: 5, def: 2, resName: 'Wut', resMax: 10, resStart: 0, resCol: '#ef7d57', range: 0, shot: '',
+    hp: 30, atk: 5, def: 2, resName: 'Wut', resMax: 10, resStart: 0, resCol: '#ef7d57', range: 0, shot: '',
     skills: [
       { name: 'Schildstoß', cost: 2, desc: 'Schaden + betäubt 2 Züge' },
       { name: 'Wirbelschlag', cost: 5, desc: 'Trifft alle Gegner ringsum' },
@@ -151,12 +151,16 @@ export const NEW_SKILLS: Record<string, SkillDef & { branch: number }> = {
   flammenwand: { name: 'Flammenwand', cost: 5, desc: 'Drei brennende Felder zwischen dir und dem Gegner, 4 Züge', branch: 0 },
   eislanze: { name: 'Eislanze', cost: 4, desc: 'Strahl bis 6 Felder, durchbohrt; Betäubte erleiden doppelten Schaden', branch: 1 },
   arkanschild: { name: 'Arkanschild', cost: 4, desc: 'Schild fängt 8 + Stufe Schaden ab, 5 Züge', branch: 2 },
+  schildwurf: { name: 'Schildwurf', cost: 7, desc: 'Wurf auf einen Gegner bis 4 Felder', branch: 0 },
+  sturmangriff: { name: 'Sturmangriff', cost: 7, desc: 'Sturm bis 4 Felder zum Gegner, schwerer Schlag', branch: 1 },
+  herausforderung: { name: 'Herausforderung', cost: 6, desc: 'Gegner im Umkreis 4 kommen zu dir, Schützen schießen 1 Zug nicht', branch: 2 },
 };
 // Stellschrauben des Baums (balance.ts darf sie für Messungen überschreiben):
 // treePtsMax – Fertigkeitspunkte je Lauf, danach gibt es Gaben; kryoMana – Mana je Treffer
 // gegen Betäubte und Bosse; kryoRegen – Anteil der normalen Mana-Erholung mit Kryomant
-export const TUNE = { treePtsMax: 6, kryoMana: 2, kryoRegen: 0.75 };
-// Texte der Knoten T2a, T2b, T3, T5 (Schritt 2b: nur Magier)
+// kCost – Aufschlag auf die neuen Fähigkeiten des Kriegers (für Messungen)
+export const TUNE = { treePtsMax: 6, kryoMana: 2, kryoRegen: 0.75, kCost: 0 };
+// Texte der Knoten T2a, T2b, T3, T5 (2b: Magier, 2c: Krieger)
 export const NODE_TEXT: Partial<Record<ClassId, Record<string, [string, string]>>> = {
   magier: {
     n0_2a: ['Zunder', 'Funke entzündet mit 30 %'],
@@ -172,30 +176,45 @@ export const NODE_TEXT: Partial<Record<ClassId, Record<string, [string, string]>
     n2_3: ['Arkanschild', 'Neuer Zauber, 4 Mana: Schild fängt 8 + Stufe Schaden ab, 5 Züge'],
     n2_5: ['Zeitriss', 'Blinzeln kostet keinen Zug, danach 3 Züge Abklingzeit'],
   },
+  krieger: {
+    n0_2a: ['Schildwall', 'Warten im Kampf: +2 Verteidigung bis zum nächsten Zug und +1 Wut'],
+    n0_2b: ['Gegenschlag', '25 %: auf einen Nahkampftreffer schlägst du sofort zurück'],
+    n0_3: ['Schildwurf', 'Neue Fähigkeit, 7 Wut: Wurf auf einen Gegner bis 4 Felder'],
+    n0_5: ['Vergelter', 'Wut nicht mehr aus eigenen Schlägen, doppelt aus erlittenen; Schildstoß betäubt alle Nachbarn'],
+    n1_2a: ['Schwungkraft', '+1 Wut je Gegner, den der Wirbelschlag trifft'],
+    n1_2b: ['Gezackte Klinge', 'Wirbelschlag vergiftet'],
+    n1_3: ['Sturmangriff', 'Neue Fähigkeit, 7 Wut: Sturm bis 4 Felder zum Gegner, schwerer Schlag'],
+    n1_5: ['Klingenrausch', 'Ein Sieg gibt einen freien Zug, höchstens alle 3 Züge'],
+    n2_2a: ['Schmerzensgeld', 'Erlittene Nahkampftreffer geben +1 Wut zusätzlich'],
+    n2_2b: ['Einschüchterung', 'Kriegsschrei: Gegner im Umkreis 2 haben –1 Angriff, solange er wirkt'],
+    n2_3: ['Herausforderung', 'Neue Fähigkeit, 6 Wut: Gegner im Umkreis 4 kommen zu dir, Schützen schießen 1 Zug nicht'],
+    n2_5: ['Blutzorn', 'Fehlende Wut zahlst du mit Leben (2 je Wut); unter 50 % Leben +30 % Schaden'],
+  },
 };
-const SPELL_OF = ['flammenwand', 'eislanze', 'arkanschild'];
 const baseNodes = (b: number, minPts4: number): TreeNode[] => [
   { id: `n${b}_1`, branch: b, tier: '1', minPts: 0, cost: 0 },
   { id: `n${b}_4a`, branch: b, tier: '4a', parent: `n${b}_1`, minPts: minPts4, cost: 0, excl: `n${b}_4b` },
   { id: `n${b}_4b`, branch: b, tier: '4b', parent: `n${b}_1`, minPts: minPts4, cost: 0, excl: `n${b}_4a` },
 ];
+// Voller Zweig: T1, T2a (kommt mit T1), T2b, T3 (neue Fähigkeit), T4a/T4b, T5
+const fullTree = (spells: string[]) => [0, 1, 2].flatMap(b => {
+  const [t1, t4a, t4b] = baseNodes(b, 2);
+  return [
+    t1,
+    // T2a gehört zu T1: ein Punkt gibt beide
+    { id: `n${b}_2a`, branch: b, tier: '2a', parent: t1.id, minPts: 0, cost: 0, bundled: true },
+    { id: `n${b}_2b`, branch: b, tier: '2b', parent: t1.id, minPts: 0, cost: 40 },
+    { id: `n${b}_3`, branch: b, tier: '3', parent: t1.id, minPts: 0, cost: 80, spell: spells[b] },
+    t4a, t4b,
+    // Schlüsselknoten: braucht Rang III (A oder B) und 4 Punkte im Zweig; im Lager hängt er an T1
+    { id: `n${b}_5`, branch: b, tier: '5', parent: t1.id, minPts: 4, cost: 120, key: true, needAny: [t4a.id, t4b.id] },
+  ] as TreeNode[];
+});
 const TREES: Record<ClassId, TreeNode[]> = {
-  // Krieger und Waldläufer: bis 2c/2d nur die Ränge (Rang III braucht Rang II)
-  krieger: [0, 1, 2].flatMap(b => baseNodes(b, 1)),
+  krieger: fullTree(['schildwurf', 'sturmangriff', 'herausforderung']),
+  // Waldläufer: bis 2d nur die Ränge (Rang III braucht Rang II)
   waldlaeufer: [0, 1, 2].flatMap(b => baseNodes(b, 1)),
-  magier: [0, 1, 2].flatMap(b => {
-    const [t1, t4a, t4b] = baseNodes(b, 2);
-    return [
-      t1,
-      // T2a gehört zu T1: ein Punkt gibt beide
-      { id: `n${b}_2a`, branch: b, tier: '2a', parent: t1.id, minPts: 0, cost: 0, bundled: true },
-      { id: `n${b}_2b`, branch: b, tier: '2b', parent: t1.id, minPts: 0, cost: 40 },
-      { id: `n${b}_3`, branch: b, tier: '3', parent: t1.id, minPts: 0, cost: 80, spell: SPELL_OF[b] },
-      t4a, t4b,
-      // Schlüsselknoten: braucht Rang III (A oder B) und 4 Punkte im Zweig; im Lager hängt er an T1
-      { id: `n${b}_5`, branch: b, tier: '5', parent: t1.id, minPts: 4, cost: 120, key: true, needAny: [t4a.id, t4b.id] },
-    ];
-  }),
+  magier: fullTree(['flammenwand', 'eislanze', 'arkanschild']),
 };
 export const treeNodes = (cls: ClassId) => TREES[cls];
 export const treeNode = (cls: ClassId, id: string) => TREES[cls].find(n => n.id === id);

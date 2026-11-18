@@ -32,8 +32,8 @@ describe('Magier-Baum', () => {
     expect(t.reduce((s, n) => s + n.cost, 0)).toBe(720);
     expect(treePool('magier', defaultMeta()).length).toBe(12);
     expect(treePool('magier', allPaid()).length).toBe(21);
-    // Krieger und Waldläufer unverändert
-    expect(treeNodes('krieger').length).toBe(9);
+    // Krieger voll (2c), Waldläufer unverändert
+    expect(treeNodes('krieger').length).toBe(21);
     expect(treeNodes('waldlaeufer').length).toBe(9);
   });
 
