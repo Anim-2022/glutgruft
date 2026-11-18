@@ -155,7 +155,7 @@ export const NEW_SKILLS: Record<string, SkillDef & { branch: number }> = {
 // Stellschrauben des Baums (balance.ts darf sie für Messungen überschreiben):
 // treePtsMax – Fertigkeitspunkte je Lauf, danach gibt es Gaben; kryoMana – Mana je Treffer
 // gegen Betäubte und Bosse; kryoRegen – Anteil der normalen Mana-Erholung mit Kryomant
-export const TUNE = { treePtsMax: 6, kryoMana: 2, kryoRegen: 0.75 };
+export const TUNE = { treePtsMax: 6, kryoMana: 3, kryoRegen: 0.75 };
 // Texte der Knoten T2a, T2b, T3, T5 (Schritt 2b: nur Magier)
 export const NODE_TEXT: Partial<Record<ClassId, Record<string, [string, string]>>> = {
   magier: {
@@ -166,7 +166,7 @@ export const NODE_TEXT: Partial<Record<ClassId, Record<string, [string, string]>
     n1_2a: ['Raureif', 'Betäubte Gegner erleiden +25 % Schaden'],
     n1_2b: ['Eisrüstung', 'Nach der Frostnova 2 Züge +2 Verteidigung'],
     n1_3: ['Eislanze', 'Neuer Zauber, 4 Mana: Strahl bis 6 Felder, durchbohrt; Betäubte erleiden doppelten Schaden'],
-    n1_5: ['Kryomant', 'Mana kehrt langsamer zurück (drei Viertel); +2 Mana je Treffer gegen Betäubte und Bosse'],
+    n1_5: ['Kryomant', 'Mana kehrt langsamer zurück (drei Viertel); +3 Mana je Treffer gegen Betäubte und Bosse'],
     n2_2a: ['Nachhall', 'Nach dem Blinzeln kostet der nächste Zauber 2 Mana weniger'],
     n2_2b: ['Schutzrune', 'Einmal je Ebene: unter 30 % Leben blinzelst du von selbst'],
     n2_3: ['Arkanschild', 'Neuer Zauber, 4 Mana: Schild fängt 8 + Stufe Schaden ab, 5 Züge'],
