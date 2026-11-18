@@ -1250,7 +1250,6 @@ function castSpell(run: Run, id: string): boolean {
     const t = nearestMob(run, 4);
     if (!t) { say(run, 'Kein Ziel in Reichweite.'); return false; }
     run.fx.push({ k: 'arrow', x0: p.x, y0: p.y, x1: t.x, y1: t.y, col: '#94b0c2', heavy: true });
-    if (TUNE.kStun) stun(run, t, 1);
     playerHit(run, t, atk * 0.9 * p.pow);
     return true;
   }
@@ -1270,7 +1269,6 @@ function castSpell(run: Run, id: string): boolean {
     }
     p.dir = [Math.sign(t.x - p.x), Math.sign(t.y - p.y)];
     run.fx.push({ k: 'lunge', id: 0, dx: p.dir[0], dy: p.dir[1] });
-    if (TUNE.kStun) stun(run, t, 1);
     playerHit(run, t, atk * 1.2 * p.pow);
     return true;
   }

@@ -38,45 +38,43 @@ describe('Krieger-Baum', () => {
     expect(availableNodes(r)).not.toContain('n0_5');
   });
 
-  it('Schildwurf trifft auf 3 Felder und betäubt', () => {
+  it('Schildwurf trifft auf 3 Felder', () => {
     const r = arena(allPaid());
     learn(r, 'n0_1', 'n0_3');
     expect(r.p.spells).toEqual(['schildwurf']);
     const m = mob(r, 'golem', 33, 6);
-    r.p.res = 5;
+    r.p.res = 9;
     act(r, { t: 'skill', i: 3 });
     expect(r.p.res).toBe(2);
     expect(m.hp).toBeLessThan(m.maxHp);
-    expect(m.x).toBe(33);             // betäubt: kein Schritt
-    expect(m.st.immun).toBeGreaterThan(0);
   });
 
-  it('Sturmangriff: bis neben das Ziel, Schlag und Betäubung; ohne Weg kein Sturm', () => {
+  it('Sturmangriff: bis neben das Ziel und Schlag; ohne Weg kein Sturm', () => {
     const r = arena(allPaid());
     learn(r, 'n1_1', 'n1_3');
     const m = mob(r, 'golem', 34, 6);
-    r.p.res = 5;
+    r.p.res = 9;
     act(r, { t: 'skill', i: 3 });
     expect([r.p.x, r.p.y]).toEqual([33, 6]);
     expect(m.hp).toBeLessThan(m.maxHp);
-    expect(r.p.res).toBe(2 + 1);      // + 1 Wut für den Nachbarn am Zugende
+    expect(r.p.res).toBe(2 + 1 + 1);  // + 1 Wut für den Nachbarn, + 1 für seinen Treffer
     // Weg versperrt: nichts passiert
     const r2 = arena(allPaid());
     learn(r2, 'n1_1', 'n1_3');
     mob(r2, 'golem', 34, 6); mob(r2, 'golem', 31, 6);
     r2.mobs[1].st.stun = 5; r2.target = r2.mobs[0].id;
-    r2.p.res = 5;
+    r2.p.res = 9;
     const t0 = r2.turn;
     act(r2, { t: 'skill', i: 3 });
     expect(r2.turn).toBe(t0);
-    expect(r2.p.res).toBe(5);
+    expect(r2.p.res).toBe(9);
   });
 
   it('Herausforderung: Schützen schießen nicht und kommen heran', () => {
     const r = arena(allPaid());
     learn(r, 'n2_1', 'n2_3');
     const s = mob(r, 'schuetze', 34, 6);
-    r.p.res = 5;
+    r.p.res = 6;
     const hp = r.p.hp;
     act(r, { t: 'skill', i: 3 });
     expect(r.p.hp).toBe(hp);

@@ -16,7 +16,7 @@ export const CLASS_ORDER: ClassId[] = ['krieger', 'magier', 'waldlaeufer'];
 export const CLASSES: Record<ClassId, ClassDef> = {
   krieger: {
     id: 'krieger', name: 'Krieger', desc: 'Zäher Nahkämpfer. Wut entsteht durch Treffer und Schmerz.',
-    hp: 40, atk: 5, def: 2, resName: 'Wut', resMax: 10, resStart: 0, resCol: '#ef7d57', range: 0, shot: '',
+    hp: 34, atk: 5, def: 2, resName: 'Wut', resMax: 10, resStart: 0, resCol: '#ef7d57', range: 0, shot: '',
     skills: [
       { name: 'Schildstoß', cost: 2, desc: 'Schaden + betäubt 2 Züge' },
       { name: 'Wirbelschlag', cost: 5, desc: 'Trifft alle Gegner ringsum' },
@@ -151,15 +151,15 @@ export const NEW_SKILLS: Record<string, SkillDef & { branch: number }> = {
   flammenwand: { name: 'Flammenwand', cost: 5, desc: 'Drei brennende Felder zwischen dir und dem Gegner, 4 Züge', branch: 0 },
   eislanze: { name: 'Eislanze', cost: 4, desc: 'Strahl bis 6 Felder, durchbohrt; Betäubte erleiden doppelten Schaden', branch: 1 },
   arkanschild: { name: 'Arkanschild', cost: 4, desc: 'Schild fängt 8 + Stufe Schaden ab, 5 Züge', branch: 2 },
-  schildwurf: { name: 'Schildwurf', cost: 3, desc: 'Wurf bis 4 Felder, betäubt 1 Zug', branch: 0 },
-  sturmangriff: { name: 'Sturmangriff', cost: 3, desc: 'Sturm bis 4 Felder zum Gegner, Schlag + 1 Zug Betäubung', branch: 1 },
-  herausforderung: { name: 'Herausforderung', cost: 2, desc: 'Gegner im Umkreis 4 kommen zu dir, Schützen schießen 2 Züge nicht', branch: 2 },
+  schildwurf: { name: 'Schildwurf', cost: 7, desc: 'Wurf auf einen Gegner bis 4 Felder', branch: 0 },
+  sturmangriff: { name: 'Sturmangriff', cost: 7, desc: 'Sturm bis 4 Felder zum Gegner, schwerer Schlag', branch: 1 },
+  herausforderung: { name: 'Herausforderung', cost: 6, desc: 'Gegner im Umkreis 4 kommen zu dir, Schützen schießen 2 Züge nicht', branch: 2 },
 };
 // Stellschrauben des Baums (balance.ts darf sie für Messungen überschreiben):
 // treePtsMax – Fertigkeitspunkte je Lauf, danach gibt es Gaben; kryoMana – Mana je Treffer
 // gegen Betäubte und Bosse; kryoRegen – Anteil der normalen Mana-Erholung mit Kryomant
-// kCost – Aufschlag auf die neuen Fähigkeiten des Kriegers; kStun – Betäubung durch Schildwurf und Sturmangriff
-export const TUNE = { treePtsMax: 6, kryoMana: 2, kryoRegen: 0.75, kCost: 0, kStun: 1 };
+// kCost – Aufschlag auf die neuen Fähigkeiten des Kriegers (für Messungen)
+export const TUNE = { treePtsMax: 6, kryoMana: 2, kryoRegen: 0.75, kCost: 0 };
 // Texte der Knoten T2a, T2b, T3, T5 (2b: Magier, 2c: Krieger)
 export const NODE_TEXT: Partial<Record<ClassId, Record<string, [string, string]>>> = {
   magier: {
@@ -179,15 +179,15 @@ export const NODE_TEXT: Partial<Record<ClassId, Record<string, [string, string]>
   krieger: {
     n0_2a: ['Schildwall', 'Warten im Kampf: +2 Verteidigung bis zum nächsten Zug und +1 Wut'],
     n0_2b: ['Gegenschlag', '25 %: auf einen Nahkampftreffer schlägst du sofort zurück'],
-    n0_3: ['Schildwurf', 'Neue Fähigkeit, 3 Wut: Wurf bis 4 Felder, betäubt 1 Zug'],
+    n0_3: ['Schildwurf', 'Neue Fähigkeit, 7 Wut: Wurf auf einen Gegner bis 4 Felder'],
     n0_5: ['Vergelter', 'Wut nicht mehr aus eigenen Schlägen, doppelt aus erlittenen; Schildstoß betäubt alle Nachbarn'],
     n1_2a: ['Schwungkraft', '+1 Wut je Gegner, den der Wirbelschlag trifft'],
     n1_2b: ['Gezackte Klinge', 'Wirbelschlag vergiftet'],
-    n1_3: ['Sturmangriff', 'Neue Fähigkeit, 3 Wut: Sturm bis 4 Felder zum Gegner, Schlag + 1 Zug Betäubung'],
+    n1_3: ['Sturmangriff', 'Neue Fähigkeit, 7 Wut: Sturm bis 4 Felder zum Gegner, schwerer Schlag'],
     n1_5: ['Klingenrausch', 'Ein Sieg gibt einen freien Zug, höchstens alle 3 Züge'],
     n2_2a: ['Schmerzensgeld', 'Erlittene Treffer geben +1 Wut zusätzlich'],
     n2_2b: ['Einschüchterung', 'Kriegsschrei: Gegner im Umkreis 2 haben –2 Angriff, solange er wirkt'],
-    n2_3: ['Herausforderung', 'Neue Fähigkeit, 2 Wut: Gegner im Umkreis 4 kommen zu dir, Schützen schießen 2 Züge nicht'],
+    n2_3: ['Herausforderung', 'Neue Fähigkeit, 6 Wut: Gegner im Umkreis 4 kommen zu dir, Schützen schießen 2 Züge nicht'],
     n2_5: ['Blutzorn', 'Fehlende Wut zahlst du mit Leben (2 je Wut); unter 50 % Leben +30 % Schaden'],
   },
 };
