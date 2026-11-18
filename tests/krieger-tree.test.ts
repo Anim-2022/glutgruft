@@ -138,7 +138,7 @@ describe('Krieger-Baum', () => {
     const hp = r.p.hp;
     act(r, { t: 'skill', i: 2 });
     expect(m.st.schwach).toBeGreaterThan(0);
-    // Skelett (4 Angriff) − 2 Einschüchterung − 2 Verteidigung → Mindestschaden 1
+    // Skelett (4 Angriff) − 1 Einschüchterung − 2 Verteidigung → 1
     expect(hp - r.p.hp).toBe(1);
     // Schmerzensgeld: Treffer + 1 Wut zusätzlich, plus 1 für den Nachbarn am Zugende
     expect(r.p.res).toBe(2 + 1);

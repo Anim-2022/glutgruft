@@ -1526,11 +1526,11 @@ function hitPlayer(run: Run, m: Actor, melee: boolean) {
   m.f = Math.abs(p.x - m.x) >= Math.abs(p.y - m.y) ? [Math.sign(p.x - m.x), 0] : [0, Math.sign(p.y - m.y)];
   if (melee) run.fx.push({ k: 'lunge', id: m.id, dx: Math.sign(p.x - m.x), dy: Math.sign(p.y - m.y) }, { k: 'swipe', x: p.x, y: p.y, dx: Math.sign(p.x - m.x), dy: Math.sign(p.y - m.y), big: !!m.boss });
   if (p.st.dodge || (p.aff.flink && run.rng.chance(Math.min(40, p.aff.flink) / 100))) { run.fx.push({ k: 'num', x: p.x, y: p.y, s: 'verfehlt', col: '#94b0c2' }); if (p.aff.konter) p.st.konter = 1; return; }
-  const atk = Math.max(1, (melee ? m.atk : Math.round(m.atk * 0.7)) - (m.st.schwach ? 2 : 0)); // Fernschüsse treffen schwächer
+  const atk = Math.max(1, (melee ? m.atk : Math.round(m.atk * 0.7)) - (m.st.schwach ? 1 : 0)); // Fernschüsse treffen schwächer
   damage(run, p, Math.max(Math.ceil(atk * 0.3), atk - p.def - (p.st.wall ? 3 : 0) - (p.st.eis ? 2 : 0) - (p.st.sw ? 2 : 0)) - (has(p, 'steinhaut') ? 1 : 0), '#b13e53');
   run.fx.push({ k: 'shake', n: m.boss ? 5 : 2 });
-  // Krieger: Wut aus Treffern; Vergelter doppelt, Schmerzensgeld +1
-  if (p.cls === 'krieger') gain(p, (hasNode(p, 'n0_5') ? 2 : 1) + (hasNode(p, 'n2_2a') ? 1 : 0));
+  // Krieger: Wut aus Treffern; Vergelter doppelt, Schmerzensgeld +1 im Nahkampf
+  if (p.cls === 'krieger') gain(p, (hasNode(p, 'n0_5') ? 2 : 1) + (melee && hasNode(p, 'n2_2a') ? 1 : 0));
   // Gegenschlag
   if (melee && p.cls === 'krieger' && hasNode(p, 'n0_2b') && p.hp > 0 && m.hp > 0 && run.rng.chance(0.25)) {
     run.fx.push({ k: 'lunge', id: 0, dx: Math.sign(m.x - p.x), dy: Math.sign(m.y - p.y) });
