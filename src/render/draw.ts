@@ -49,6 +49,18 @@ let mapMode = 1, tutorial = false; // 0 aus, 1 klein, 2 groß
 export const setMouse = (x: number, y: number) => { mouse.x = x; mouse.y = y; };
 export const toggleMap = () => { mapMode = (mapMode + 1) % 3; };
 export const setTutorial = (on: boolean) => { tutorial = on; };
+// Lehrgang: aktueller Schritt (vom Hauptprogramm gesetzt) und Karte beim ersten Kennenlernen
+let tutStep: { text: string; k: number; n: number } | null = null;
+export const setTutStep = (s: typeof tutStep) => { tutStep = s; };
+export function drawCard(ctx: CanvasRenderingContext2D, card: { title: string; lines: string[] }) {
+  const lines = card.lines.flatMap(l => wrapText(l, 66)), w = 420, h = 52 + lines.length * 12, x = (VW - w) >> 1, y = (VH - h) >> 1;
+  ctx.fillStyle = 'rgba(13,14,23,0.7)'; ctx.fillRect(0, 0, VW, VH);
+  panel(ctx, x, y, w, h, '#73eff7');
+  text(ctx, 'LEHRGANG', x + 10, y + 8, '#566c86', 8);
+  text(ctx, card.title, VW / 2, y + 8, '#73eff7', 10, 'center');
+  lines.forEach((l, k) => text(ctx, l, x + 14, y + 28 + k * 12, '#f4f4f4', 8));
+  text(ctx, '[ENTER] weiter', VW / 2, y + h - 14, '#ffcd75', 8, 'center');
+}
 
 // ---- Fackeln: Positionen werden einmal pro Ebene bestimmt ----
 const torches = new Set<number>();
@@ -705,8 +717,17 @@ function hud(ctx: CanvasRenderingContext2D, run: Run, time: number) {
   if (loot && run.mode === 'play' && overlay === 'none') lootCard(ctx, run);
 
   if (tutorial && run.mode === 'play') {
-    const h0 = hint(run), h = h0 && tr(h0);
-    if (h) { const w = h.length * 6 + 16; panel(ctx, (VW - w) >> 1, 38, w, 16, '#ffcd75'); text(ctx, h, VW / 2, 43, '#ffcd75', 8, 'center'); }
+    if (tutStep) {
+      // Lehrgang: Fortschritt und Aufgabe, [T] überspringt
+      const head = tr(`Lehrgang ${tutStep.k}/${tutStep.n}`), body = tr(tutStep.text), w = Math.max(head.length + 18, body.length) * 6 + 20;
+      panel(ctx, (VW - w) >> 1, 36, w, 28, '#73eff7', 'rgba(13,14,23,0.85)');
+      text(ctx, head, (VW - w) / 2 + 8, 40, '#73eff7', 8);
+      text(ctx, '[T] überspringen', (VW + w) / 2 - 8, 40, '#566c86', 8, 'right');
+      text(ctx, body, VW / 2, 52, '#ffcd75', 8, 'center');
+    } else {
+      const h0 = hint(run), h = h0 && tr(h0);
+      if (h) { const w = h.length * 6 + 16; panel(ctx, (VW - w) >> 1, 38, w, 16, '#ffcd75'); text(ctx, h, VW / 2, 43, '#ffcd75', 8, 'center'); }
+    }
   }
   const boss = run.mobs.find(m => m.boss && m.awake);
   if (boss) {
@@ -918,7 +939,7 @@ function charSheet(ctx: CanvasRenderingContext2D, run: Run) {
 }
 
 const HELP: [string, string][] = [
-  ['Pfeile / WASD', 'bewegen, in Gegner laufen greift an'], ['Leertaste', 'einen Zug warten'], ['1 bis 6', 'Fähigkeiten (4–6: neue Zauber aus dem Baum)'], ['U', 'Ultimative Fähigkeit ab Stufe 5'], ['7 8 9 0', 'Rollen und Tränke benutzen'], ['R', 'letzten Fund anlegen'], ['K', 'Fertigkeitsbaum: Punkt vergeben'], ['F', 'Fernangriff (Magier, Waldläufer)'],
+  ['Pfeile / WASD', 'bewegen, in Gegner laufen greift an'], ['Leertaste', 'einen Zug warten'], ['1 bis 6', 'Fähigkeiten (4–6: neue Zauber aus dem Baum)'], ['U', 'Ultimative Fähigkeit ab Stufe 5'], ['7 8 9 0', 'Rollen und Tränke benutzen'], ['R', 'letzten Fund anlegen'], ['K', 'Fertigkeitsbaum: Punkt vergeben'], ['T', 'Lehrgang: Schritt überspringen'], ['F', 'Fernangriff (Magier, Waldläufer)'],
   ['Q', 'Heiltrank trinken'], ['B', 'Bombe werfen'], ['E', 'Treppe hinabsteigen'], ['Klick / Tab', 'Ziel wählen'], ['Maus', 'über etwas halten zeigt Details'],
   ['I', 'Rucksack: anlegen, benutzen, verkaufen'], ['C', 'Charakter, Reliquien, Gaben'], ['N', 'Karte: klein, groß, aus'], ['M', 'Ton ein/aus'], ['V', 'Vollbild'], ['J', 'Journal: alle Meldungen nachlesen'], ['H', 'diese Hilfe'],
 ];
