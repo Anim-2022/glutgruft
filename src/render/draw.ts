@@ -1112,7 +1112,9 @@ export type TreeState = 'learned' | 'open' | 'locked' | 'buy' | 'owned' | 'free'
 const TREE_COL: Record<TreeState, string> = { learned: '#a7f070', open: '#ffcd75', locked: '#333c57', buy: '#b13e53', owned: '#73eff7', free: '#73eff7' };
 // Reihen eines Zweigs von oben nach unten; es werden nur vorhandene gezeigt
 const TIER_ROWS = [['1'], ['2a', '2b'], ['3'], ['4a', '4b'], ['5']];
-const rowsOf = (cls: ClassId) => TIER_ROWS.filter(r => treeNodes(cls).some(n => n.branch === 0 && r.includes(n.tier)));
+// gebündelte Knoten (T2a) erscheinen als Teil ihres Elternknotens
+const rowsOf = (cls: ClassId) => TIER_ROWS.map(r => r.filter(t => treeNodes(cls).some(n => n.branch === 0 && n.tier === t && !n.bundled))).filter(r => r.length);
+const bundledOf = (cls: ClassId, id: string) => treeNodes(cls).find(n => n.bundled && n.parent === id);
 const tierOf = (cls: ClassId, id: string) => treeNode(cls, id)!.tier;
 let treeSel = 'n0_1';
 export const treeCursor = () => treeSel;
@@ -1130,7 +1132,7 @@ export function treeMove(cls: ClassId, dx: number, dy: number) {
 
 const shortName = (cls: ClassId, id: string) => {
   const n = treeNode(cls, id)!;
-  if (n.tier === '1') return CLASSES[cls].skills[n.branch].name;
+  if (n.tier === '1') { const b = bundledOf(cls, id); return b ? `${CLASSES[cls].skills[n.branch].name} + ${nodeText(cls, b.id).name}` : CLASSES[cls].skills[n.branch].name; }
   if (n.tier === '4a' || n.tier === '4b') return SKILL_UP[`${cls}${n.branch}`][n.tier === '4a' ? 'a' : 'b'][0];
   return nodeText(cls, id).name;
 };
@@ -1169,7 +1171,8 @@ export function drawTree(ctx: CanvasRenderingContext2D, cls: ClassId, title: str
     });
   }
   // Beschreibung des gewählten Knotens
-  const nt = nodeText(cls, treeSel), lines = wrapText(nt.desc, 90), node = treeNode(cls, treeSel)!;
+  const nt = nodeText(cls, treeSel), node = treeNode(cls, treeSel)!, bun = bundledOf(cls, treeSel);
+  const lines = [...wrapText(nt.desc, 90), ...(bun ? wrapText(`Dazu ${nodeText(cls, bun.id).name}: ${nodeText(cls, bun.id).desc}`, 90) : [])];
   panel(ctx, x0, 248, 3 * colW + 2 * gap, 74, '#566c86');
   text(ctx, `${nt.name}${node.key ? ' – Schlüsselknoten' : ''}`, x0 + 10, 256, '#ffcd75', 10);
   lines.forEach((l, k) => text(ctx, l, x0 + 10, 272 + k * 10, '#f4f4f4', 8));

@@ -909,7 +909,7 @@ export function availableNodes(run: Run): string[] {
   const p = run.p;
   return run.pool.filter(id => {
     const n = treeNode(p.cls, id);
-    if (!n || p.tree.includes(id) || (n.parent && !p.tree.includes(n.parent)) || (n.excl && p.tree.includes(n.excl))) return false;
+    if (!n || n.bundled || p.tree.includes(id) || (n.parent && !p.tree.includes(n.parent)) || (n.excl && p.tree.includes(n.excl))) return false;
     if (n.needAny && !n.needAny.some(q => p.tree.includes(q))) return false;
     return p.tree.filter(q => treeNode(p.cls, q)?.branch === n.branch).length >= n.minPts;
   });
@@ -935,6 +935,8 @@ const nodeName = (p: Player, id: string) => nodeText(p.cls, id).name;
 function learnNode(run: Run, id: string) {
   const p = run.p, n = treeNode(p.cls, id)!, i = n.branch;
   p.tree.push(id);
+  // gebündelte Knoten (T2a) kommen mit
+  for (const b of treeNodes(p.cls)) if (b.bundled && b.parent === id && run.pool.includes(b.id) && !p.tree.includes(b.id)) { p.tree.push(b.id); say(run, `Dazu: ${nodeName(p, b.id)}`); }
   if (n.spell) { (p.spells ??= []).push(n.spell); say(run, `Neuer Zauber: ${NEW_SKILLS[n.spell].name} [${2 + p.spells.length}]`); return; }
   if (n.tier !== '1' && n.tier !== '4a' && n.tier !== '4b') { say(run, `Gelernt: ${nodeName(p, id)}`); return; }
   if (n.tier === '1') p.skillLvl[i] = Math.max(1, p.skillLvl[i]);

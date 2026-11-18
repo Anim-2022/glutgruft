@@ -139,6 +139,7 @@ export interface TreeNode {
   key?: boolean;    // Schlüsselknoten
   spell?: string;   // schaltet einen neuen Zauber frei (NEW_SKILLS)
   needAny?: string[]; // mindestens einer davon muss gelernt sein
+  bundled?: boolean;  // kommt zusammen mit dem Elternknoten (kein eigener Punkt)
 }
 export const BRANCH_NAMES: Record<ClassId, string[]> = {
   krieger: ['Schild', 'Klinge', 'Schlachtruf'],
@@ -184,7 +185,8 @@ const TREES: Record<ClassId, TreeNode[]> = {
     const [t1, t4a, t4b] = baseNodes(b, 2);
     return [
       t1,
-      { id: `n${b}_2a`, branch: b, tier: '2a', parent: t1.id, minPts: 0, cost: 0 },
+      // T2a gehört zu T1: ein Punkt gibt beide
+      { id: `n${b}_2a`, branch: b, tier: '2a', parent: t1.id, minPts: 0, cost: 0, bundled: true },
       { id: `n${b}_2b`, branch: b, tier: '2b', parent: t1.id, minPts: 0, cost: 40 },
       { id: `n${b}_3`, branch: b, tier: '3', parent: t1.id, minPts: 0, cost: 80, spell: SPELL_OF[b] },
       t4a, t4b,

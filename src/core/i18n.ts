@@ -268,7 +268,7 @@ const EN: Record<string, string> = {
   'Arkanschild': 'Arcane Shield', 'Neuer Zauber, 4 Mana: Schild fängt 8 + Stufe Schaden ab, 5 Züge': 'New spell, 4 mana: shield absorbs 8 + level damage, 5 turns',
   'Schild fängt 8 + Stufe Schaden ab, 5 Züge': 'Shield absorbs 8 + level damage, 5 turns', 'Arkanschild!': 'Arcane shield!',
   'Zeitriss': 'Time Rift', 'Blinzeln kostet keinen Zug, danach 3 Züge Abklingzeit': 'Blink costs no turn, then 3 turns of cooldown', 'Zeitriss: noch ': 'Time rift: ',
-  'erst im Lager': 'camp first',   'Neuer Zauber: ': 'New spell: ', 'Gelernt: ': 'Learned: ', ' – Schlüsselknoten': ' – key node',
+  'erst im Lager': 'camp first',   'Neuer Zauber: ': 'New spell: ', 'Dazu: ': 'Also: ', 'Dazu ': 'Also ', 'Gelernt: ': 'Learned: ', ' – Schlüsselknoten': ' – key node',
   'Braucht Rang III und 4 Punkte im Zweig.': 'Needs rank III and 4 points in the branch.', 'Braucht ': 'Needs ', ' Punkte im Zweig.': ' points in the branch.',
   'Ohne Seelensplitter, steht in jedem Lauf zur Wahl.': 'No soul shards needed, available in every run.',
   '1 bis 6': '1 to 6', 'Fähigkeiten (4–6: neue Zauber aus dem Baum)': 'Skills (4–6: new spells from the tree)',

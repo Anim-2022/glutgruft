@@ -21,7 +21,7 @@ function mob(r: Run, kind: string, x: number, y: number): Actor {
   r.mobs.push(m);
   return m;
 }
-const learn = (r: Run, ...ids: string[]) => { for (const id of ids) { r.p.pts = 1; r.mode = 'tree'; if (!r.pool.includes(id)) r.pool.push(id); act(r, { t: 'learn', id }); expect(r.p.tree, id).toContain(id); } };
+const learn = (r: Run, ...ids: string[]) => { for (const id of ids) { if (treeNodes('magier').find(n => n.id === id)?.bundled) { expect(r.p.tree, id).toContain(id); continue; } r.p.pts = 1; r.mode = 'tree'; if (!r.pool.includes(id)) r.pool.push(id); act(r, { t: 'learn', id }); expect(r.p.tree, id).toContain(id); } };
 const allPaid = () => ({ ...defaultMeta(), tree: { krieger: [], waldlaeufer: [], magier: treeNodes('magier').filter(n => n.cost).map(n => n.id) } });
 
 describe('Magier-Baum', () => {
@@ -37,11 +37,14 @@ describe('Magier-Baum', () => {
     expect(treeNodes('waldlaeufer').length).toBe(9);
   });
 
-  it('Rang III braucht 2 Punkte im Zweig, der Schlüsselknoten Rang III und 4 Punkte', () => {
+  it('T1 bringt T2a mit; Rang III braucht 2 Knoten im Zweig, der Schlüsselknoten Rang III und 4', () => {
     const r = arena(allPaid());
-    learn(r, 'n0_1');
-    expect(availableNodes(r)).not.toContain('n0_4a');
-    learn(r, 'n0_2a');
+    expect(availableNodes(r)).not.toContain('n0_2a');
+    r.p.pts = 1; r.mode = 'tree';
+    act(r, { t: 'learn', id: 'n0_1' });
+    expect(r.p.tree).toEqual(['n0_1', 'n0_2a']);
+    expect(r.p.pts).toBe(0);
+    expect(availableNodes(r)).not.toContain('n0_2a');
     expect(availableNodes(r)).toContain('n0_4a');
     learn(r, 'n0_2b');
     expect(availableNodes(r)).not.toContain('n0_5'); // noch kein Rang III
@@ -150,7 +153,7 @@ describe('Magier-Baum', () => {
     act(f, { t: 'skill', i: 0 });
     expect(g.st.brand).toBeGreaterThanOrEqual(2); // 3 gesetzt, 1 schon abgebrannt
     const rr = (stunned: boolean, rime: boolean) => {
-      const z = arena(allPaid()); learn(z, 'n1_1', ...(rime ? ['n1_2a'] : []));
+      const z = arena(allPaid()); if (rime) learn(z, 'n1_1', 'n1_2a');
       const m = mob(z, 'golem', 33, 6); m.hp = m.maxHp = 999; m.def = 0; if (stunned) m.st.stun = 5;
       z.p.crit = 0; act(z, { t: 'shoot' }); return 999 - m.hp;
     };
