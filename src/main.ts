@@ -1,11 +1,12 @@
 import { drawIcon, UPG_ICON } from './render/icons';
 import { VW, VH, bake, sprites, tilesets, text, panel, wrap, figure } from './render/gfx';
 import { getLang, setLang } from './core/i18n';
-import { drawRun, drawTree, treeMove, treeFocus, treeCursor, resetView, setMouse, toggleMap, setTutorial, tileAt, getOverlay, setOverlay, invMove, invAction, invDrop, lootIndex, lootDone } from './render/draw';
+import { drawRun, drawCard, setTutStep, drawTree, treeMove, treeFocus, treeCursor, resetView, setMouse, toggleMap, setTutorial, tileAt, getOverlay, setOverlay, invMove, invAction, invDrop, lootIndex, lootDone } from './render/draw';
 import { sfx, soundOn, toggleSound, wakeAudio } from './core/audio';
 import { loadMeta, saveMeta } from './core/save';
 import { W } from './game/dungeon';
 import { newRun, act, serialize, deserialize, availableNodes, Run, Action } from './game/run';
+import { snap, stepsDone, currentStep, runCard, resetMoves, STEPS, STEP_COUNT, CARDS, TutCard } from './game/tutorial';
 import { CLASSES, CLASS_ORDER, UPGRADES, RANGER_COST, upgCost, LAST_FLOOR, USE_ORDER, treeNode } from './game/content';
 
 const cv = document.getElementById('c') as HTMLCanvasElement;
@@ -50,10 +51,11 @@ const locked = () => CLASS_ORDER[clsIdx] === 'waldlaeufer' && !meta.ranger;
 
 function startRun(daily = false) {
   resetView();
-  if (saved && !daily) { run = saved; saved = null; setTutorial(false); scene = 'run'; return; }
+  if (saved && !daily) { run = saved; saved = null; setTutorial(!meta.tutOff); resetMoves(); scene = 'run'; return; }
   if (locked()) { flash('Diese Klasse ist noch gesperrt.'); return; }
   saved = null;
-  setTutorial(meta.best === 0);
+  setTutorial(!meta.tutOff);
+  resetMoves();
   run = newRun(daily ? today() : (Math.random() * 2 ** 31) | 0, CLASS_ORDER[clsIdx], meta);
   run.daily = daily;
   scene = 'run';
@@ -73,8 +75,16 @@ function endRun() {
   row = ROWS - 1;
 }
 
+// Lehrgang: offene Karte hält das Spiel an
+let card: TutCard | null = null;
+const tutDone = (id: string) => { if (!meta.tut.includes(id)) { meta.tut.push(id); saveMeta(meta); } };
+
 function onKey(k: string): boolean {
   wakeAudio();
+  if (card) {
+    if (k === 'enter' || k === ' ' || k === 'escape') { tutDone(card.id); card = null; }
+    return true;
+  }
   if (k === 'm') { flash(toggleSound() ? 'Ton an' : 'Ton aus'); return true; }
   if (k === 'n' && scene === 'run') { toggleMap(); return true; }
   if (scene === 'run' && run && run.mode === 'play') {
@@ -176,6 +186,7 @@ function onKey(k: string): boolean {
   else if (k === ' ' || k === '.') a = { t: 'wait' };
   else if (k === 'f') a = { t: 'shoot' };
   else if (k === 'k') a = { t: 'tree' };
+  else if (k === 't' && !meta.tutOff) { const s = currentStep(meta.tut, run); if (s) tutDone(s.id); return true; }
   else if (k === 'q') a = { t: 'potion' };
   else if (k === 'b') a = { t: 'bomb' };
   else if (k === 'e' || k === 'enter') a = { t: 'descend' };
@@ -184,8 +195,9 @@ function onKey(k: string): boolean {
   else if (k >= '7' && k <= '9') a = { t: 'use', id: USE_ORDER[+k - 7] };
   else if (k === '0') a = { t: 'use', id: USE_ORDER[3] };
   if (!a) return false;
-  const before: string = run.mode, solved = !!run.puzzle?.solved, items = run.p.potions + run.p.bombs;
+  const before: string = run.mode, solved = !!run.puzzle?.solved, items = run.p.potions + run.p.bombs, b = snap(run);
   act(run, a);
+  if (!meta.tutOff) for (const id of stepsDone(meta.tut, run, a, b)) tutDone(id);
   const mode: string = run.mode;
   // Baum: Auswahl auf den ersten lernbaren Knoten setzen
   if (mode === 'tree' && (before !== 'tree' || !availableNodes(run).includes(treeCursor()))) { const av = availableNodes(run); if (av.length) treeFocus(run.p.cls, av[0]); }
@@ -234,7 +246,7 @@ function backdrop(time: number, dt: number) {
 }
 
 // ---------- Titelbild ----------
-const TITLE_ITEMS = 4;
+const TITLE_ITEMS = 6;
 let tRow = 0;
 let stageDark: HTMLCanvasElement | null = null;
 
@@ -242,6 +254,8 @@ function titleAction() {
   if (tRow === 0) { scene = 'lager'; row = ROWS - 1; }
   else if (tRow === 1) setLang(getLang() === 'de' ? 'en' : 'de');
   else if (tRow === 2) toggleSound();
+  else if (tRow === 3) { meta.tutOff = !meta.tutOff; saveMeta(meta); }
+  else if (tRow === 4) { meta.tut = []; meta.tutOff = false; saveMeta(meta); flash('Lehrgang beginnt von vorn.'); }
   else if (document.fullscreenElement) void document.exitFullscreen();
   else document.documentElement.requestFullscreen().catch(() => { /* nicht erlaubt */ });
 }
@@ -314,9 +328,9 @@ function drawTitle(time: number, dt: number) {
   ctx.fillStyle = '#ffcd75'; ctx.fillRect(VW / 2 - 3, 102, 6, 5);
 
   // Menü
-  const items = ['SPIEL STARTEN', 'SPRACHE: DEUTSCH', soundOn() ? 'TON: AN' : 'TON: AUS', 'VOLLBILD'];
+  const items = ['SPIEL STARTEN', 'SPRACHE: DEUTSCH', soundOn() ? 'TON: AN' : 'TON: AUS', meta.tutOff ? 'LEHRGANG: AUS' : 'LEHRGANG: AN', 'LEHRGANG NEU BEGINNEN', 'VOLLBILD'];
   items.forEach((label, i) => {
-    const y = 264 + i * 17, sel = i === tRow;
+    const y = 246 + i * 14, sel = i === tRow;
     if (sel) { panel(ctx, VW / 2 - 100, y - 4, 200, 16, '#ffcd75', 'rgba(177,62,83,0.45)'); text(ctx, '>', VW / 2 - 92, y, '#ffcd75'); text(ctx, '<', VW / 2 + 88, y, '#ffcd75'); }
     text(ctx, label, VW / 2, y, sel ? '#ffcd75' : '#94b0c2', 10, 'center');
   });
@@ -409,6 +423,16 @@ function frame(now: number) {
   else if (scene === 'lager') drawLager(time, dt);
   else if (scene === 'baum') drawLagerTree(time, dt);
   else if (run) drawRun(ctx, run, dt, time);
+  // Lehrgang: Schritt im Lauf, Karten beim ersten Kennenlernen
+  if (!meta.tutOff && !card) {
+    if (scene === 'run' && run) card = runCard(meta.tut, run);
+    else if (scene === 'lager' && !meta.tut.includes('lager')) card = CARDS.lager;
+  }
+  if (scene === 'run' && run) {
+    const s = meta.tutOff ? null : currentStep(meta.tut, run);
+    setTutStep(s ? { text: s.text(run), k: STEPS.filter(q => meta.tut.includes(q.id)).length + 1, n: STEP_COUNT } : null);
+  }
+  if (card) drawCard(ctx, card);
   requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);
