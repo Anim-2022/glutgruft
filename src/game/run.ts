@@ -27,6 +27,7 @@ export interface Player extends Actor {
   tree: string[];              // gelernte Knoten des Fertigkeitsbaums
   pts: number;                 // offene Fertigkeitspunkte
   rest: number;                // Punkte, die mangels Knoten zu Gaben wurden
+  resAcc?: number;             // angesammelte Bruchteile aus fokusOnHit
 }
 
 export interface Puzzle {
@@ -1284,6 +1285,11 @@ export function act(run: Run, a: Action): void {
       const base = playerAtk(p) * (p.cls === 'waldlaeufer' ? 0.7 : 1);
       playerHit(run, t, base);
       sideHits(run, t, base, c.resCol);
+      if (c.fokusOnHit) {
+        p.resAcc = (p.resAcc ?? 0) + c.fokusOnHit;
+        const n = Math.floor(p.resAcc + 1e-9);
+        if (n > 0) { gain(p, n); p.resAcc -= n; }
+      }
       used = true;
       break;
     }

@@ -6,6 +6,7 @@ export interface ClassDef {
   hp: number; atk: number; def: number;
   resName: string; resMax: number; resStart: number; resCol: string;
   range: number; // Reichweite des Grundangriffs (0 = nur Nahkampf)
+  fokusOnHit?: number; // Klassenressource je Treffer des Grundangriffs (Bruchteile sammeln sich)
   shot: string;
   skills: SkillDef[];
 }
@@ -33,7 +34,7 @@ export const CLASSES: Record<ClassId, ClassDef> = {
   },
   waldlaeufer: {
     id: 'waldlaeufer', name: 'Waldläufer', desc: 'Schütze mit Fallen. Fokus wächst beim Warten im Kampf und mit jedem besiegten Gegner.',
-    hp: 22, atk: 4, def: 1, resName: 'Fokus', resMax: 8, resStart: 2, resCol: '#a7f070', range: 5, shot: 'Schuss',
+    hp: 22, atk: 4, def: 1, resName: 'Fokus', resMax: 8, resStart: 2, resCol: '#a7f070', range: 5, fokusOnHit: 1, shot: 'Schuss',
     skills: [
       { name: 'Zielschuss', cost: 4, desc: 'Schwerer Schuss auf große Distanz' },
       { name: 'Falle', cost: 2, desc: 'Legt eine Falle: Schaden + Betäubung' },

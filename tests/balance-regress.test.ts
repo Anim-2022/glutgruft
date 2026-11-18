@@ -3,7 +3,7 @@ import { describe, it, expect } from 'vitest';
 import { defaultMeta } from '../src/core/save';
 import { newRun, act, genItem, Run, Actor, MAX_TRAPS } from '../src/game/run';
 import { W, H, T, computeFov } from '../src/game/dungeon';
-import { MOBS, spawnTable } from '../src/game/content';
+import { MOBS, CLASSES, spawnTable } from '../src/game/content';
 import type { ClassId } from '../src/game/content';
 
 // Leerer Gang 3x58 ohne Gegner, Spieler in der Mitte
@@ -183,5 +183,22 @@ describe('Balance-Regressionen', () => {
     act(r, { t: 'perk', i: 0 });
     expect(r.p.atk).toBe(atk + 3);
     expect(r.p.maxHp).toBe(Math.round(maxHp * 0.8));
+  });
+
+  it('Waldläufer: Treffer des Grundangriffs gibt Fokus (fokusOnHit), andere Klassen nicht', () => {
+    const r = arena('waldlaeufer');
+    const m = mob(r, 'golem', 33, 6);
+    r.p.res = 0;
+    act(r, { t: 'shoot' });
+    expect(m.hp).toBeLessThan(m.maxHp);
+    expect(r.p.res).toBe(CLASSES.waldlaeufer.fokusOnHit);
+    const k = arena('magier');
+    const g = mob(k, 'golem', 32, 6);
+    k.p.res = 0;
+    act(k, { t: 'shoot' });
+    expect(g.hp).toBeLessThan(g.maxHp);
+    expect(k.p.res).toBeLessThanOrEqual(1); // nur die übliche Mana-Erholung
+    expect(CLASSES.magier.fokusOnHit ?? 0).toBe(0);
+    expect(CLASSES.krieger.fokusOnHit ?? 0).toBe(0);
   });
 });
