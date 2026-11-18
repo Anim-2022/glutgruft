@@ -1173,7 +1173,7 @@ function useSkill(run: Run, i: number): boolean {
 let freeTurn = false;
 
 // Gerade Linie (Bresenham) vom Spieler zum Ziel und darüber hinaus, bis zur Wand
-function lineFrom(run: Run, tx: number, ty: number, len: number): [number, number][] {
+export function lineFrom(run: Run, tx: number, ty: number, len: number): [number, number][] {
   const p = run.p, out: [number, number][] = [];
   const dx = tx - p.x, dy = ty - p.y, n = Math.max(Math.abs(dx), Math.abs(dy));
   if (!n) return out;
