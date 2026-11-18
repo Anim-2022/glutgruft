@@ -56,13 +56,17 @@ export function pickNode(run: Run): string {
 const shopped = new Set<number>();
 const trail: number[] = [];
 let visitFloor = 0, wander = 0, loops = 0;
+// fehlgeschlagene neue Fähigkeit (kein Ziel, kein Weg): in diesem Zug nicht noch einmal
+let failTurn = -1, failSkill = -1, lastTurn = -1, lastSkill = -1;
 
 export function botAction(run: Run): Action {
   if (run.mode === 'shop') shopped.add(run.floor);
   if (run.turn === 0) shopped.clear();
   if (run.turn === 0 || visitFloor !== run.floor) { trail.length = 0; wander = 0; loops = 0; visitFloor = run.floor; }
   if (wander > 0 && run.mode === 'play') { wander--; const d = DIRS[(wander * 7 + run.turn) % 4]; return { t: 'move', dx: d[0], dy: d[1] }; }
+  if (lastSkill >= 0 && run.turn === lastTurn) { failTurn = run.turn; failSkill = lastSkill; }
   const a = decide(run);
+  lastTurn = run.turn; lastSkill = a.t === 'skill' && a.i >= 3 ? a.i : -1;
   // Gegen Pendeln: wechselt der Bot nur noch zwischen zwei Feldern, läuft er kurz ziellos
   if (a.t === 'move' && run.mode === 'play') {
     trail.push(run.p.y * W + run.p.x);
@@ -114,14 +118,14 @@ function decide(run: Run): Action {
       // Blutzorn: mit Leben zahlen nur oberhalb von 40 % Leben
       const kc = (i: number) => p.res >= skillCost(p, i) || (node('n2_5') && skillReady(p, i) && p.hp - 2 * (skillCost(p, i) - p.res) > p.maxHp * 0.4);
       const kcan = (i: number) => (node('n2_5') ? kc(i) : can(i));
-      const spell = (id: string) => { const k = (p.spells ?? []).indexOf(id); return k >= 0 && kc(3 + k) ? 3 + k : -1; };
+      const spell = (id: string) => { const k = (p.spells ?? []).indexOf(id); return k >= 0 && kc(3 + k) && !(failTurn === run.turn && failSkill === 3 + k) ? 3 + k : -1; };
       const ranged = vis.filter(m => m.awake && MOBS[m.kind].range && dist(m) <= 6);
       const adjN = vis.filter(m => dist(m) <= 1).length;
       // Kriegsschrei zu Beginn eines Kampfs gegen mehrere oder einen Boss
       if (!p.st.stark && kcan(2) && (vis.filter(m => dist(m) <= 3).length >= 2 || (near.boss && d <= 3))) return { t: 'skill', i: 2 };
       // Herausforderung: Schützen in Sicht, noch niemand direkt daneben
       const hf = spell('herausforderung');
-      if (hf >= 0 && ranged.length && adjN === 0 && !ranged.some(m => m.st.taunt)) return { t: 'skill', i: hf };
+      if (hf >= 0 && ranged.some(m => dist(m) <= 4) && adjN === 0 && !ranged.some(m => m.st.taunt)) return { t: 'skill', i: hf };
       // Schildwurf: Schütze auf 2–4 Feldern
       const sw = spell('schildwurf');
       if (sw >= 0) { const t = ranged.filter(m => dist(m) >= 2 && dist(m) <= 4 && !m.st.stun)[0]; if (t) { if (run.target !== t.id) return { t: 'target', x: t.x, y: t.y }; return { t: 'skill', i: sw }; } }
