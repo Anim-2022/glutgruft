@@ -1,6 +1,6 @@
 // Einfacher Autospieler für Balance- und Stabilitätsläufe.
 import { W, H, T, walkable } from '../src/game/dungeon';
-import { Run, Action, act, playerAtk, itemScore, availableNodes, MAX_TRAPS } from '../src/game/run';
+import { Run, Action, act, playerAtk, itemScore, availableNodes, MAX_TRAPS, skillReady, lineFrom } from '../src/game/run';
 import { CLASSES, MOBS } from '../src/game/content';
 
 const DIRS = [[1, 0], [-1, 0], [0, 1], [0, -1]];
@@ -33,8 +33,11 @@ function stepTo(run: Run, goal: (x: number, y: number, i: number) => boolean, av
 }
 
 // Wahl im Fertigkeitsbaum: BUILD=heur (Zweig nach Seed, erst in die Tiefe) oder BUILD=random
-export type Build = 'heur' | 'random';
-let build: Build = (globalThis as { process?: { env: Record<string, string | undefined> } }).process?.env.BUILD === 'random' ? 'random' : 'heur';
+// BUILD=feuer|eis|arkan: fester Zweig für alle Seeds (Magier)
+export type Build = 'heur' | 'random' | 'feuer' | 'eis' | 'arkan';
+const FORCED: Record<string, number> = { feuer: 0, eis: 1, arkan: 2 };
+const envBuild = (globalThis as { process?: { env: Record<string, string | undefined> } }).process?.env.BUILD ?? 'heur';
+let build: Build = (envBuild in FORCED || envBuild === 'random' ? envBuild : 'heur') as Build;
 export const setBuild = (b: Build) => { build = b; };
 const TIER_ORDER = (ab: string) => ['1', '3', `4${ab}`, '5', '2a', '2b'];
 
@@ -45,7 +48,7 @@ export function pickNode(run: Run): string {
     const h = (Math.imul(run.seed, 73856093) ^ Math.imul(run.p.lvl, 19349663) ^ Math.imul(run.p.tree.length + 1, 83492791)) >>> 0;
     return av[h % av.length];
   }
-  const focus = run.seed % 3, ab = Math.floor(run.seed / 3) % 2 ? 'b' : 'a';
+  const focus = build in FORCED && run.p.cls === 'magier' ? FORCED[build] : run.seed % 3, ab = Math.floor(run.seed / 3) % 2 ? 'b' : 'a';
   for (let k = 0; k < 3; k++) for (const t of TIER_ORDER(ab)) { const id = `n${(focus + k) % 3}_${t}`; if (av.includes(id)) return id; }
   return av[0];
 }
@@ -113,9 +116,34 @@ function decide(run: Run): Action {
       if (d <= 1 && can(0) && !near.st.stun && near.hp > playerAtk(p)) return { t: 'skill', i: 0 };
       if (adj) return { t: 'move', dx: near.x - p.x, dy: near.y - p.y };
     } else if (p.cls === 'magier') {
-      if (d <= 2 && can(1) && !near.st.stun) return { t: 'skill', i: 1 };
-      if (d <= 7 && d >= 2 && can(0)) return { t: 'skill', i: 0 };
-      if (d <= 1 && can(2) && !near.st.stun) return { t: 'skill', i: 2 };
+      const ready = (i: number) => skillReady(p, i), node = (id: string) => p.tree.includes(id);
+      const spell = (id: string) => { const k = (p.spells ?? []).indexOf(id); return k >= 0 && ready(3 + k) ? 3 + k : -1; };
+      // Kryomant: betäubte Gegner zuerst angreifen
+      if (node('n1_5')) {
+        const st = vis.filter(m => m.st.stun && dist(m) <= 6).sort((a, b) => dist(a) - dist(b))[0];
+        if (st && run.target !== st.id) return { t: 'target', x: st.x, y: st.y };
+      }
+      // Arkanschild: Gegner direkt daneben oder wenig Leben, Schild nicht aktiv
+      const sh = spell('arkanschild');
+      if (sh >= 0 && !p.shield && (d <= 1 || p.hp < p.maxHp * 0.6)) return { t: 'skill', i: sh };
+      if (d <= 2 && ready(1) && !near.st.stun) return { t: 'skill', i: 1 };
+      // Eislanze bevorzugt: betäubtes Ziel oder 2+ Gegner auf einer Linie
+      const la = spell('eislanze');
+      if (la >= 0) {
+        const onLine = (m: typeof near) => lineFrom(run, m.x, m.y, 6).filter(([x, y]) => run.mobs.some(o => o.x === x && o.y === y)).length;
+        const best = vis.filter(m => dist(m) <= 6 && (m.st.stun || onLine(m) >= 2)).sort((a, b) => (b.st.stun ? 1 : 0) - (a.st.stun ? 1 : 0) || onLine(b) - onLine(a) || dist(a) - dist(b))[0];
+        if (best) { if (run.target !== best.id) return { t: 'target', x: best.x, y: best.y }; return { t: 'skill', i: la }; }
+      }
+      // Flammenwand: 2+ Gegner kommen heran, noch keiner direkt daneben
+      const wa = spell('flammenwand');
+      if (wa >= 0 && d >= 2 && vis.filter(m => m.awake && dist(m) <= 5).length >= 2) return { t: 'skill', i: wa };
+      // Flächenbrand: erst anzünden, Brennende mit dem Funken erledigen
+      if (node('n0_5') && near.st.brand && d <= c.range) return { t: 'shoot' };
+      // Feuerball geht den übrigen neuen Zaubern vor
+      if (d <= 7 && d >= 2 && ready(0)) return { t: 'skill', i: 0 };
+      // Zeitriss: Blinzeln kostet keinen Zug – direkt danach angreifen
+      if (d <= 1 && ready(2) && (!near.st.stun || node('n2_5'))) return { t: 'skill', i: 2 };
+      if (la >= 0 && d <= 6) return { t: 'skill', i: la };
       if (d <= c.range) return { t: 'shoot' };
     } else {
       const onTrap = run.traps.some(t => t.x === p.x && t.y === p.y);

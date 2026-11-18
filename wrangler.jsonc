@@ -1,9 +1,0 @@
-{
-  // Statische Auslieferung über Cloudflare Workers (Assets)
-  "name": "glutgruft",
-  "compatibility_date": "2026-11-01",
-  "assets": { "directory": "./dist" },
-  "build": { "command": "npm run build" },
-  // Vorschau-Builds für Nicht-Produktionszweige (npx wrangler preview) brauchen diesen Block
-  "previews": {}
-}

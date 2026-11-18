@@ -137,28 +137,79 @@ export interface TreeNode {
   cost: number;     // Seelensplitter im Lager, 0 = immer offen
   excl?: string;    // schließt diesen Knoten aus
   key?: boolean;    // Schlüsselknoten
+  spell?: string;   // schaltet einen neuen Zauber frei (NEW_SKILLS)
+  needAny?: string[]; // mindestens einer davon muss gelernt sein
+  bundled?: boolean;  // kommt zusammen mit dem Elternknoten (kein eigener Punkt)
 }
 export const BRANCH_NAMES: Record<ClassId, string[]> = {
   krieger: ['Schild', 'Klinge', 'Schlachtruf'],
   magier: ['Feuer', 'Eis', 'Arkan'],
   waldlaeufer: ['Scharfschütze', 'Fallensteller', 'Pirscher'],
 };
-export const TREE_NODES: TreeNode[] = [0, 1, 2].flatMap(b => [
+// Neue Zauber aus dem Baum; sie belegen die Plätze 4–6 in der Reihenfolge des Lernens
+export const NEW_SKILLS: Record<string, SkillDef & { branch: number }> = {
+  flammenwand: { name: 'Flammenwand', cost: 5, desc: 'Drei brennende Felder zwischen dir und dem Gegner, 4 Züge', branch: 0 },
+  eislanze: { name: 'Eislanze', cost: 4, desc: 'Strahl bis 6 Felder, durchbohrt; Betäubte erleiden doppelten Schaden', branch: 1 },
+  arkanschild: { name: 'Arkanschild', cost: 4, desc: 'Schild fängt 8 + Stufe Schaden ab, 5 Züge', branch: 2 },
+};
+// Stellschrauben des Baums (balance.ts darf sie für Messungen überschreiben):
+// treePtsMax – Fertigkeitspunkte je Lauf, danach gibt es Gaben; kryoMana – Mana je Treffer
+// gegen Betäubte und Bosse; kryoRegen – Anteil der normalen Mana-Erholung mit Kryomant
+export const TUNE = { treePtsMax: 6, kryoMana: 2, kryoRegen: 0.75 };
+// Texte der Knoten T2a, T2b, T3, T5 (Schritt 2b: nur Magier)
+export const NODE_TEXT: Partial<Record<ClassId, Record<string, [string, string]>>> = {
+  magier: {
+    n0_2a: ['Zunder', 'Funke entzündet mit 30 %'],
+    n0_2b: ['Schwelbrand', 'Brand hält 1 Zug länger und brennt 1 stärker'],
+    n0_3: ['Flammenwand', 'Neuer Zauber, 5 Mana: drei brennende Felder zwischen dir und dem Gegner, 4 Züge'],
+    n0_5: ['Flächenbrand', 'Brennende Gegner explodieren beim Tod und entzünden ihre Nachbarn'],
+    n1_2a: ['Raureif', 'Betäubte Gegner erleiden +25 % Schaden'],
+    n1_2b: ['Eisrüstung', 'Nach der Frostnova 2 Züge +2 Verteidigung'],
+    n1_3: ['Eislanze', 'Neuer Zauber, 4 Mana: Strahl bis 6 Felder, durchbohrt; Betäubte erleiden doppelten Schaden'],
+    n1_5: ['Kryomant', 'Mana kehrt langsamer zurück (drei Viertel); +2 Mana je Treffer gegen Betäubte und Bosse'],
+    n2_2a: ['Nachhall', 'Nach dem Blinzeln kostet der nächste Zauber 2 Mana weniger'],
+    n2_2b: ['Schutzrune', 'Einmal je Ebene: unter 30 % Leben blinzelst du von selbst'],
+    n2_3: ['Arkanschild', 'Neuer Zauber, 4 Mana: Schild fängt 8 + Stufe Schaden ab, 5 Züge'],
+    n2_5: ['Zeitriss', 'Blinzeln kostet keinen Zug, danach 3 Züge Abklingzeit'],
+  },
+};
+const SPELL_OF = ['flammenwand', 'eislanze', 'arkanschild'];
+const baseNodes = (b: number, minPts4: number): TreeNode[] => [
   { id: `n${b}_1`, branch: b, tier: '1', minPts: 0, cost: 0 },
-  { id: `n${b}_4a`, branch: b, tier: '4a', parent: `n${b}_1`, minPts: 1, cost: 0, excl: `n${b}_4b` },
-  { id: `n${b}_4b`, branch: b, tier: '4b', parent: `n${b}_1`, minPts: 1, cost: 0, excl: `n${b}_4a` },
-]);
-export const treeNode = (id: string) => TREE_NODES.find(n => n.id === id);
-// Name und Wirkung eines Knotens, aus den Texten der Ränge
+  { id: `n${b}_4a`, branch: b, tier: '4a', parent: `n${b}_1`, minPts: minPts4, cost: 0, excl: `n${b}_4b` },
+  { id: `n${b}_4b`, branch: b, tier: '4b', parent: `n${b}_1`, minPts: minPts4, cost: 0, excl: `n${b}_4a` },
+];
+const TREES: Record<ClassId, TreeNode[]> = {
+  // Krieger und Waldläufer: bis 2c/2d nur die Ränge (Rang III braucht Rang II)
+  krieger: [0, 1, 2].flatMap(b => baseNodes(b, 1)),
+  waldlaeufer: [0, 1, 2].flatMap(b => baseNodes(b, 1)),
+  magier: [0, 1, 2].flatMap(b => {
+    const [t1, t4a, t4b] = baseNodes(b, 2);
+    return [
+      t1,
+      // T2a gehört zu T1: ein Punkt gibt beide
+      { id: `n${b}_2a`, branch: b, tier: '2a', parent: t1.id, minPts: 0, cost: 0, bundled: true },
+      { id: `n${b}_2b`, branch: b, tier: '2b', parent: t1.id, minPts: 0, cost: 40 },
+      { id: `n${b}_3`, branch: b, tier: '3', parent: t1.id, minPts: 0, cost: 80, spell: SPELL_OF[b] },
+      t4a, t4b,
+      // Schlüsselknoten: braucht Rang III (A oder B) und 4 Punkte im Zweig; im Lager hängt er an T1
+      { id: `n${b}_5`, branch: b, tier: '5', parent: t1.id, minPts: 4, cost: 120, key: true, needAny: [t4a.id, t4b.id] },
+    ];
+  }),
+};
+export const treeNodes = (cls: ClassId) => TREES[cls];
+export const treeNode = (cls: ClassId, id: string) => TREES[cls].find(n => n.id === id);
+// Name und Wirkung eines Knotens
 export function nodeText(cls: ClassId, id: string): { name: string; desc: string } {
-  const n = treeNode(id)!, sk = CLASSES[cls].skills[n.branch], up = SKILL_UP[`${cls}${n.branch}`];
+  const n = treeNode(cls, id)!, sk = CLASSES[cls].skills[n.branch], up = SKILL_UP[`${cls}${n.branch}`];
   if (n.tier === '1') return { name: `${sk.name} II`, desc: up.r2 };
-  const [name, desc] = n.tier === '4a' ? up.a : up.b;
-  return { name: `${sk.name} III: ${name}`, desc };
+  if (n.tier === '4a' || n.tier === '4b') { const [name, desc] = n.tier === '4a' ? up.a : up.b; return { name: `${sk.name} III: ${name}`, desc }; }
+  const [name, desc] = NODE_TEXT[cls]![id];
+  return { name, desc };
 }
 // Knoten, die in einem Lauf dieser Klasse zur Wahl stehen können
 export const treePool = (cls: ClassId, meta: { tree?: Partial<Record<ClassId, string[]>> }) =>
-  TREE_NODES.filter(n => n.cost === 0 || (meta.tree?.[cls] ?? []).includes(n.id)).map(n => n.id);
+  TREES[cls].filter(n => n.cost === 0 || (meta.tree?.[cls] ?? []).includes(n.id)).map(n => n.id);
 
 // Zwei bestimmte Gaben zusammen ergeben eine zusätzliche Wirkung
 export interface Synergy { id: string; need: [string, string]; name: string; desc: string; }

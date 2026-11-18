@@ -11,13 +11,13 @@ npm test         # Logiktests
 npm run build    # Ausgabe in dist/
 ```
 
-## Deployment (Cloudflare Pages)
+## Deployment (Vercel)
 
 Build-Befehl `npm run build`, Ausgabeverzeichnis `dist`.
 
 ## Steuerung
 
-Pfeile/WASD bewegen und angreifen · Leertaste warten · 1–3 Fähigkeiten · F Fernangriff · Q Heiltrank · B Bombe · E Treppe
+Pfeile/WASD bewegen und angreifen · Leertaste warten · 1–6 Fähigkeiten (4–6: Zauber aus dem Baum) · U Ultimative · 7–0 Rollen und Tränke · K Fertigkeitsbaum · F Fernangriff · Q Heiltrank · B Bombe · E Treppe
 Klick oder Tab wählt ein Ziel · I Rucksack · C Charakter · H Hilfe · N Minikarte · M Ton · V Vollbild · L Sprache (DE/EN)
 
 ## Inhalt

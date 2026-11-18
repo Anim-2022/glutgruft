@@ -107,12 +107,12 @@ function onKey(k: string): boolean {
   }
   if (scene === 'baum') {
     const mv = MOVES[k], cls = CLASS_ORDER[clsIdx];
-    if (mv) { treeMove(mv[0], mv[1]); return true; }
+    if (mv) { treeMove(cls, mv[0], mv[1]); return true; }
     if (k === 'escape' || k === 'backspace') { scene = 'lager'; return true; }
     if (k === 'enter') {
-      const n = treeNode(treeCursor())!, own = meta.tree[cls] ?? [];
+      const n = treeNode(cls, treeCursor())!, own = meta.tree[cls] ?? [];
       if (!n.cost || own.includes(n.id)) flash(n.cost ? 'Schon freigeschaltet.' : 'Immer verfügbar.');
-      else if (n.parent && treeNode(n.parent)!.cost && !own.includes(n.parent)) flash('Erst den vorigen Knoten freischalten.');
+      else if (n.parent && treeNode(cls, n.parent)!.cost && !own.includes(n.parent)) flash('Erst den vorigen Knoten freischalten.');
       else if (meta.souls < n.cost) flash('Nicht genug Seelensplitter.');
       else { meta.souls -= n.cost; meta.tree[cls] = [...own, n.id]; saveMeta(meta); }
       return true;
@@ -136,7 +136,7 @@ function onKey(k: string): boolean {
           if (meta.souls >= RANGER_COST) { meta.souls -= RANGER_COST; meta.ranger = true; saveMeta(meta); flash('Waldläufer freigeschaltet!'); }
           else flash('Nicht genug Seelensplitter.');
         }
-      } else if (row === 1) { scene = 'baum'; treeFocus('n0_1'); }
+      } else if (row === 1) { scene = 'baum'; treeFocus(CLASS_ORDER[clsIdx], 'n0_1'); }
       else if (row === ROWS - 1) startRun();
       else if (row === ROWS - 2) startRun(true);
       else {
@@ -157,7 +157,7 @@ function onKey(k: string): boolean {
   let a: Action | null = null;
   if (run.mode === 'perk') { if (k >= '1' && k <= '4') a = { t: 'perk', i: +k - 1 }; }
   else if (run.mode === 'tree') {
-    if (MOVES[k]) { treeMove(MOVES[k][0], MOVES[k][1]); return true; }
+    if (MOVES[k]) { treeMove(run.p.cls, MOVES[k][0], MOVES[k][1]); return true; }
     if (k === 'enter' || k === ' ') a = { t: 'learn', id: treeCursor() };
     else if (k === 'k' || k === 'escape') a = { t: 'later' };
   }
@@ -179,15 +179,16 @@ function onKey(k: string): boolean {
   else if (k === 'q') a = { t: 'potion' };
   else if (k === 'b') a = { t: 'bomb' };
   else if (k === 'e' || k === 'enter') a = { t: 'descend' };
-  else if (k >= '1' && k <= '3') a = { t: 'skill', i: +k - 1 };
-  else if (k === '4') a = { t: 'ult' };
-  else if (k >= '5' && k <= '8') a = { t: 'use', id: USE_ORDER[+k - 5] };
+  else if (k >= '1' && k <= '6') a = { t: 'skill', i: +k - 1 };
+  else if (k === 'u') a = { t: 'ult' };
+  else if (k >= '7' && k <= '9') a = { t: 'use', id: USE_ORDER[+k - 7] };
+  else if (k === '0') a = { t: 'use', id: USE_ORDER[3] };
   if (!a) return false;
   const before: string = run.mode, solved = !!run.puzzle?.solved, items = run.p.potions + run.p.bombs;
   act(run, a);
   const mode: string = run.mode;
   // Baum: Auswahl auf den ersten lernbaren Knoten setzen
-  if (mode === 'tree' && (before !== 'tree' || !availableNodes(run).includes(treeCursor()))) { const av = availableNodes(run); if (av.length) treeFocus(av[0]); }
+  if (mode === 'tree' && (before !== 'tree' || !availableNodes(run).includes(treeCursor()))) { const av = availableNodes(run); if (av.length) treeFocus(run.p.cls, av[0]); }
   if (mode !== before) {
     if (mode === 'dead') sfx('death');
     else if (mode === 'win' || (mode === 'perk' && !solved && run.puzzle?.solved)) sfx('solve');
@@ -320,7 +321,7 @@ function drawTitle(time: number, dt: number) {
     text(ctx, label, VW / 2, y, sel ? '#ffcd75' : '#94b0c2', 10, 'center');
   });
   text(ctx, 'Pfeile wählen · ENTER bestätigen', VW / 2, 336, '#566c86', 8, 'center');
-  text(ctx, 'Bewegen: Pfeile/WASD · Fähigkeiten: 1-3 · Rucksack: I · Hilfe: H', VW / 2, 347, '#333c57', 8, 'center');
+  text(ctx, 'Bewegen: Pfeile/WASD · Fähigkeiten: 1-6 · Rucksack: I · Hilfe: H', VW / 2, 347, '#333c57', 8, 'center');
 }
 
 function drawLager(time: number, dt: number) {
@@ -392,11 +393,11 @@ function drawLager(time: number, dt: number) {
 function drawLagerTree(time: number, dt: number) {
   backdrop(time, dt);
   const cls = CLASS_ORDER[clsIdx], own = meta.tree[cls] ?? [];
-  const stateOf = (id: string) => { const n = treeNode(id)!; return !n.cost ? 'free' : own.includes(id) ? 'owned' : meta.souls >= n.cost ? 'open' : 'buy'; };
+  const stateOf = (id: string) => { const n = treeNode(cls, id)!; return !n.cost ? 'free' : own.includes(id) ? 'owned' : meta.souls >= n.cost ? 'open' : 'buy'; };
   drawTree(ctx, cls, `FERTIGKEITSBAUM – ${CLASSES[cls].name.toUpperCase()}`, stateOf,
-    id => { const n = treeNode(id)!; return !n.cost ? 'immer offen' : own.includes(id) ? 'freigeschaltet' : `${n.cost} Splitter`; },
+    id => { const n = treeNode(cls, id)!; return !n.cost ? '#free' : own.includes(id) ? 'freigeschaltet' : `${n.cost} Splitter`; },
     `Pfeile: wählen · ENTER: freischalten · ESC: zurück · ${meta.souls} Seelensplitter`,
-    id => { const n = treeNode(id)!; return !n.cost ? 'Steht in jedem Lauf zur Wahl.' : own.includes(id) ? 'Steht in jedem Lauf zur Wahl.' : 'Freischalten: kommt in die Auswahl der Läufe.'; });
+    id => { const n = treeNode(cls, id)!; return !n.cost ? 'Ohne Seelensplitter, steht in jedem Lauf zur Wahl.' : own.includes(id) ? 'Steht in jedem Lauf zur Wahl.' : 'Freischalten: kommt in die Auswahl der Läufe.'; });
   if (noteT > 0) { noteT -= dt; text(ctx, note, VW / 2, 346, '#ffcd75', 8, 'center'); }
 }
 
