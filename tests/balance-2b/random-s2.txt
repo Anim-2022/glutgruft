@@ -1,0 +1,51 @@
+
+=== neu magier: Median Ebene 9, Siege 7/80, Big hits(>=50%maxHP) 0, One-shots from full 0
+Gold verdient 476/Lauf, ausgegeben 264, Tränke gekauft 3.6, gefunden 16.7, Bomben gekauft 0.0, Gold übrig bei Sieg 815, Tode mit Boss in Sicht 3
+Eb  n  Tod  Züge  HPverl  Tränke Kills  Gold  Lvl  Atk  MaxHP  maxHit  medHit
+ 1  80   8   326     16   0.69  23.9     0  1.0  3.0    18      7      5
+ 2  72   5   298     20   0.83  23.1    21  4.0  3.9    28      8      5
+ 3  67   9   276     55   1.97  21.0    44  5.9  4.7    36      8      3
+ 4  58   6   263     53   1.64  21.1    68  7.7  5.3    43      9      3
+ 5  52   4   270     68   2.10  22.3    88  9.1  5.8    48     12      4
+ 6  48   2   275     97   2.38  25.8   139 10.8  6.1    55     10      5
+ 7  46   3   269     93   2.02  26.1   132 12.2  6.3    60     11      4
+ 8  43   1   268    105   2.00  25.2   151 13.5  6.5    65     11      5
+ 9  42   6   276    158   4.19  24.3   169 14.7  6.7    69     14      6
+10  36  10   265    197   4.50  25.8   143 15.8  7.0    73     18      6
+11  26  10   396    405   9.00  41.4   231 17.5  7.4    78     20      7
+12  16   7   353    356   5.75  37.9   204 19.9  8.1    89     19      7
+13   9   2   424    391   4.11  48.7   259 22.6  8.9   100     19      8
+14   7   0   541    533   6.29  59.6   393 24.9  8.7   107     20      8
+15   7   0   530    560   6.57  59.6   496 27.3  8.7   115     25      9
+Tod durch: [["schuetze",21],["skelett",14],["schuetze+skelett",5],["schuetze+sporling",3],["glutgeist+golem+schuetze",3],["other",3],["golem+schuetze+skelett+sporling",2],["glutgeist+golem+schuetze+sporling",2]]
+
+=== max magier: Median Ebene 12, Siege 19/80, Big hits(>=50%maxHP) 0, One-shots from full 0
+Gold verdient 921/Lauf, ausgegeben 533, Tränke gekauft 6.9, gefunden 27.4, Bomben gekauft 0.0, Gold übrig bei Sieg 787, Tode mit Boss in Sicht 3
+Eb  n  Tod  Züge  HPverl  Tränke Kills  Gold  Lvl  Atk  MaxHP  maxHit  medHit
+ 1  80   1   311     18   0.50  24.7    45  1.0  3.0    28      7      5
+ 2  79   0   291     20   0.75  22.9    49  3.9  4.1    38      7      5
+ 3  79   6   300     64   2.13  22.3    61  5.6  4.7    45      8      4
+ 4  73   1   301     62   1.47  23.3    76  7.5  5.4    53      9      3
+ 5  72   0   317     81   2.00  25.5    87  9.0  6.0    58     11      4
+ 6  72   5   271    102   2.18  26.0   148 10.7  6.2    65     10      5
+ 7  67   2   283    109   2.19  26.5   157 12.3  6.7    71     10      5
+ 8  65   1   269    106   1.66  25.8   157 13.5  7.0    75     10      5
+ 9  64   0   291    149   2.72  26.5   155 14.8  7.3    80     12      6
+10  64   5   312    206   4.22  31.4   148 15.9  7.4    85     18      7
+11  59  13   450    485   8.24  46.5   252 17.8  7.8    92     20      7
+12  46  17   444    463   7.02  48.2   333 20.4  8.2   101     19      8
+13  29   7   451    440   4.83  48.8   490 23.2  8.7   111     19      8
+14  22   2   497    470   4.68  53.9   458 25.7  8.9   120     20      9
+15  20   1   571    654   6.60  62.4   517 27.7  9.0   126     25     10
+Tod durch: [["schuetze",11],["schuetze+sporling",4],["schuetze+skelett",4],["golem+schuetze+sporling",3],["golem",3],["golem+schuetze",3],["glutgeist+golem+schuetze",3],["mutter+sporling",3]]
+
+=== Zusammenfassung (SEEDS=2, BUILD=random) ===
+neu magier      Siege  7/80  Median  9  Seelen/Lauf 540  Gaben 8.3  Ränge 2.8  Stufe RangII 6.4 RangIII 15.8  Restpunkt 1 %  Fähigkeiten/Lauf 90.8 / 23.3 / 58.2  Ressource vor Tod 2.1
+max magier      Siege 19/80  Median 12  Seelen/Lauf 1061  Gaben 12.9  Ränge 3.2  Stufe RangII 8.0 RangIII 17.5  Restpunkt 0 %  Fähigkeiten/Lauf 132.2 / 31.7 / 101.1  Ressource vor Tod 2.2
+
+Neue Zauber je Lauf:
+max magier       flammenwand 17.4  eislanze 0.9  arkanschild 12.7
+
+Knoten (Anteil der Läufe):
+neu magier       n0_1 58%  n0_2a 45%  n0_4a 16%  n0_4b 16%  n1_1 66%  n1_2a 39%  n1_4a 14%  n1_4b 9%  n2_1 73%  n2_2a 46%  n2_4a 16%  n2_4b 15%
+max magier       n0_1 78%  n0_2a 33%  n0_2b 34%  n0_3 44%  n0_4a 18%  n0_4b 15%  n0_5 8%  n1_1 75%  n1_2a 38%  n1_2b 36%  n1_3 40%  n1_4a 21%  n1_4b 13%  n1_5 10%  n2_1 68%  n2_2a 35%  n2_2b 28%  n2_3 30%  n2_4a 13%  n2_4b 19%  n2_5 4%
