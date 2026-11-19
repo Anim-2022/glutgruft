@@ -1,6 +1,6 @@
 // Einfacher Autospieler für Balance- und Stabilitätsläufe.
 import { W, H, T, walkable } from '../src/game/dungeon';
-import { Run, Action, act, playerAtk, itemScore, availableNodes, maxTraps, skillReady, skillCost, lineFrom } from '../src/game/run';
+import { Run, Action, act, playerAtk, itemScore, availableNodes, maxTraps, skillReady, skillCost, lineFrom, forgeTarget } from '../src/game/run';
 import { CLASSES, MOBS } from '../src/game/content';
 
 const DIRS = [[1, 0], [-1, 0], [0, 1], [0, -1]];
@@ -89,7 +89,7 @@ function decide(run: Run): Action {
   if (run.mode === 'perk') return { t: 'perk', i: 0 };
   if (run.mode === 'tree') return { t: 'learn', id: pickNode(run) };
   if (run.mode === 'shop') {
-    const i = run.shop.findIndex(o => !o.sold && o.price <= p.gold && (o.kind !== 'bomb'));
+    const i = run.shop.findIndex(o => !o.sold && o.price <= p.gold && o.kind !== 'bomb' && (o.kind !== 'forge' || !!forgeTarget(p)));
     return i >= 0 ? { t: 'buy', i } : { t: 'leave' };
   }
   if (p.hp < p.maxHp * 0.4 && p.potions > 0) return { t: 'potion' };
