@@ -59,7 +59,7 @@ export const MOBS: Record<string, MobDef> = {
   glutgeist: { name: 'Glutgeist', hp: 14, atk: 5, def: 0, xp: 10, ai: 'erratic', burn: true },
   koenig: { name: 'Gruftkönig', hp: 60, atk: 7, def: 2, xp: 40, ai: 'boss', boss: true, minion: 'skelett', smash: true },
   mutter: { name: 'Sporenmutter', hp: 110, atk: 9, def: 3, xp: 80, ai: 'boss', boss: true, minion: 'sporling', poison: true, smash: true },
-  mimik: { name: 'Mimik', hp: 16, atk: 5, def: 2, xp: 12, ai: 'chase' },
+  mimik: { name: 'Mimik', hp: 16, atk: 4, def: 2, xp: 12, ai: 'chase' },
   // Ereignisgegner
   dieb: { name: 'Diebesratte', hp: 7, atk: 1, def: 0, xp: 2, ai: 'flee' },
   goblin: { name: 'Schatzgoblin', hp: 12, atk: 2, def: 1, xp: 8, ai: 'flee' },
