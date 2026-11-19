@@ -220,11 +220,11 @@ const fullTree = (spells: string[]) => [0, 1, 2].flatMap(b => {
     t1,
     // T2a gehört zu T1: ein Punkt gibt beide
     { id: `n${b}_2a`, branch: b, tier: '2a', parent: t1.id, minPts: 0, cost: 0, bundled: true },
-    { id: `n${b}_2b`, branch: b, tier: '2b', parent: t1.id, minPts: 0, cost: 40 },
-    { id: `n${b}_3`, branch: b, tier: '3', parent: t1.id, minPts: 0, cost: 80, spell: spells[b] },
+    { id: `n${b}_2b`, branch: b, tier: '2b', parent: t1.id, minPts: 0, cost: 80 },
+    { id: `n${b}_3`, branch: b, tier: '3', parent: t1.id, minPts: 0, cost: 160, spell: spells[b] },
     t4a, t4b,
     // Schlüsselknoten: braucht Rang III (A oder B) und 4 Punkte im Zweig; im Lager hängt er an T1
-    { id: `n${b}_5`, branch: b, tier: '5', parent: t1.id, minPts: 4, cost: 120, key: true, needAny: [t4a.id, t4b.id] },
+    { id: `n${b}_5`, branch: b, tier: '5', parent: t1.id, minPts: 4, cost: 240, key: true, needAny: [t4a.id, t4b.id] },
   ] as TreeNode[];
 });
 const TREES: Record<ClassId, TreeNode[]> = {
@@ -259,17 +259,17 @@ export const SYNERGIES: Synergy[] = [
 export interface UpgDef { id: string; name: string; desc: string; max: number; cost: number; }
 
 export const UPGRADES: UpgDef[] = [
-  { id: 'vit', name: 'Vitalität', desc: '+2 Leben pro Stufe', max: 5, cost: 20 },
-  { id: 'atk', name: 'Schleifstein', desc: '+1 Angriff pro Stufe (nicht für den Magier)', max: 2, cost: 60 },
-  { id: 'trank', name: 'Proviant', desc: '+1 Heiltrank zum Start', max: 3, cost: 25 },
-  { id: 'fokus', name: 'Fokus', desc: '+1 max. Klassenressource', max: 3, cost: 20 },
-  { id: 'gold', name: 'Startkapital', desc: '+15 Gold zum Start', max: 3, cost: 15 },
-  { id: 'bombe', name: 'Pulvervorrat', desc: '+1 Bombe zum Start', max: 2, cost: 20 },
-  { id: 'fund', name: 'Schatzsucher', desc: 'Bessere Funde in Truhen', max: 3, cost: 30 },
-  { id: 'wahl', name: 'Weisheit', desc: '+1 Auswahl beim Stufenaufstieg', max: 1, cost: 80 },
-  { id: 'erbe', name: 'Erbstück', desc: 'Start mit einer zufälligen Reliquie', max: 1, cost: 120 },
+  { id: 'vit', name: 'Vitalität', desc: '+2 Leben pro Stufe', max: 5, cost: 40 },
+  { id: 'atk', name: 'Schleifstein', desc: '+1 Angriff pro Stufe (nicht für den Magier)', max: 2, cost: 120 },
+  { id: 'trank', name: 'Proviant', desc: '+1 Heiltrank zum Start', max: 3, cost: 50 },
+  { id: 'fokus', name: 'Fokus', desc: '+1 max. Klassenressource', max: 3, cost: 40 },
+  { id: 'gold', name: 'Startkapital', desc: '+15 Gold zum Start', max: 3, cost: 30 },
+  { id: 'bombe', name: 'Pulvervorrat', desc: '+1 Bombe zum Start', max: 2, cost: 40 },
+  { id: 'fund', name: 'Schatzsucher', desc: 'Bessere Funde in Truhen', max: 3, cost: 60 },
+  { id: 'wahl', name: 'Weisheit', desc: '+1 Auswahl beim Stufenaufstieg', max: 1, cost: 160 },
+  { id: 'erbe', name: 'Erbstück', desc: 'Start mit einer zufälligen Reliquie', max: 1, cost: 240 },
 ];
-export const RANGER_COST = 60;
+export const RANGER_COST = 120;
 export const upgCost = (u: UpgDef, lvl: number) => u.cost * (lvl + 1);
 
 export const RELICS: Record<string, PerkDef> = {
@@ -299,6 +299,7 @@ export interface Item {
   wk?: number;              // Waffenart 0..2, bestimmt das Aussehen
   use?: string;             // Verbrauchsgegenstand
   uniq?: boolean; neu?: boolean;
+  plus?: number;            // beim Schmied verbessert
 }
 // Eigenschaften von Ausrüstung und Gaben
 export const AFFIX: Record<string, (v: number) => string> = {
@@ -328,4 +329,4 @@ export const UNIQUES: U[] = [
   { slot: 3, name: 'Ring der Gier', aff: [['gold', 40], ['quell', 4]] },
   { slot: 3, name: 'Sturmring', aff: [['kette', 60], ['macht', 20]] },
 ];
-export interface Offer { kind: 'potion' | 'bomb' | 'item'; name: string; desc: string; price: number; sold: boolean; item?: Item; left?: number; }
+export interface Offer { kind: 'potion' | 'bomb' | 'item' | 'forge' | 'reroll'; name: string; desc: string; price: number; sold: boolean; item?: Item; left?: number; }
