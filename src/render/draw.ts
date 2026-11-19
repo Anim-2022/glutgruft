@@ -7,6 +7,13 @@ import { drawItemIcon, drawIcon, PERK_ICON } from './icons';
 import { Light, applyLight, AMBIENTS } from './light';
 import { dropShadow, drawAO, castFrom, castShadow, beginShadows, flushShadows } from './shade';
 import { floorTint, softEdged } from './tiles';
+import { propAt, drawProp, recolor } from './props';
+import { stepAmbient, drawAmbient, drawFog, resetAmbient } from './ambient';
+
+// Arena des Bosses: Fackeln brennen in seiner Farbe [außen, Kern], dazu eine Aura um ihn
+const BOSS_FLAME: [string, string][] = [['#9a4fc0', '#c9d4dc'], ['#38b764', '#a7f070'], ['#ef7d57', '#f4f4f4']];
+const bossTorch: HTMLCanvasElement[][] = [];
+const torchOf = (bi: number, f: number) => (bossTorch[bi] ??= [0, 1].map(k => recolor(sprites[`torch${k}`], { '#ef7d57': BOSS_FLAME[bi][0], '#ffcd75': BOSS_FLAME[bi][1] })))[f];
 import { sfx } from '../core/audio';
 import { tr } from '../core/i18n';
 import { Run, Actor, xpNeed, skillCost, skillReady, spellAt, itemText, itemValue, itemScore, perkInfo, skillModName, shotRange, RANKS, SORT_NAMES, BAG_MAX, RUNE_NAMES, availableNodes } from '../game/run';
@@ -85,7 +92,7 @@ export function resetView() {
   pos.clear(); lunges.clear(); flashes.clear();
   nums.length = 0; bolts.length = 0; bits.length = 0; booms.length = 0; shake = 0;
   shots.length = 0; rings.length = 0; sparks.length = 0; bashes.length = 0; swipes.length = 0; deathT = -1; poses.clear();
-  resetDeaths();
+  resetDeaths(); resetAmbient();
 }
 
 function smooth(a: Actor, dt: number) {
@@ -178,7 +185,7 @@ export function drawRun(ctx: CanvasRenderingContext2D, run: Run, dt: number, tim
 
   view.ox = ox - sx; view.oy = oy - sy;
   ctx.fillStyle = '#08090f'; ctx.fillRect(0, 0, VW, VH);
-  const ts = tilesets[biomeOf(run.floor)];
+  const bio = biomeOf(run.floor), ts = tilesets[bio], boss = run.floor % 5 === 0, fx = !reducedFx();
   buildLight(run);
   const lights: Light[] = [], floorTiles: number[] = [];
   beginShadows(VW, VH);
@@ -194,7 +201,8 @@ export function drawRun(ctx: CanvasRenderingContext2D, run: Run, dt: number, tim
       const open = (ox2: number, oy2: number) => x + ox2 >= 0 && x + ox2 < W && y + oy2 >= 0 && y + oy2 < H && !wallLike(run.tiles[i + oy2 * W + ox2]);
       const l = open(-1, 0), r = open(1, 0), u = open(0, -1);
       // Wandspielart fest am Feld (Hash der Koordinaten, kein Zufall): meist die Grundwand
-      if (front) { const hv = hash(x, y, 101) % 7; ctx.drawImage(ts.walls[hv < 5 ? 0 : hv - 4], dx, dy); }
+      const hv = hash(x, y, 101) % 7;
+      if (front) ctx.drawImage(ts.walls[hv < 5 ? 0 : hv - 4], dx, dy);
       else {
         const c = [open(-1, -1), open(1, -1), open(-1, 1), open(1, 1)];
         const bits = (u ? 1 : 0) | (l ? 2 : 0) | (r ? 4 : 0), inner = !(bits || c.some(Boolean));
@@ -214,12 +222,17 @@ export function drawRun(ctx: CanvasRenderingContext2D, run: Run, dt: number, tim
       if (front) { ctx.fillStyle = ts.hi; if (l) ctx.fillRect(dx, dy, 2, 12); if (r) ctx.fillRect(dx + TS - 2, dy, 2, 12); }
       if (t === T.CRACKED) ctx.drawImage(sprites[(run.cracks.get(i) ?? 0) >= 2 ? 'crack2' : 'crack'], dx, dy);
       if (front && torches.has(i)) {
-        ctx.drawImage(sprites[`torch${Math.floor(time * 7 + x) % 2}`], dx, dy);
-        lights.push({ x, y: y + 0.6, r: 5 * flick(i), col: '#ef7d57' });
+        const tf = Math.floor(time * 7 + x) % 2;
+        ctx.drawImage(boss ? torchOf(bio, tf) : sprites[`torch${tf}`], dx, dy);
+        lights.push({ x, y: y + 0.6, r: (boss ? 5.5 : 5) * flick(i), col: boss ? BOSS_FLAME[bio][0] : '#ef7d57' });
+      } else if (front && hv < 5 && t === T.WALL) {
+        // Wanddekor (Ketten, Banner, Wurzeln …) nur auf der schlichten Grundwand
+        const pr = propAt(run.tiles, run.seed + run.floor, x, y);
+        if (pr) drawProp(ctx, bio, pr, x, y, dx, dy, time, lights);
       }
     } else {
       // Boden: Muster über 2×2 Felder, selten eine Sonderplatte; dazu eine weiche Helligkeitswelle
-      const hf = hash(x, y, 303), bio = biomeOf(run.floor);
+      const hf = hash(x, y, 303);
       ctx.drawImage(bio && hf % 9 === 0 ? ts.floorX[(hf >>> 4) % ts.floorX.length] : ts.floorM[hash(x >> 1, y >> 1, 404) % ts.floorM.length][(y & 1) * 2 + (x & 1)], dx, dy);
       const tv = floorTint(x, y);
       ctx.fillStyle = tv > 0 ? `rgba(255,255,255,${(tv * 0.045).toFixed(3)})` : `rgba(0,0,0,${(-tv * 0.11).toFixed(3)})`; ctx.fillRect(dx, dy, TS, TS);
@@ -228,7 +241,11 @@ export function drawRun(ctx: CanvasRenderingContext2D, run: Run, dt: number, tim
       if (t === T.ICE) ctx.drawImage(softEdged(sprites.ice, edge(T.ICE)), dx, dy);
       if (t === T.GRASS) ctx.drawImage(softEdged(ts.bed, edge(T.GRASS)), dx, dy);
       drawAO(ctx, run.tiles, x, y, dx, dy);
-      if (t === T.FLOOR) { const h = hash(x, y, run.seed + run.floor * 7); if (h % 9 === 0) ctx.drawImage(ts.decals[(h >>> 8) % ts.decals.length], dx, dy); }
+      if (t === T.FLOOR) {
+        const pr = propAt(run.tiles, run.seed + run.floor, x, y);
+        if (pr) drawProp(ctx, bio, pr, x, y, dx, dy, time, lights);
+        else { const h = hash(x, y, run.seed + run.floor * 7); if (h % 9 === 0) ctx.drawImage(ts.decals[(h >>> 8) % ts.decals.length], dx, dy); }
+      }
       if (t === T.GRASS) ctx.drawImage(ts.grass[(x * 5 + y * 3) % 3], dx, dy);
       else if (t === T.BURNT) ctx.drawImage(softEdged(ts.burnt, edge(T.BURNT)), dx, dy);
       floorTiles.push(i);
@@ -236,6 +253,7 @@ export function drawRun(ctx: CanvasRenderingContext2D, run: Run, dt: number, tim
   }
   // Spuren am Boden liegen über dem Boden, aber unter Gegenständen, Fallen und Figuren
   drawDecals(ctx, run, ox, oy, lights, time, dt);
+  if (fx) drawFog(ctx, bio, run.tiles, run.vis, x0, y0, x1, y1, ox, oy, time, VW, VH);
   for (const i of floorTiles) {
     const x = i % W, y = (i / W) | 0, t = run.tiles[i], dx = x * TS + ox, dy = y * TS + oy;
     const s = TILE_SPR[t];
@@ -261,6 +279,7 @@ export function drawRun(ctx: CanvasRenderingContext2D, run: Run, dt: number, tim
       lights.push({ x, y, r: 3 * flick(i), col: '#ef7d57' });
     }
     if (t === T.ALTAR) lights.push({ x, y, r: 2.6 + 0.3 * Math.sin(time * 3), col: '#73eff7', a: 0.8 });
+    if (t === T.STAIRS) lights.push({ x, y, r: 1.9 + 0.2 * Math.sin(time * 2), col: '#94b0c2', a: 0.8 }); // Wegweiser nach unten
   }
   for (const t of run.traps) ctx.drawImage(sprites.trap, t.x * TS + ox, t.y * TS + oy);
   drawDying(ctx, run, ox, oy, lights, dt);
@@ -385,6 +404,10 @@ export function drawRun(ctx: CanvasRenderingContext2D, run: Run, dt: number, tim
     actor(m, q);
   }
   if (!drawn) actor(p, pp);
+  // Bossaura (der Schmiedefürst glüht ohnehin)
+  for (const [m, q] of order) if (m.boss && !GLOW[m.kind]) lights.push({ x: q.x, y: q.y, r: 3.2, col: BOSS_FLAME[bio][0], a: 0.5 });
+  // Schwebeteilchen: Staub, Sporen, Asche liegen im Lichtschein
+  if (fx) { stepAmbient(bio, run.tiles, run.vis, x0, y0, x1, y1, dt); drawAmbient(ctx, ox, oy, false); }
 
   for (let i = bits.length - 1; i >= 0; i--) {
     const b = bits[i];
@@ -529,8 +552,10 @@ export function drawRun(ctx: CanvasRenderingContext2D, run: Run, dt: number, tim
   }
   for (const b of booms) lights.push({ x: b.x, y: b.y, r: 6 * (1 - b.t / 0.32) + 1, col: '#ffcd75' });
   for (const b of bolts) lights.push({ x: b.x1, y: b.y1, r: 2, col: b.col === '#1a1c2c' ? undefined : b.col, a: 0.7 });
-  applyLight(ctx, run, lights, ox, oy, AMBIENTS[biomeOf(run.floor)], VW, VH);
+  const amb = AMBIENTS[bio];
+  applyLight(ctx, run, lights, ox, oy, boss ? { ...amb, dark: Math.min(0.9, amb.dark + 0.05) } : amb, VW, VH);
   flushShadows(ctx, run.tiles, run.vis, ox, oy, x0, y0, x1, y1);
+  if (fx) drawAmbient(ctx, ox, oy, true); // Glutfunken leuchten selbst
   // Schadenszahlen über der Dunkelheit, damit sie lesbar bleiben
   for (let i = nums.length - 1; i >= 0; i--) {
     const n = nums[i];
