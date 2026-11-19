@@ -343,8 +343,15 @@ export function drawRun(ctx: CanvasRenderingContext2D, run: Run, dt: number, tim
   // Ereignis: Felder, die im nächsten Zug getroffen werden, und das Zielfeld (Geist, leuchtende Truhe)
   const hw = run.hunt ? hunterWarn(run) : [];
   if (run.warn?.length || hw.length) {
-    ctx.fillStyle = `rgba(177,62,83,${(0.32 + 0.12 * Math.sin(time * 9)).toFixed(3)})`;
-    for (const i of [...(run.warn ?? []), ...hw]) if (run.seen[i]) ctx.fillRect((i % W) * TS + ox, ((i / W) | 0) * TS + oy, TS, TS);
+    // rote Felder: Fläche plus heller Rand, damit sie auch auf rötlichem Boden (Schmiede) auffallen
+    const pulse = 0.32 + 0.12 * Math.sin(time * 9);
+    for (const i of [...(run.warn ?? []), ...hw]) {
+      if (!run.seen[i]) continue;
+      const x = (i % W) * TS + ox, y = ((i / W) | 0) * TS + oy;
+      ctx.fillStyle = `rgba(177,62,83,${pulse.toFixed(3)})`; ctx.fillRect(x, y, TS, TS);
+      ctx.fillStyle = `rgba(255,120,120,${(pulse + 0.3).toFixed(3)})`;
+      ctx.fillRect(x + 1, y + 1, TS - 2, 1); ctx.fillRect(x + 1, y + TS - 2, TS - 2, 1); ctx.fillRect(x + 1, y + 2, 1, TS - 4); ctx.fillRect(x + TS - 2, y + 2, 1, TS - 4);
+    }
   }
   // Ziele: Geist, leuchtende Truhe, Altar (eins) oder Kerzen, Pilze, Kühlplatten (mehrere)
   if (run.ev && (run.ev.mark !== undefined || run.ev.marks?.length)) {
