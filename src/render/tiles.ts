@@ -291,3 +291,119 @@ export function pickDecal(sets: HTMLCanvasElement[][], bi: number, h: number): H
   const list = sets[cat];
   return list[(h >>> 8) % list.length];
 }
+
+// ---- Wandfront: viele Spielarten, damit Risse und Abplatzer sich nicht wiederholen ----
+const copyTile = (src: HTMLCanvasElement, f: (g: CanvasRenderingContext2D) => void) => { const [c, g] = mk(TS, TS); g.drawImage(src, 0, 0); f(g); return c; };
+// Riss als Zufallspfad von oben nach unten, mit heller Bruchkante und manchmal einer Abzweigung
+function crackPath(r: () => number, x0: number, y0: number, y1: number): [number, number][] {
+  const pts: [number, number][] = [];
+  let x = x0;
+  for (let y = y0; y <= y1; y++) {
+    pts.push([x, y]);
+    if (r() < 0.45) { x += r() < 0.5 ? -1 : 1; x = Math.max(1, Math.min(14, x)); pts.push([x, y]); }
+  }
+  return pts;
+}
+export function wallVariants(b: BiomeCols, bi: number, wall: HTMLCanvasElement, r: () => number): { plain: HTMLCanvasElement[]; special: HTMLCanvasElement[] } {
+  // schlichte Spielarten: Steine leicht anders getönt, winzige Abplatzer
+  const plain = [wall, ...[0, 1, 2].map(() => copyTile(wall, g => {
+    for (let k = 0; k < 4; k++) px(g, r() < 0.5 ? 'rgba(0,0,0,0.12)' : 'rgba(255,255,255,0.06)', (r() * 12) | 0, (r() * 10) | 0, 3 + ((r() * 4) | 0), 2);
+    for (let k = 0; k < 2; k++) px(g, b.top, 1 + ((r() * 14) | 0), 1 + ((r() * 10) | 0));
+  }))];
+  const special: HTMLCanvasElement[] = [];
+  // Risse
+  for (let v = 0; v < 5; v++) special.push(copyTile(wall, g => {
+    const pts = crackPath(r, 2 + ((r() * 12) | 0), (r() * 3) | 0, 6 + ((r() * 6) | 0));
+    for (const [x, y] of pts) px(g, b.top, x, y);
+    for (const [x, y] of pts) if (r() < 0.25) px(g, b.hi, x + 1, y);
+    if (r() < 0.6) { const [bx, by] = pts[(pts.length / 2) | 0]; for (const [x, y] of crackPath(r, bx, by, Math.min(11, by + 3 + ((r() * 3) | 0)))) px(g, b.top, x + (x > bx ? 1 : -1), y); }
+  }));
+  // Abplatzer an Steinkanten
+  for (let v = 0; v < 3; v++) special.push(copyTile(wall, g => {
+    for (let k = 1 + ((r() * 2) | 0); k > 0; k--) {
+      const x = (r() * 13) | 0, y = 1 + ((r() * 8) | 0), w = 2 + ((r() * 2) | 0);
+      px(g, b.mortar, x, y, w, 2); px(g, b.top, x, y, 1, 1); px(g, b.hi, x, y + 2, w, 1);
+    }
+  }));
+  // biomtypische Stücke
+  const P = (g: CanvasRenderingContext2D, col: string, pts: number[][]) => { for (const [x, y, w = 1, h = 1] of pts) px(g, col, x, y, w, h); };
+  for (let v = 0; v < 3; v++) special.push(copyTile(wall, g => {
+    if (bi === 0) { // Nische: Schädel, Kerze oder Knochen
+      const nx = 3 + ((r() * 3) | 0);
+      P(g, b.top, [[nx, 3, 8, 8]]); P(g, b.mortar, [[nx, 3, 8, 1]]); P(g, b.capHi, [[nx, 11, 8, 1]]);
+      if (v === 0) { P(g, '#c9d4dc', [[nx + 2, 6, 4, 3]]); P(g, '#1a1c2c', [[nx + 2, 7], [nx + 5, 7]]); P(g, '#94b0c2', [[nx + 3, 9, 2, 1]]); }
+      else if (v === 1) { P(g, '#d9cfb4', [[nx + 3, 7, 2, 4]]); P(g, '#ffcd75', [[nx + 3, 6, 1, 1]]); P(g, '#ef7d57', [[nx + 4, 5, 1, 1]]); }
+      else { P(g, '#c9d4dc', [[nx + 1, 9, 6, 1], [nx + 1, 8, 1, 2], [nx + 6, 8, 1, 2]]); P(g, '#94b0c2', [[nx + 2, 10, 4, 1]]); }
+    } else if (bi === 1) { // hängendes Moos und Wasserspur an zufälliger Stelle
+      for (let k = 0; k < 2; k++) { const x = (r() * 12) | 0, h = 2 + ((r() * 5) | 0); P(g, b.g1, [[x, 3, 2, h]]); P(g, b.g2, [[x, 3, 1, Math.max(1, h - 2)]]); }
+      if (v < 2) { const x = 3 + ((r() * 10) | 0), h = 5 + ((r() * 5) | 0); P(g, '#41a6f6', [[x, 2, 1, h]]); P(g, '#73eff7', [[x, 4, 1, 1], [x, 2 + h - 2, 1, 1]]); }
+    } else { // Glutader als Zufallspfad
+      const pts = crackPath(r, 3 + ((r() * 10) | 0), 1 + ((r() * 2) | 0), 9 + ((r() * 3) | 0));
+      for (const [x, y] of pts) px(g, '#b13e53', x, y);
+      for (const [x, y] of pts) if (y > 2 && y < 10) px(g, '#ef7d57', x, y);
+      const [mx, my] = pts[(pts.length / 2) | 0]; px(g, '#ffcd75', mx, my, 1, 2);
+    }
+  }));
+  return { plain, special };
+}
+
+// Mauerkrone: mehrere ruhige Oberflächen mit zufälligen Fugen
+export function capBases(b: BiomeCols, bi: number, r: () => number, n = 4): HTMLCanvasElement[] {
+  return Array.from({ length: n }, () => {
+    const [c, g] = mk(TS, TS);
+    px(g, b.cap, 0, 0, TS, TS);
+    g.fillStyle = 'rgba(0,0,0,0.22)';
+    if (bi === 1) for (let i = 0; i < 7; i++) g.fillRect((r() * 13) | 0, (r() * 14) | 0, 2 + ((r() * 2) | 0), 1 + ((r() * 2) | 0));
+    else for (let k = 1 + ((r() * 3) | 0); k > 0; k--) {
+      if (r() < 0.5) g.fillRect((r() * 8) | 0, 3 + ((r() * 10) | 0), 4 + ((r() * 7) | 0), 1);
+      else g.fillRect(2 + ((r() * 12) | 0), (r() * 8) | 0, 1, 3 + ((r() * 6) | 0));
+    }
+    g.fillStyle = 'rgba(255,255,255,0.08)';
+    for (let i = 0; i < 5; i++) g.fillRect((r() * 15) | 0, (r() * 15) | 0, 1 + ((r() * 2) | 0), 1);
+    if (bi === 2 && r() < 0.6) { const x = 2 + ((r() * 11) | 0), y = 2 + ((r() * 10) | 0); px(g, '#7d2b45', x, y, 1, 3); px(g, '#ef7d57', x, y + 1); }
+    return c;
+  });
+}
+
+// Risse in rissigen Wänden: je Spielart Stufe 1 und daraus gewachsene Stufe 2 (gleicher Verlauf, breiter, mehr Äste)
+export function wallCracks(r: () => number, n = 5): HTMLCanvasElement[][] {
+  const one: HTMLCanvasElement[] = [], two: HTMLCanvasElement[] = [];
+  for (let v = 0; v < n; v++) {
+    const main = crackPath(r, 5 + ((r() * 6) | 0), 1, 12 + ((r() * 2) | 0));
+    const br = [main[(main.length * 0.35) | 0], main[(main.length * 0.7) | 0]].map(([bx, by], k) => crackPath(r, bx, by, Math.min(13, by + 3 + ((r() * 3) | 0))).map(([x, y]) => [x + (k ? 2 : -2) * Math.sign(x - bx || 1), y] as [number, number]));
+    const [c1, g1] = mk(TS, TS), [c2, g2] = mk(TS, TS);
+    for (const [x, y] of main) px(g1, '#1a1c2c', x, y);
+    for (const [x, y] of br[0]) px(g1, '#1a1c2c', x, y);
+    for (const [x, y] of main) { px(g2, '#1a1c2c', x, y); px(g2, '#1a1c2c', x + 1, y); }
+    for (const p of br) for (const [x, y] of p) px(g2, '#1a1c2c', x, y);
+    for (let k = 0; k < 3; k++) { const [x, y] = main[(r() * main.length) | 0]; px(g2, '#1a1c2c', x - 1, y, 3, 2); } // ausgebrochene Stücke
+    one.push(c1); two.push(c2);
+  }
+  return [one, two];
+}
+
+// ---- Lavaadern in der Mauerkrone der Schmiede: zufällige Spalten, waagrecht oder senkrecht ----
+// je Spielart vier Bilder: die Glut läuft entlang der Ader; dunkler Saum, damit sie in den Stein eingelassen wirkt
+export function lavaVeins(r: () => number, n = 6): { h: HTMLCanvasElement[][]; v: HTMLCanvasElement[][] } {
+  const make = (vertical: boolean) => Array.from({ length: n }, () => {
+    const pts: [number, number][] = [];
+    let a = 5 + ((r() * 6) | 0);
+    const b0 = 2 + ((r() * 3) | 0), b1 = 13 - ((r() * 3) | 0);
+    for (let b = b0; b <= b1; b++) {
+      pts.push([b, a]);
+      if (r() < 0.3) pts.push([b, a + 1]);
+      if (r() < 0.35) a = Math.max(4, Math.min(11, a + (r() < 0.5 ? -1 : 1)));
+    }
+    if (r() < 0.5) { const [bb, aa] = pts[(pts.length / 2) | 0], d = r() < 0.5 ? -1 : 1; for (let k = 1; k <= 2 + ((r() * 2) | 0); k++) pts.push([bb + (k > 2 ? 1 : 0), aa + d * k]); }
+    if (r() < 0.35) { const [bb, aa] = pts[(r() * pts.length) | 0]; for (const [db, da] of [[0, 0], [1, 0], [0, 1], [1, 1], [-1, 0]]) pts.push([bb + db, aa + da]); } // kleiner Glutsee
+    const on = new Set(pts.map(([b, a]) => a * 16 + b));
+    return [0, 1, 2, 3].map(f => {
+      const [c, g] = mk(TS, TS);
+      const put = (col: string, b: number, a: number) => { if (b >= 1 && a >= 1 && b <= 14 && a <= 14) px(g, col, vertical ? a : b, vertical ? b : a); };
+      for (const [b, a] of pts) for (const [db, da] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) if (!on.has((a + da) * 16 + b + db)) put('#7d2b45', b + db, a + da);
+      pts.forEach(([b, a], k) => put((k + f * 2) % 7 < 2 ? '#ffcd75' : (k + f) % 5 === 0 ? '#b13e53' : '#ef7d57', b, a));
+      return c;
+    });
+  });
+  return { h: make(false), v: make(true) };
+}

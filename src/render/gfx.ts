@@ -4,7 +4,7 @@ export const VW = 640, VH = 360, TS = 16;
 import { PAL, SPR, ACTORS, NO_OUTLINE, VIEWS, FLOATERS, WEAPON_ART, WeaponArt, DECALS } from './sprites';
 import { tr } from '../core/i18n';
 import { poseFrames } from './poses';
-import { floorMacro, capBase, capEdges, capTiles, plinth, grassBed, scorchTiles, floorDecals } from './tiles';
+import { floorMacro, capBases, capEdges, capTiles, plinth, grassBed, scorchTiles, floorDecals, wallVariants, wallCracks, lavaVeins } from './tiles';
 export { PAL };
 
 export const sprites: Record<string, HTMLCanvasElement> = {};
@@ -24,7 +24,10 @@ export function hex(col: string): [number, number, number] {
 export interface TileSet {
   floor: HTMLCanvasElement[]; floorX: HTMLCanvasElement[]; walls: HTMLCanvasElement[]; lava: HTMLCanvasElement[]; wall: HTMLCanvasElement; top: HTMLCanvasElement; cap: HTMLCanvasElement; hi: string; grass: HTMLCanvasElement[]; burnt: HTMLCanvasElement; decals: HTMLCanvasElement[][]; // Bodenspuren je Art, viele Spielarten
   floorM: HTMLCanvasElement[][]; // Bodenmuster 2×2: Spielart → vier Viertel
-  caps: HTMLCanvasElement[]; capEdge: HTMLCanvasElement[]; // Mauerkrone und ihre Kanten je offene Seiten (Bit 1 oben, 2 links, 4 rechts)
+  caps: HTMLCanvasElement[][]; capEdge: HTMLCanvasElement[]; // Mauerkrone: Spielart → je offene Seiten (Bit 1 oben, 2 links, 4 rechts); Kanten
+  wallsX: HTMLCanvasElement[]; // Wandfront mit Riss, Abplatzer oder Biomstück (walls: schlichte Spielarten)
+  wallCrack: HTMLCanvasElement[][]; // rissige Wand: [Stufe 1, Stufe 2] je Spielart
+  veins: { h: HTMLCanvasElement[][]; v: HTMLCanvasElement[][] } | null; // Lavaadern (nur Schmiede): Spielart → 4 Bilder
   bed: HTMLCanvasElement; // Moosgrund unter Gras
   scorch: HTMLCanvasElement[]; scorchCore: HTMLCanvasElement; char: HTMLCanvasElement[]; // Brandfläche, dichter Kern, verkohlte Reste
 }
@@ -184,7 +187,7 @@ export function bake(): void {
     if (bi !== 1) { wg.fillStyle = b.capHi; wg.fillRect(0, 0, TS, 2); }
     plinth(wg, b);
     // Mauerkrone: von oben gesehene Wand, ruhige Fläche; Kanten je nach offenen Seiten (tiles.ts)
-    const cap = capBase(b, bi, rnd), capEdge = capEdges(b), caps = capTiles(b, cap, capEdge);
+    const capB = capBases(b, bi, rnd), cap = capB[0], capEdge = capEdges(b), caps = capB.map(cb => capTiles(b, cb, capEdge));
     // Felsinneres ohne angrenzenden Boden
     const [top, tg] = mk(TS, TS);
     tg.fillStyle = b.top; tg.fillRect(0, 0, TS, TS);
@@ -208,16 +211,8 @@ export function bake(): void {
     // Phase 2: Spielarten von Wand und Boden, Lava im Fels der Glutschmiede
     const copy = (src: HTMLCanvasElement, f: (g: CanvasRenderingContext2D) => void) => { const [c, g] = mk(TS, TS); g.drawImage(src, 0, 0); f(g); return c; };
     const px = (g: CanvasRenderingContext2D, col: string, pts: number[][]) => { g.fillStyle = col; for (const [x, y, w = 1, h = 1] of pts) g.fillRect(x, y, w, h); };
-    const walls = [wall,
-      // Riss und abgeplatzte Ecke
-      copy(wall, g => { px(g, b.top, [[9, 1, 1, 2], [10, 3, 1, 2], [9, 5, 1, 2], [11, 6, 1, 3], [3, 9, 1, 2], [4, 11, 1, 1]]); px(g, b.mortar, [[0, 4, 3, 3]]); px(g, b.hi, [[0, 7, 3, 1]]); }),
-      bi === 0 // Gruft: Nische mit Schädel
-        ? copy(wall, g => { px(g, b.top, [[4, 3, 8, 8]]); px(g, b.mortar, [[4, 3, 8, 1]]); px(g, '#c9d4dc', [[6, 6, 4, 3]]); px(g, '#1a1c2c', [[6, 7, 1, 1], [9, 7, 1, 1]]); px(g, '#94b0c2', [[7, 9, 2, 1]]); px(g, b.capHi, [[4, 11, 8, 1]]); })
-        : bi === 1 // Höhle: hängendes Moos und Wasserspur
-          ? copy(wall, g => { px(g, b.g1, [[2, 3, 2, 5], [3, 8, 1, 2], [12, 3, 2, 3]]); px(g, b.g2, [[2, 3, 1, 3], [12, 3, 1, 1]]); px(g, '#41a6f6', [[8, 2, 1, 9]]); px(g, '#73eff7', [[8, 4, 1, 1], [8, 8, 1, 1]]); })
-          // Schmiede: breite Glutader
-          : copy(wall, g => { px(g, '#b13e53', [[6, 2, 1, 10], [7, 5, 3, 1], [10, 6, 1, 4]]); px(g, '#ef7d57', [[6, 3, 1, 7], [8, 5, 1, 1], [10, 7, 1, 2]]); px(g, '#ffcd75', [[6, 5, 1, 2]]); }),
-    ];
+    // Wandfront: schlichte Spielarten und besondere (Riss, Abplatzer, Biomstück) – alle zufällig erzeugt
+    const { plain: walls, special: wallsX } = wallVariants(b, bi, wall, rnd);
     const floorX = bi === 0
       ? [ // Gruft: Steinplatten mit Fugen, gesprungene Platte
         copy(floor[0], g => { px(g, b.mortar, [[0, 7, TS, 1], [7, 0, 1, 7], [11, 8, 1, 8]]); px(g, b.speck, [[0, 8, TS, 1]]); }),
@@ -246,7 +241,7 @@ export function bake(): void {
       g.fillStyle = '#ffcd75'; g.fillRect((f * 4 + 2) % TS, 7 + Math.round(Math.sin(((f * 4 + 2) % TS + f * 2) * 0.55) * 2), 2, 1);
       lava.push(c);
     }
-    tilesets.push({ floor, floorX, walls, lava, wall, top, cap, hi: b.capHi, grass, burnt, decals, floorM: floorMacro(b, bi, rnd), caps, capEdge, bed: grassBed(b), ...(({ scorch, core, char }) => ({ scorch, scorchCore: core, char }))(scorchTiles(rnd)) });
+    tilesets.push({ floor, floorX, walls, lava, wall, top, cap, hi: b.capHi, grass, burnt, decals, floorM: floorMacro(b, bi, rnd), caps, capEdge, wallsX, wallCrack: wallCracks(rnd), veins: bi === 2 ? lavaVeins(rnd) : null, bed: grassBed(b), ...(({ scorch, core, char }) => ({ scorch, scorchCore: core, char }))(scorchTiles(rnd)) });
   }
 }
 
@@ -270,11 +265,14 @@ const F57 = '0000000000 00005F0000 0007000700 147F147F14 242A7F2A12 2313086462 3
   '2054545478 7F48444438 3844444420 384444487F 3854545418 087E090102 18A4A4A47C 7F08040478 00447D4000 4080847D00 7F10284400 00417F4000 7C04180478 7C08040478 3844444438 FC24242418 18242424FC 7C08040408 4854545420 043F444020 3C4040207C 1C2040201C 3C4030403C 4428102844 1CA0A0A07C 4464544C44 0008364100 00007F0000 0041360800 0804081008';
 const EXTRA: Record<string, string> = {
   'ä': '2055545578', 'ö': '3845444538', 'ü': '3C4140217C', 'Ä': '7D1212127D', 'Ö': '3D4242423D', 'Ü': '3D4040403D',
-  'ß': '7E01494E30', '·': '0000080000', '–': '0808080808',
+  'ß': '7E01494E30', '·': '0000080000', '–': '0808080808', '×': '0028102800',
 };
 const GLYPH = new Map<string, number[]>();
 F57.split(' ').forEach((h, i) => GLYPH.set(String.fromCharCode(32 + i), cols(h)));
 for (const [ch, h] of Object.entries(EXTRA)) GLYPH.set(ch, cols(h));
+
+// Gibt es für das Zeichen ein Bild in der Pixelschrift? (sonst erscheint „?“)
+export const hasGlyph = (ch: string) => GLYPH.has(ch);
 
 function cols(h: string): number[] {
   let c = [0, 2, 4, 6, 8].map(i => parseInt(h.slice(i, i + 2), 16));

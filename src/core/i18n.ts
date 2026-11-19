@@ -159,7 +159,7 @@ const EN: Record<string, string> = {
   'Fass: anstoßen zündet die Lunte – dann Abstand halten': 'Barrel: bump it to light the fuse – then keep away',
   'Truhe: hineinlaufen öffnet sie': 'Chest: walk into it to open', 'Finde die Treppe · Maus über etwas halten zeigt Details': 'Find the stairs · hover over things for details',
   'WÄHLE EINE RELIQUIE': 'CHOOSE A RELIC', 'WÄHLE EINE GABE': 'CHOOSE A BOON', 'Taste 1 oder 2': 'Press 1 or 2', 'Taste 1, 2 oder 3': 'Press 1, 2 or 3',
-  'HÄNDLER': 'TRADER', ' – verkauft': ' – sold', '[LEERTASTE] weiterziehen': '[SPACE] move on',
+  'HÄNDLER': 'TRADER', 'Was darf es sein?': 'What will it be?', 'VERKAUFT': 'SOLD', ' – verkauft': ' – sold', '[LEERTASTE] weiterziehen': '[SPACE] move on',
   'SIEG!': 'VICTORY!', 'GEFALLEN': 'FALLEN', 'Die Glutgruft ist bezwungen.': 'The Ember Crypt is conquered.',
   'Besiegte Gegner: ': 'Enemies defeated: ', 'Stufe: ': 'Level: ', '[LEERTASTE] zurück zum Lager': '[SPACE] back to camp',
   // Menüs

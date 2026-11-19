@@ -211,17 +211,21 @@ export function drawRun(ctx: CanvasRenderingContext2D, run: Run, dt: number, tim
       const open = (ox2: number, oy2: number) => x + ox2 >= 0 && x + ox2 < W && y + oy2 >= 0 && y + oy2 < H && !wallLike(run.tiles[i + oy2 * W + ox2]);
       const l = open(-1, 0), r = open(1, 0), u = open(0, -1);
       // Wandspielart fest am Feld (Hash der Koordinaten, kein Zufall): meist die Grundwand
-      const hv = hash(x, y, 101) % 7;
-      if (front) ctx.drawImage(ts.walls[hv < 5 ? 0 : hv - 4], dx, dy);
+      // Wandspielart fest am Feld: meist schlichte Mauer in vier Tönungen, sonst Riss, Abplatzer oder Biomstück
+      const plain = hash(x, y, 101) % 100 < 74;
+      if (front) ctx.drawImage(plain ? ts.walls[hash(x, y, 111) % ts.walls.length] : ts.wallsX[hash(x, y, 121) % ts.wallsX.length], dx, dy);
       else {
         const c = [open(-1, -1), open(1, -1), open(-1, 1), open(1, 1)];
         const bits = (u ? 1 : 0) | (l ? 2 : 0) | (r ? 4 : 0), inner = !(bits || c.some(Boolean));
         // Glutschmiede: in der Mauerkrone fließt hier und da Lava (vier Bilder, Phase je Feld versetzt)
-        if (!inner && ts.lava.length && hash(x, y, 202) % 5 === 0) {
-          ctx.drawImage(ts.lava[(Math.floor(time * 5) + x) % 4], dx, dy);
-          ctx.drawImage(ts.capEdge[bits], dx, dy);
+        ctx.drawImage(inner ? ts.top : ts.caps[hash(x, y, 606) % ts.caps.length][bits], dx, dy); // Kanten nur zu offenen Seiten, Mitte dunkler
+        // Glutschmiede: Lavaader in der Mauerkrone – Richtung folgt der Wand, nie zwei nebeneinander
+        const vein = (vx: number, vy: number) => hash(vx, vy, 202) % 5 === 0;
+        if (!inner && ts.veins && vein(x, y) && !vein(x - 1, y) && !vein(x, y - 1) && !vein(x - 1, y - 1) && !vein(x + 1, y - 1)) {
+          const set = (bits & 6) && !(bits & 1) ? ts.veins.v : ts.veins.h, vv = set[hash(x, y, 212) % set.length];
+          ctx.drawImage(vv[(Math.floor(time * 5) + x + y) % vv.length], dx, dy);
           lights.push({ x, y, r: 1.8 * flick(i), col: '#ef7d57', a: 0.6 });
-        } else ctx.drawImage(inner ? ts.top : ts.caps[bits], dx, dy); // Kanten nur zu offenen Seiten, Mitte dunkler
+        }
         ctx.fillStyle = ts.hi;
         if (c[0] && !l && !u) ctx.fillRect(dx, dy, 2, 2);
         if (c[1] && !r && !u) ctx.fillRect(dx + TS - 2, dy, 2, 2);
@@ -230,12 +234,12 @@ export function drawRun(ctx: CanvasRenderingContext2D, run: Run, dt: number, tim
       }
       // Wandfront: helle Kante zur offenen Seite, der Raumumriss bleibt rundum lesbar
       if (front) { ctx.fillStyle = ts.hi; if (l) ctx.fillRect(dx, dy, 2, 12); if (r) ctx.fillRect(dx + TS - 2, dy, 2, 12); }
-      if (t === T.CRACKED) ctx.drawImage(sprites[(run.cracks.get(i) ?? 0) >= 2 ? 'crack2' : 'crack'], dx, dy);
+      if (t === T.CRACKED) { const cs = ts.wallCrack[(run.cracks.get(i) ?? 0) >= 2 ? 1 : 0]; ctx.drawImage(cs[hash(x, y, 707) % cs.length], dx, dy); } // derselbe Riss wächst beim zweiten Schlag
       if (front && torches.has(i)) {
         const tf = Math.floor(time * 7 + x) % 2;
         ctx.drawImage(boss ? torchOf(bio, tf) : sprites[`torch${tf}`], dx, dy);
         lights.push({ x, y: y + 0.6, r: (boss ? 5.5 : 5) * flick(i), col: boss ? BOSS_FLAME[bio][0] : '#ef7d57' });
-      } else if (front && hv < 5 && t === T.WALL && !torches.has(i - 1) && !torches.has(i + 1)) {
+      } else if (front && plain && t === T.WALL && !torches.has(i - 1) && !torches.has(i + 1)) {
         // Wanddekor (Ketten, Banner, Wurzeln …) nur auf der schlichten Grundwand
         const pr = props[i];
         if (pr) drawProp(ctx, bio, pr, x, y, dx, dy, time, lights);
@@ -275,11 +279,20 @@ export function drawRun(ctx: CanvasRenderingContext2D, run: Run, dt: number, tim
     const x = i % W, y = (i / W) | 0, t = run.tiles[i], dx = x * TS + ox, dy = y * TS + oy;
     const s = TILE_SPR[t];
     if (t === T.CRATE_ON) ctx.drawImage(sprites.plate, dx, dy);
+    if (t === T.TRADER) {
+      // Händler: Teppich unter ihm, Laterne als Licht, Münze über dem Kopf, solange es etwas zu kaufen gibt
+      ctx.fillStyle = '#5d275d'; ctx.fillRect(dx, dy + 12, TS, 4);
+      ctx.fillStyle = '#9a4fc0'; ctx.fillRect(dx + 1, dy + 12, TS - 2, 1);
+      ctx.fillStyle = '#ffcd75'; for (let k = 1; k < TS - 1; k += 3) ctx.fillRect(dx + k, dy + 14, 1, 1);
+      lights.push({ x: x - 0.4, y: y + 0.1, r: 2.6 * flick(i), col: '#ffcd75', a: 0.85 });
+    }
     const sh = OBJ_SHADOW[t];
     if (sh) dropShadow(ctx, dx + 8, dy + sh[0], sh[1]);
     // Lunte: Fass zittert im letzten Zug, Zähler der verbleibenden Züge darüber
     const fz = t === T.BARREL ? run.fuses.get(i) : undefined;
-    if (s) ctx.drawImage(sprites[s], dx + (fz === 1 ? Math.round(Math.sin(time * 60)) : 0), dy);
+    const sname = t === T.TRADER && Math.floor(time * 1.6 + x) % 2 ? 'trader_b' : s;
+    if (s) ctx.drawImage(sprites[sname], dx + (fz === 1 ? Math.round(Math.sin(time * 60)) : 0), dy);
+    if (t === T.TRADER && run.shop.some(o => !o.sold)) drawIcon(ctx, ['coin'], dx + 4, dy - 11 + Math.round(Math.sin(time * 3) * 1.5), '#ffcd75');
     if (fz !== undefined && run.vis[i]) { fuseTags.push({ x: dx + 8 - ox, y: dy - 10 - oy, n: fz }); lights.push({ x, y: y - 0.4, r: 1.3, col: '#ffcd75', a: 0.7 }); }
     if (t === T.CRATE_ON) { ctx.fillStyle = 'rgba(255,205,117,0.3)'; ctx.fillRect(dx + 1, dy + 1, 14, 14); }
     if (t === T.GOAL) { ctx.fillStyle = `rgba(115,239,247,${0.15 + 0.1 * Math.sin(time * 4)})`; ctx.fillRect(dx, dy, TS, TS); lights.push({ x, y, r: 2.2, col: '#73eff7', a: 0.8 }); }
@@ -608,7 +621,7 @@ export function drawRun(ctx: CanvasRenderingContext2D, run: Run, dt: number, tim
   else if (overlay === 'inv') invSheet(ctx, run, time);
   if (run.mode === 'perk') perkOverlay(ctx, run);
   if (run.mode === 'tree') treeOverlay(ctx, run);
-  if (run.mode === 'shop') shopOverlay(ctx, run);
+  if (run.mode === 'shop') shopOverlay(ctx, run, time);
   if (deathT >= 0 && run.mode === 'dead') {
     deathT += dt;
     const f = Math.min(1, deathT / DEATH_T);
@@ -1120,23 +1133,43 @@ function perkOverlay(ctx: CanvasRenderingContext2D, run: Run) {
   text(ctx, `Taste 1 bis ${ids.length}`, VW / 2, 244, '#94b0c2', 8, 'center');
 }
 
-function shopOverlay(ctx: CanvasRenderingContext2D, run: Run) {
-  const p = run.p, w = 330, h = 62 + run.shop.length * 30, x = (VW - w) >> 1, y = (VH - h) >> 1;
+// Symbole der Händlerware ohne eigenen Gegenstand
+const OFFER_ICON: Record<string, [string, string]> = { potion: ['potion', '#b13e53'], bomb: ['bomb', '#94b0c2'], forge: ['whetstone', '#c9d4dc'], reroll: ['scroll', '#ffcd75'] };
+function shopOverlay(ctx: CanvasRenderingContext2D, run: Run, time: number) {
+  const p = run.p, rowH = 28, w = 360, h = 84 + run.shop.length * rowH, x = (VW - w) >> 1, y = (VH - h) >> 1;
   ctx.fillStyle = 'rgba(13,14,23,0.75)'; ctx.fillRect(0, 0, VW, VH);
   panel(ctx, x, y, w, h, '#ffcd75');
-  ctx.drawImage(sprites.trader, x + 10, y + 8, 32, 32);
-  text(ctx, 'HÄNDLER', x + 52, y + 12, '#ffcd75', 16);
-  ctx.drawImage(sprites.coin, x + w - 60, y + 14);
-  text(ctx, `${p.gold}`, x + w - 12, y + 17, '#ffcd75', 10, 'right');
+  // Kopf: Bildnis im Laternenschein
+  const gl = ctx.createRadialGradient(x + 30, y + 28, 2, x + 30, y + 28, 46);
+  gl.addColorStop(0, 'rgba(255,205,117,0.22)'); gl.addColorStop(1, 'rgba(255,205,117,0)');
+  ctx.fillStyle = gl; ctx.fillRect(x + 1, y + 1, 90, 56);
+  panel(ctx, x + 8, y + 7, 44, 44, '#c98a3a', 'rgba(26,28,44,0.95)');
+  ctx.drawImage(sprites[Math.floor(time * 1.6) % 2 ? 'trader_b' : 'trader'], x + 14, y + 13, 32, 32);
+  text(ctx, 'HÄNDLER', x + 62, y + 12, '#ffcd75', 16);
+  text(ctx, 'Was darf es sein?', x + 62, y + 34, '#94b0c2', 8);
+  const gw = text(ctx, `${p.gold}`, x + w - 14, y + 16, '#ffcd75', 10, 'right');
+  drawIcon(ctx, ['coin'], x + w - 28 - gw, y + 15, '#ffcd75');
+  ctx.fillStyle = '#566c86'; ctx.fillRect(x + 8, y + 57, w - 16, 1);
   run.shop.forEach((o, i) => {
-    const oy = y + 46 + i * 30, ok = !o.sold && p.gold >= o.price;
-    text(ctx, `[${i + 1}]`, x + 12, oy + 4, o.sold ? '#333c57' : '#ffcd75');
-    if (o.item && !o.sold) drawItemIcon(ctx, o.item, p.cls, x + 36, oy, RARITY_COL[o.item.rar]);
-    text(ctx, o.sold ? `${o.name} – verkauft` : o.left !== undefined ? `${o.name} ×${o.left}` : o.name, x + (o.item && !o.sold ? 48 : 36), oy, o.sold ? '#566c86' : o.item ? RARITY_COL[o.item.rar] : '#f4f4f4');
-    text(ctx, cut(o.desc, 46), x + 36, oy + 11, '#94b0c2', 8);
-    if (!o.sold) text(ctx, `${o.price} Gold`, x + w - 12, oy + 4, ok ? '#ffcd75' : '#b13e53', 10, 'right');
+    const oy = y + 64 + i * rowH, ok = !o.sold && p.gold >= o.price;
+    if (i % 2) { ctx.fillStyle = 'rgba(255,255,255,0.035)'; ctx.fillRect(x + 4, oy - 3, w - 8, rowH - 2); }
+    if (o.sold) ctx.globalAlpha = 0.45;
+    text(ctx, `[${i + 1}]`, x + 10, oy + 6, o.sold ? '#566c86' : '#ffcd75');
+    // Symbol im Rahmen
+    ctx.fillStyle = '#05060c'; ctx.fillRect(x + 32, oy - 1, 15, 15);
+    ctx.fillStyle = o.item ? RARITY_COL[o.item.rar] : '#566c86'; ctx.fillRect(x + 32, oy - 1, 15, 1); ctx.fillRect(x + 32, oy + 13, 15, 1); ctx.fillRect(x + 32, oy - 1, 1, 15); ctx.fillRect(x + 46, oy - 1, 1, 15);
+    if (o.item?.use) ctx.drawImage(sprites[`i_${o.item.use}`], x + 34, oy); // Rolle, Trank: eigenes Bild wie im Rucksack
+    else if (o.item) drawItemIcon(ctx, o.item, p.cls, x + 35, oy + 2, RARITY_COL[o.item.rar]);
+    else { const ic = OFFER_ICON[o.kind]; if (ic) drawIcon(ctx, [ic[0]], x + 35, oy + 2, ic[1]); }
+    const nw = text(ctx, o.name, x + 54, oy, o.item ? RARITY_COL[o.item.rar] : '#f4f4f4');
+    if (o.left !== undefined && !o.sold) text(ctx, `×${o.left}`, x + 58 + nw, oy, '#566c86');
+    text(ctx, cut(o.desc, 44), x + 54, oy + 11, '#94b0c2', 8);
+    if (o.sold) text(ctx, 'VERKAUFT', x + w - 14, oy + 5, '#94b0c2', 8, 'right');
+    else { const pw = text(ctx, `${o.price}`, x + w - 14, oy + 4, ok ? '#ffcd75' : '#b13e53', 10, 'right'); drawIcon(ctx, ['coin'], x + w - 26 - pw, oy + 3, ok ? '#ffcd75' : '#b13e53'); }
+    ctx.globalAlpha = 1;
   });
-  text(ctx, '[LEERTASTE] weiterziehen', VW / 2, y + h - 14, '#94b0c2', 8, 'center');
+  ctx.fillStyle = '#333c57'; ctx.fillRect(x + 8, y + h - 22, w - 16, 1);
+  text(ctx, '[LEERTASTE] weiterziehen', VW / 2, y + h - 15, '#94b0c2', 8, 'center');
 }
 
 function endOverlay(ctx: CanvasRenderingContext2D, run: Run) {
