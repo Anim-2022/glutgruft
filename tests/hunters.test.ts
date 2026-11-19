@@ -80,6 +80,16 @@ describe('Jäger', () => {
     expect(a.maxHp / (1 + 0.3 * 1)).toBeLessThan(b.maxHp / (1 + 0.3 * 5));
   });
 
+  it('Jäger an oder aus: Ereignisse werden trotzdem geplant, auf Bossebenen keine', () => {
+    for (const on of [false, true]) {
+      FEATURES.hunters = on;
+      const r = newRun(9, 'krieger', defaultMeta());
+      expect(r.evQ!.length, `hunters ${on}`).toBeGreaterThan(0);
+      while (r.floor < 5) { r.tiles[r.p.y * W + r.p.x] = T.STAIRS; r.mode = 'play'; act(r, { t: 'descend' }); }
+      expect(r.evQ ?? [], `Boss, hunters ${on}`).toEqual([]);
+    }
+  });
+
   it('keine Jäger auf Bossebenen', () => {
     FEATURES.events = false;
     const r = newRun(9, 'krieger', defaultMeta());

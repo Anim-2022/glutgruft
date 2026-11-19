@@ -863,8 +863,8 @@ function nextFloor(run: Run) {
   if (run.warn?.length) run.warn = [];
   if (run.mud?.length) run.mud = [];
   if (FEATURES.events && !bossFloor) planEvents(run, rooms);
-  if (FEATURES.hunters) { run.floorTurns = 0; run.entry = [run.p.x, run.p.y]; run.hunt = bossFloor ? null : { next: HUNTER.first, n: 0 }; }
   else if (run.evQ?.length) run.evQ = [];
+  if (FEATURES.hunters) { run.floorTurns = 0; run.entry = [run.p.x, run.p.y]; run.hunt = bossFloor ? null : { next: HUNTER.first, n: 0 }; }
   computeFov(run.tiles, run.p.x, run.p.y, fovR(run), run.vis, run.seen);
   say(run, `Ebene ${run.floor} – ${BIOME_NAMES[biome]}`);
   if (bossFloor) say(run, 'Etwas Mächtiges lauert hier ...');
