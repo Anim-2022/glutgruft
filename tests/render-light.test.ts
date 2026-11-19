@@ -19,6 +19,15 @@ describe('Licht mit Verdeckung', () => {
     for (let y = 5; y <= 12; y++) for (let x = 11; x <= 13; x++) expect(at(m, R, 7, 8, x, y)).toBe(0);
   });
 
+  it('eine Quelle in der Wand (Lava) leuchtet nur zur offenen Seite', () => {
+    const t = new Uint8Array(W * H).fill(T.WALL), R = 5;
+    for (let y = 5; y <= 12; y++) for (let x = 3; x <= 8; x++) t[y * W + x] = T.FLOOR; // Raum links, Fels ab x = 9
+    const m = lightMask(t, 9, 8, R);
+    expect(at(m, R, 9, 8, 7, 8)).toBe(1);   // Raum
+    expect(at(m, R, 9, 8, 9, 6)).toBe(1);   // Wandseite zum Raum
+    for (let x = 10; x <= 13; x++) expect(at(m, R, 9, 8, x, 8)).toBe(0); // Fels dahinter
+  });
+
   it('nach dem Sprengen der Wand verfallen die gespeicherten Masken', () => {
     const t = twoRooms(), R = 6;
     syncTiles(t);

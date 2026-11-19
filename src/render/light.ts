@@ -18,17 +18,24 @@ const TS = 16;
 export const CELL = 2;
 const BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5].map(v => (v + 0.5) / 16);
 const LEVELS = 7;
-const WALL_MIN = 0.42; // Wände im Sichtfeld bleiben auch fern vom Licht erkennbar
+const WALL_MIN = 0.42;
+const GLOW_MAX = 96; // Obergrenze des Farblichts je Kanal: dicht an der Flamme brennt nichts weiß aus // Wände im Sichtfeld bleiben auch fern vom Licht erkennbar
 
 // ---- Sichtbarkeit je Lichtquelle (rein, testbar) ----
 
-// Maske (2R+1)² um das Ursprungsfeld: 1 = das Licht erreicht dieses Feld
+// Maske (2R+1)² um das Ursprungsfeld: 1 = das Licht erreicht dieses Feld.
+// Sitzt die Quelle selbst in einer Wand (Lava in der Mauerkrone), leuchtet sie nur aus ihren
+// offenen Nachbarfeldern heraus – sonst schiene sie in den Fels dahinter.
 export function lightMask(tiles: Uint8Array, ox: number, oy: number, R: number): Uint8Array {
   const n = 2 * R + 1, m = new Uint8Array(n * n);
+  const inside = (x: number, y: number) => x >= 0 && y >= 0 && x < W && y < H;
+  const from: [number, number][] = !opaque(tiles[oy * W + ox]) ? [[ox, oy]]
+    : ([[1, 0], [-1, 0], [0, 1], [0, -1]] as const).map(([a, b]) => [ox + a, oy + b] as [number, number]).filter(([x, y]) => inside(x, y) && !opaque(tiles[y * W + x]));
+  m[R * n + R] = 1;
   for (let dy = -R; dy <= R; dy++) for (let dx = -R; dx <= R; dx++) {
     const x = ox + dx, y = oy + dy;
-    if (x < 0 || y < 0 || x >= W || y >= H || dx * dx + dy * dy > (R + 0.5) ** 2) continue;
-    if (los(tiles, ox, oy, x, y)) m[(dy + R) * n + dx + R] = 1;
+    if (!inside(x, y) || dx * dx + dy * dy > (R + 0.5) ** 2) continue;
+    if (from.some(([fx, fy]) => (fx === x && fy === y) || los(tiles, fx, fy, x, y))) m[(dy + R) * n + dx + R] = 1;
   }
   return m;
 }
@@ -133,7 +140,7 @@ export function applyLight(ctx: CanvasRenderingContext2D, view: LightView, light
       } else alpha = ti >= 0 && view.seen[ti] ? amb.memory : amb.dark;
       d[i * 4] = ar; d[i * 4 + 1] = ag; d[i * 4 + 2] = ab; d[i * 4 + 3] = Math.max(0, alpha) * 255;
       const vis = ti >= 0 && view.vis[ti];
-      for (let k = 0; k < 3; k++) gd[i * 4 + k] = vis ? Math.floor((glow[i * 3 + k] / 255) * 12 + b) * (255 / 12) : 0;
+      for (let k = 0; k < 3; k++) gd[i * 4 + k] = vis ? Math.floor((Math.min(GLOW_MAX, glow[i * 3 + k]) / 255) * 12 + b) * (255 / 12) : 0;
       gd[i * 4 + 3] = 255;
     }
   }

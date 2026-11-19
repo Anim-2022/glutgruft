@@ -5,6 +5,7 @@ import { threatOf, statusMarks } from './warn';
 import { onDeath, drawDecals, drawDying, resetDeaths, reducedFx } from './deaths';
 import { drawItemIcon, drawIcon, PERK_ICON } from './icons';
 import { Light, applyLight, AMBIENTS } from './light';
+import { dropShadow, drawAO, castFrom, castShadow, beginShadows, flushShadows } from './shade';
 import { sfx } from '../core/audio';
 import { tr } from '../core/i18n';
 import { Run, Actor, xpNeed, skillCost, skillReady, spellAt, itemText, itemValue, itemScore, perkInfo, skillModName, shotRange, RANKS, SORT_NAMES, BAG_MAX, RUNE_NAMES, availableNodes } from '../game/run';
@@ -95,6 +96,14 @@ function smooth(a: Actor, dt: number) {
 }
 
 
+// Bodenschatten unter Gegenständen: [Fußzeile im Feld, Breite]
+const OBJ_SHADOW: Record<number, [number, number]> = {
+  [T.PILLAR]: [15, 14], [T.BARREL]: [14, 13], [T.CHEST]: [13, 16], [T.CHEST_OPEN]: [13, 16], [T.ALTAR]: [15, 14], [T.ALTAR_USED]: [15, 14],
+  [T.TRADER]: [15, 14], [T.CRATE]: [15, 16], [T.CRATE_ON]: [15, 16], [T.TABLET]: [15, 14], [T.LEVER]: [14, 10], [T.CURSED]: [14, 15],
+  [T.FOUNTAIN]: [15, 15], [T.FOUNTAIN_DRY]: [15, 15],
+};
+const FLY = new Set(['fledermaus', 'glutgeist']);
+
 const TILE_SPR: Record<number, string> = {
   [T.STAIRS]: 'stairs', [T.CHEST]: 'chest', [T.CHEST_OPEN]: 'chest_open', [T.ALTAR]: 'altar', [T.ALTAR_USED]: 'altar_used',
   [T.CRATE]: 'crate', [T.CRATE_ON]: 'crate', [T.PLATE]: 'plate', [T.LEVER]: 'lever', [T.TABLET]: 'tablet', [T.GOAL]: 'goal',
@@ -171,6 +180,7 @@ export function drawRun(ctx: CanvasRenderingContext2D, run: Run, dt: number, tim
   const ts = tilesets[biomeOf(run.floor)];
   buildLight(run);
   const lights: Light[] = [], floorTiles: number[] = [];
+  beginShadows(VW, VH);
   const flick = (n: number) => 0.92 + 0.08 * Math.sin(time * 9 + n) + 0.04 * Math.sin(time * 23 + n * 1.7);
   const x0 = Math.max(0, Math.floor(cam.x / TS) - 1), x1 = Math.min(W - 1, x0 + VW / TS + 2);
   const y0 = Math.max(0, Math.floor(cam.y / TS) - 1), y1 = Math.min(H - 1, y0 + Math.ceil(VH / TS) + 2);
@@ -211,7 +221,7 @@ export function drawRun(ctx: CanvasRenderingContext2D, run: Run, dt: number, tim
     } else {
       const hf = hash(x, y, 303);
       ctx.drawImage(t === T.ICE ? sprites.ice : hf % 6 === 0 ? ts.floorX[(hf >>> 4) % ts.floorX.length] : ts.floor[(x * 7 + y * 13 + ((x * y) % 5)) % 4], dx, dy);
-      if (y > 0 && wallLike(run.tiles[i - W])) { ctx.fillStyle = 'rgba(0,0,0,0.38)'; ctx.fillRect(dx, dy, TS, 4); }
+      drawAO(ctx, run.tiles, x, y, dx, dy);
       if (t === T.FLOOR) { const h = hash(x, y, run.seed + run.floor * 7); if (h % 9 === 0) ctx.drawImage(ts.decals[(h >>> 8) % ts.decals.length], dx, dy); }
       if (t === T.GRASS) ctx.drawImage(ts.grass[(x * 5 + y * 3) % 3], dx, dy);
       else if (t === T.BURNT) ctx.drawImage(ts.burnt, dx, dy);
@@ -224,6 +234,8 @@ export function drawRun(ctx: CanvasRenderingContext2D, run: Run, dt: number, tim
     const x = i % W, y = (i / W) | 0, t = run.tiles[i], dx = x * TS + ox, dy = y * TS + oy;
     const s = TILE_SPR[t];
     if (t === T.CRATE_ON) ctx.drawImage(sprites.plate, dx, dy);
+    const sh = OBJ_SHADOW[t];
+    if (sh) dropShadow(ctx, dx + 8, dy + sh[0], sh[1]);
     if (s) ctx.drawImage(sprites[s], dx, dy);
     if (t === T.CRATE_ON) { ctx.fillStyle = 'rgba(255,205,117,0.3)'; ctx.fillRect(dx + 1, dy + 1, 14, 14); }
     if (t === T.GOAL) { ctx.fillStyle = `rgba(115,239,247,${0.15 + 0.1 * Math.sin(time * 4)})`; ctx.fillRect(dx, dy, TS, TS); lights.push({ x, y, r: 2.2, col: '#73eff7', a: 0.8 }); }
@@ -315,7 +327,12 @@ export function drawRun(ctx: CanvasRenderingContext2D, run: Run, dt: number, tim
       if (!mirror) { ctx.drawImage(c, dx, dy); return; }
       ctx.save(); ctx.translate(dx + c.width, dy); ctx.scale(-1, 1); ctx.drawImage(c, 0, 0); ctx.restore();
     };
-    if (!glow) { ctx.fillStyle = 'rgba(0,0,0,0.35)'; const sw = Math.min(img.width, a.boss ? 24 : 16); ctx.fillRect(bx + 8 - sw / 2 + 3, Math.round(q.y * TS) + oy + 13, sw - 6, 2); }
+    // Bodenschatten; Flieger werfen einen kleineren, atmenden Schatten
+    const fly = FLY.has(a.kind), foot = by + 14;
+    if (fly) dropShadow(ctx, bx + 8, foot, 8 + (Math.sin(time * 5 + a.id) > 0 ? 2 : 0), glow ? 0.5 : 0.8);
+    else dropShadow(ctx, bx + 8, foot, a.boss ? 22 : 12, glow ? 0.5 : 1);
+    // Schlagschatten von der nächsten Flamme weg (Fackel, Feuer, Glutwesen)
+    if (!fly && !glow && !reducedFx() && !(a === p && deathT >= 0)) { const c = castFrom(lights, q.x, q.y); if (c) castShadow(masks[frame], bx + 8 + jx, foot, mirror, c); }
     // Ausweichen: Held flackert halbdurchsichtig
     if (statusMarks(a, a === p).includes('dodge')) ctx.globalAlpha = 0.55 + 0.25 * Math.sin(time * 18);
     blit(img);
@@ -507,6 +524,7 @@ export function drawRun(ctx: CanvasRenderingContext2D, run: Run, dt: number, tim
   for (const b of booms) lights.push({ x: b.x, y: b.y, r: 6 * (1 - b.t / 0.32) + 1, col: '#ffcd75' });
   for (const b of bolts) lights.push({ x: b.x1, y: b.y1, r: 2, col: b.col === '#1a1c2c' ? undefined : b.col, a: 0.7 });
   applyLight(ctx, run, lights, ox, oy, AMBIENTS[biomeOf(run.floor)], VW, VH);
+  flushShadows(ctx, run.tiles, run.vis, ox, oy, x0, y0, x1, y1);
   // Schadenszahlen über der Dunkelheit, damit sie lesbar bleiben
   for (let i = nums.length - 1; i >= 0; i--) {
     const n = nums[i];
