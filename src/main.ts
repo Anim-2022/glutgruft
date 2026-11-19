@@ -160,6 +160,7 @@ function onKey(k: string): boolean {
     return false;
   }
   if (!run) return false;
+  if (k === 'l') { setLang(getLang() === 'de' ? 'en' : 'de'); return true; } // Sprache auch im Lauf
   if (run.mode === 'dead' || run.mode === 'win') {
     if (k === ' ' || k === 'enter') { endRun(); return true; }
     return false;
