@@ -45,7 +45,7 @@ export const CLASSES: Record<ClassId, ClassDef> = {
 
 export interface MobDef {
   name: string; hp: number; atk: number; def: number; xp: number;
-  ai: 'chase' | 'erratic' | 'slow' | 'boss' | 'flee' | 'wisp';
+  ai: 'chase' | 'erratic' | 'slow' | 'boss' | 'flee' | 'wisp' | 'idle';
   range?: number; poison?: boolean; burn?: boolean; boss?: boolean; minion?: string; smash?: boolean;
 }
 
@@ -67,6 +67,11 @@ export const MOBS: Record<string, MobDef> = {
   schatten_k: { name: 'Schattenzwilling', hp: 1, atk: 1, def: 0, xp: 20, ai: 'chase' },
   schatten_m: { name: 'Schattenzwilling', hp: 1, atk: 1, def: 0, xp: 20, ai: 'chase', range: 4 },
   schatten_w: { name: 'Schattenzwilling', hp: 1, atk: 1, def: 0, xp: 20, ai: 'chase', range: 5 },
+  rivale_k: { name: 'Rivalin Hedda', hp: 1, atk: 1, def: 0, xp: 20, ai: 'chase' },
+  rivale_m: { name: 'Rivale Orban', hp: 1, atk: 1, def: 0, xp: 20, ai: 'chase', range: 4 },
+  rivale_w: { name: 'Rivalin Sela', hp: 1, atk: 1, def: 0, xp: 20, ai: 'chase', range: 5 },
+  ei: { name: 'Sporenei', hp: 6, atk: 0, def: 0, xp: 2, ai: 'idle' },
+  riesenpilz: { name: 'Riesenpilz', hp: 30, atk: 0, def: 2, xp: 16, ai: 'idle' },
   fuerst: { name: 'Schmiedefürst', hp: 180, atk: 13, def: 5, xp: 150, ai: 'boss', boss: true, minion: 'glutgeist', burn: true, smash: true },
 };
 
@@ -176,7 +181,7 @@ export const TUNE = { treePtsMax: 6, kryoMana: 2, kryoRegen: 0.75, kCost: 0 };
 export const FEATURES = { hazards: true, mimics: true, events: true, eventRate: 1, eventForce: '' };
 // Ereignisse: Ruhe-Auslöser, Zweitereignis bei Rate 1, Obergrenze zusätzlicher Reliquienwahlen je Lauf,
 // Schattenzwilling als Anteil der Heldenwerte (nur Grundangriff)
-export const EVENT = { calmMin: 25, calmMax: 40, calmChance: 0.15, second: 0.45, relicCap: 2, relicChance: 0.35, twinHp: 0.55, twinAtk: 0.65, noteChance: 0.3 };
+export const EVENT = { biomeShare: 0.6, calmMin: 25, calmMax: 40, calmChance: 0.15, second: 0.45, relicCap: 2, relicChance: 0.35, twinHp: 0.55, twinAtk: 0.65, noteChance: 0.3 };
 // Versteckte Bodenfallen und Mimiks
 export const HAZARD = { minFloor: 2, spot: 0.35, spotSicht: 0.1, mimic: 0.12, mimicRarUp: 0.25 };
 // Texte der Knoten T2a, T2b, T3, T5

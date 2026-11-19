@@ -1071,6 +1071,16 @@ export const FLOATERS = new Set(['fledermaus', 'glutgeist', 'ratte']);
 // Wesen, die selbst leuchten: Radius in Feldern und Farbe
 export const GLOW: Record<string, [number, string]> = { glutgeist: [3.4, '#ef7d57'], fuerst: [5, '#ef7d57'], irrlicht: [2.6, '#73eff7'] };
 
+// Ereignisse: Leuchtpilz, Kühlplatte, Sporenei
+SPR.leuchtpilz = ['................', '................', '................', '.....ssss.......', '...sscwwcss.....', '..scccsscccs....', '..sccscccsccs...', '...ssssssssss...', '......gg........', '......gg....ss..',
+  '......gg...scws.', '.....gggg..sccs.', '....gggggg..gg..', '...........gg...', '................', '................'];
+SPR.kuehl = ['................', '................', '..BBBBBBBBBBBB..', '..BcccccccccsB..', '..BccsscccsscB..', '..BcsccccscccB..', '..BccccccccccB..', '..BccsscccsscB..', '..BcsccccscccB..', '..BccccccccccB..',
+  '..BccsscccsscB..', '..BccccccccccB..', '..BBBBBBBBBBBB..', '................', '................', '................'];
+SPR.ei = ['................', '................', '................', '......llll......', '.....lGGGGl.....', '....lGGlGGGl....', '....lGGGGGlGl...', '...lGGlGGGGGGl..', '...lGGGGGlGGGl..', '...lGlGGGGGGGl..',
+  '...lGGGGGGlGGl..', '....lGGGlGGGl...', '....lllllllll...', '...TTTTTTTTTTT..', '................', '................'];
+VIEWS.ei = { b: SPR.ei, s: SPR.ei };
+ACTORS.push('ei');
+
 // Ereigniswesen als umgefärbte Fassungen vorhandener Figuren: [Art, Vorlage, Farbtausch]
 const SHADOW: Record<string, string> = {};
 for (const [k, hex] of Object.entries(PAL)) {
@@ -1078,11 +1088,15 @@ for (const [k, hex] of Object.entries(PAL)) {
   SHADOW[k] = l > 170 ? '#9a4fc0' : l > 90 ? '#5d275d' : '#1a1c2c';
 }
 SHADOW.k = '#f4f4f4'; // leuchtende Augen
+// Rivalen: andere Farben für Umhang und Rüstung
+const RIVAL: Record<string, string> = { r: '#257179', e: '#1e6b3a', b: '#7d2b45', B: '#5d275d', c: '#ef7d57', G: '#c98a3a', F: '#7d2b45' };
 export const RECOLORS: [string, string, Record<string, string>][] = [
   ['dieb', 'ratte', { d: '#5d275d', g: '#ffcd75', h: '#c48a6a' }],
   ['goblin', 'skelett', { w: '#38b764', g: '#ffcd75' }],
   ['irrlicht', 'glutgeist', { o: '#41a6f6', y: '#73eff7', w: '#f4f4f4' }],
   ['schatten_k', 'krieger', SHADOW], ['schatten_m', 'magier', SHADOW], ['schatten_w', 'waldlaeufer', SHADOW],
+  ['rivale_k', 'krieger', RIVAL], ['rivale_m', 'magier', RIVAL], ['rivale_w', 'waldlaeufer', RIVAL],
+  ['riesenpilz', 'sporling', { G: '#b13e53', F: '#7d2b45', T: '#5d275d', l: '#ef7d57' }],
 ];
 
 SPR.fountain = [E, E, '.......ss.......', '......scws......', '.....s.ss.s.....', '....s..cc..s....', '...gggggggggg...', '..gccscccscccg..', '..gcccccccccsg..', '..gggggggggggg..',

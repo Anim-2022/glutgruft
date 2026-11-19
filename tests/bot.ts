@@ -222,8 +222,8 @@ function decide(run: Run): Action {
   }
   if (run.tiles[p.y * W + p.x] === T.STAIRS) return { t: 'descend' };
   // Ereignisziel (Geist, leuchtende Truhe) steht auf der Karte – hinlaufen
-  const mark = run.ev?.mark;
-  const toMark = mark !== undefined ? stepTo(run, (_x, _y, i) => i === mark) : null;
+  const marks = run.ev?.mark !== undefined ? [run.ev.mark] : run.ev?.marks ?? [];
+  const toMark = marks.length ? stepTo(run, (_x, _y, i) => marks.includes(i)) : null;
   if (toMark) return { t: 'move', dx: toMark[0], dy: toMark[1] };
   // Truhen mitnehmen, dann Treppe, sonst erkunden
   const s =

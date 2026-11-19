@@ -15,6 +15,7 @@ export interface EvState {
   mobs: number[];              // Ids der Gegner, die zum Ereignis gehören
   total: number;               // so viele Ereignisgegner gab es insgesamt
   mark?: number;               // Zielfeld (Geist, Truhe)
+  marks?: number[];            // mehrere Zielfelder (Kerzen, Pilze, Kühlplatten); data.look wählt das Bild
   seal?: [number, number][];   // versiegelte Durchgänge: Feld und ursprüngliche Kachel
   data: Record<string, number>;
 }
@@ -40,7 +41,17 @@ export interface EvApi {
   roomTiles(r: Room): number[];             // begehbare Bodenfelder des Raums
   seal(e: EvState): void;
   warn(tiles: number[]): void;              // Felder, die im nächsten Zug getroffen werden
-  strike(dmg: number, fx: 'spike' | 'rock'): void; // trifft alle auf den gewarnten Feldern, löscht die Warnung
+  strike(dmg: number, fx: 'spike' | 'rock' | 'fire' | 'gas' | 'hammer'): void; // trifft alle auf den gewarnten Feldern, löscht die Warnung
+  elite(m: EvActor, mul: number, name: string): void;
+  rival(e: EvState, x: number, y: number): EvActor;
+  barrel(x: number, y: number, fuse: number): boolean;
+  hurt(n: number, why: string): void;      // Schaden am Helden ohne Angreifer
+  heal(frac: number): number;
+  mud(tiles: number[]): void;              // Schlamm: wer hineintritt, steckt einen Zug fest
+  isFloor(i: number): boolean;
+  free(i: number): boolean;                // begehbar und von niemandem besetzt
+  reward(tier: number): string;
+  near2(x: number, y: number, min: number, max: number): number[]; // begehbare Felder im Abstand [min, max] (Schachbrett) um x, y
   wake(e: EvState, max: number, range: number): number;
   root(turns: number): void;
   gold(n: number): number;                  // mit Goldfund verrechnet, gibt die echte Menge zurück
@@ -52,6 +63,7 @@ export interface EvApi {
 
 export interface EvDef {
   id: string; cat: EvCat; trigger: 'room' | 'calm';
+  biome?: 0 | 1 | 2;           // nur in diesem Gebiet (sonst überall)
   title: string; intro: string[];
   tier: 0 | 1 | 2 | 3;         // Lohnstufe; 0 = eigener Lohn in won()
   limit: number;
@@ -85,6 +97,25 @@ function rockWarn(a: EvApi, e: EvState) {
   const tiles = shuffled(a, a.roomTiles(e.room!)).slice(0, a.int(4, 6)), p = a.p, pi = p.y * W + p.x;
   if (a.chance(0.5) && !tiles.includes(pi)) tiles.push(pi);
   a.warn(tiles);
+}
+
+// Skelettparade: nächstes Feld, aus dem ein Skelett steigt (rot markiert)
+function parade(a: EvApi, e: EvState): boolean {
+  const c = a.roomTiles(e.room!).filter(i => a.free(i) && Math.max(Math.abs((i % W) - a.p.x), Math.abs(((i / W) | 0) - a.p.y)) >= 2);
+  if (!c.length) return false;
+  e.data.next = c[a.int(0, c.length - 1)];
+  a.warn([e.data.next]);
+  return true;
+}
+// freies Feld im Raum, möglichst weit weg vom Helden (mindestens min Felder)
+function far(a: EvApi, e: EvState, min: number): number {
+  const c = a.roomTiles(e.room!).filter(i => a.free(i) && Math.max(Math.abs((i % W) - a.p.x), Math.abs(((i / W) | 0) - a.p.y)) >= min);
+  return c.length ? c[a.int(0, c.length - 1)] : -1;
+}
+// Zielfelder einsammeln: steht der Held auf einem, verschwindet es
+function take(a: EvApi, e: EvState, got: () => void) {
+  const i = e.marks!.findIndex(m => a.atPlayer(m));
+  if (i >= 0) { e.marks!.splice(i, 1); got(); }
 }
 
 export const EVENTS: EvDef[] = [
@@ -256,6 +287,111 @@ export const EVENTS: EvDef[] = [
     },
     tick: killAll,
     goal: () => 'Besiege deinen Schatten',
+  },
+  // ===================== Gruft (Gebiet 0) =====================
+  {
+    id: 'parade', cat: 'danger', trigger: 'room', biome: 0, title: 'Skelettparade', tier: 2, limit: 40,
+    intro: ['Der Boden klappert. Knochen fügen sich zusammen – einer nach dem anderen.', 'Unter den Fliesen regt sich etwas. Viele etwas.'],
+    start(a, e) { e.data.left = 4; return parade(a, e); },
+    tick(a, e) {
+      if (e.data.left > 0) {
+        const i = e.data.next;
+        if (a.free(i)) a.spawn(e, 'skelett', i % W, (i / W) | 0);
+        e.data.left--;
+        if (e.data.left > 0) parade(a, e); else a.warn([]);
+        return 'run';
+      }
+      return killAll(a, e);
+    },
+    goal: (a, e) => (e.data.left > 0 ? `Gleich steigt ein Skelett aus dem roten Feld · noch ${e.data.left}` : `Besiege die Parade ${beaten(a, e)}`),
+  },
+  {
+    id: 'rivale', cat: 'danger', trigger: 'calm', biome: 0, title: 'Rivalisierender Abenteurer', tier: 3, limit: 60, vanish: true,
+    intro: ['"Die Beute hier unten gehört MIR!", ruft jemand.', 'Ein anderer Abenteurer zieht die Waffe. Er will deinen Fund.'],
+    start(a, e) { const s = a.near(5, 9); if (!s) return false; a.rival(e, s[0], s[1]); return true; },
+    tick: killAll,
+    goal: () => 'Besiege den Rivalen',
+    lost: () => 'Der Rivale zieht lachend ab.',
+  },
+  {
+    id: 'spukglocke', cat: 'challenge', trigger: 'calm', biome: 0, title: 'Spukglocke', tier: 2, limit: 13, survive: true,
+    intro: ['Eine Glocke läutet von selbst. Und noch einmal.', 'Dong ... dong ... Die Toten zählen mit.'],
+    start(a, e) { e.data.ring = 0; return true; },
+    tick(a, e) {
+      if (e.turns % 4 === 1 && e.data.ring < 3) { e.data.ring++; const n = a.wake(e, 2, 30); a.say(`Die Glocke läutet (${e.data.ring}/3)${n ? ' – etwas erwacht.' : '.'}`); }
+      return 'run';
+    },
+    goal: (a, e) => `Überstehe das Läuten (${e.data.ring}/3) · noch ${left(e)} Züge`,
+  },
+  {
+    id: 'ratten', cat: 'challenge', trigger: 'room', biome: 0, title: 'Rattenschwarm', tier: 1, limit: 40,
+    intro: ['Quiek. Quiek? QUIEK! Aus jeder Ritze kommen Ratten.', 'Der Boden bewegt sich. Er ist voller Ratten.'],
+    start(a, e) {
+      for (const [x, y] of shuffled(a, a.edge(e.room!)).slice(0, 5 + (a.floor >= 3 ? 1 : 0))) a.spawn(e, 'ratte', x, y);
+      return e.mobs.length > 0;
+    },
+    tick: killAll,
+    goal: (a, e) => `Vertreibe die Ratten ${beaten(a, e)}`,
+  },
+  {
+    id: 'koloss', cat: 'danger', trigger: 'room', biome: 0, title: 'Knochenkoloss', tier: 3, limit: 60,
+    intro: ['Der Knochenhaufen in der Ecke steht auf. Er ist sehr groß.', 'Hunderte Knochen, ein Wille. Der Koloss erwacht.'],
+    start(a, e) {
+      const t = far(a, e, 3);
+      if (t < 0) return false;
+      const m = a.spawn(e, 'skelett', t % W, (t / W) | 0);
+      a.elite(m, 2.2, 'Knochenkoloss');
+      return true;
+    },
+    tick: killAll,
+    goal: () => 'Zerschlage den Knochenkoloss',
+  },
+  {
+    id: 'kerzen', cat: 'challenge', trigger: 'calm', biome: 0, title: 'Geisterkerzen', tier: 2, limit: 40,
+    intro: ['Drei kalte Kerzen flackern auf. Entzünde sie, bevor der Geist geht.', 'Eine Stimme: "Licht ... bring mir Licht ..."'],
+    start(a, e) {
+      const ms: number[] = []; let sum = 0;
+      for (let k = 0; k < 6 && ms.length < 3; k++) { const s = a.near(4, 12); if (s && !ms.includes(s[1] * W + s[0])) { ms.push(s[1] * W + s[0]); sum += s[2]; } }
+      if (ms.length < 3) return false;
+      e.marks = ms; e.data.look = 1; e.data.need = 3;
+      e.limit = 2 * sum + 4; // reicht immer: Hin und zurück zu jeder Kerze
+      return true;
+    },
+    tick(a, e) { take(a, e, () => a.say('Eine Kerze brennt.')); return e.marks!.length ? 'run' : 'won'; },
+    goal: (a, e) => `Entzünde die Kerzen ${e.data.need - e.marks!.length}/${e.data.need} · noch ${left(e)} Züge`,
+    lost: () => 'Die Kerzen erlöschen. Der Geist seufzt.',
+  },
+  {
+    id: 'sarkophag', cat: 'danger', trigger: 'room', biome: 0, title: 'Sarkophag', tier: 3, limit: 60,
+    intro: ['Ein Steindeckel schabt zur Seite. Der Grabwächter erwacht.', 'Der Sarkophag öffnet sich – und sein Bewohner ist schlecht gelaunt.'],
+    start(a, e) {
+      const t = far(a, e, 3);
+      if (t < 0) return false;
+      const m = a.spawn(e, a.table()[a.int(0, a.table().length - 1)], t % W, (t / W) | 0);
+      a.elite(m, 2, `Grabwächter`);
+      for (const i of a.near2(t % W, (t / W) | 0, 1, 1).filter(a.free).slice(0, 2)) a.spawn(e, 'fledermaus', i % W, (i / W) | 0);
+      return true;
+    },
+    tick: killAll,
+    goal: (a, e) => `Besiege den Grabwächter ${beaten(a, e)}`,
+  },
+  {
+    id: 'gruftfluch', cat: 'challenge', trigger: 'calm', biome: 0, title: 'Gruftfluch', tier: 2, limit: 30,
+    intro: ['Ein Fluch kriecht in deine Knochen. Nur ein Altar kann ihn brechen.', 'Kalte Finger an deinem Herzen. Du musst zum Altar!'],
+    start(a, e) {
+      const s = a.near(7, 14);
+      if (!s) return false;
+      e.mark = s[1] * W + s[0]; e.data.look = 4;
+      e.limit = Math.ceil(s[2] * 1.5) + 3;
+      return true;
+    },
+    tick(a, e) {
+      if (a.atPlayer(e.mark!)) return 'won';
+      if (e.turns % 3 === 0) a.hurt(1, 'Der Gruftfluch hat dich verzehrt.');
+      return 'run';
+    },
+    goal: (a, e) => `Erreiche den Altar, der Fluch zehrt · noch ${left(e)} Züge`,
+    lost: () => 'Der Fluch verfliegt von selbst – diesmal.',
   },
 ];
 
