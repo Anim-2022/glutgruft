@@ -4,6 +4,7 @@ export const VW = 640, VH = 360, TS = 16;
 import { PAL, SPR, ACTORS, NO_OUTLINE, VIEWS, FLOATERS, WEAPON_ART, WeaponArt, DECALS } from './sprites';
 import { tr } from '../core/i18n';
 import { poseFrames } from './poses';
+import { floorMacro, capBase, capEdges, capTiles, plinth, grassBed } from './tiles';
 export { PAL };
 
 export const sprites: Record<string, HTMLCanvasElement> = {};
@@ -20,7 +21,12 @@ export function hex(col: string): [number, number, number] {
   return [n >> 16, (n >> 8) & 255, n & 255];
 }
 
-export interface TileSet { floor: HTMLCanvasElement[]; floorX: HTMLCanvasElement[]; walls: HTMLCanvasElement[]; lava: HTMLCanvasElement[]; wall: HTMLCanvasElement; top: HTMLCanvasElement; cap: HTMLCanvasElement; hi: string; grass: HTMLCanvasElement[]; burnt: HTMLCanvasElement; decals: HTMLCanvasElement[]; }
+export interface TileSet {
+  floor: HTMLCanvasElement[]; floorX: HTMLCanvasElement[]; walls: HTMLCanvasElement[]; lava: HTMLCanvasElement[]; wall: HTMLCanvasElement; top: HTMLCanvasElement; cap: HTMLCanvasElement; hi: string; grass: HTMLCanvasElement[]; burnt: HTMLCanvasElement; decals: HTMLCanvasElement[];
+  floorM: HTMLCanvasElement[][]; // Bodenmuster 2×2: Spielart → vier Viertel
+  caps: HTMLCanvasElement[]; capEdge: HTMLCanvasElement[]; // Mauerkrone und ihre Kanten je offene Seiten (Bit 1 oben, 2 links, 4 rechts)
+  bed: HTMLCanvasElement; // Moosgrund unter Gras
+}
 export const tilesets: TileSet[] = [];
 
 const BIOMES = [
@@ -175,17 +181,9 @@ export function bake(): void {
       wg.fillStyle = '#ffcd75'; wg.fillRect(3, 4, 1, 1); wg.fillRect(11, 11, 1, 1);
     }
     if (bi !== 1) { wg.fillStyle = b.capHi; wg.fillRect(0, 0, TS, 2); }
-    wg.fillStyle = 'rgba(0,0,0,0.4)'; wg.fillRect(0, 13, TS, 3);
-    // Mauerkrone: von oben gesehene Wand, deutlich heller als das Dunkel dahinter
-    const [cap, cg] = mk(TS, TS);
-    cg.fillStyle = b.cap; cg.fillRect(0, 0, TS, TS);
-    cg.fillStyle = 'rgba(0,0,0,0.28)';
-    if (bi === 1) { for (let i = 0; i < 7; i++) cg.fillRect((rnd() * 13) | 0, (rnd() * 14) | 0, 2 + ((rnd() * 2) | 0), 1 + ((rnd() * 2) | 0)); }
-    else { cg.fillRect(0, 7, TS, 1); cg.fillRect(0, 15, TS, 1); cg.fillRect(7, 0, 1, 7); cg.fillRect(3, 8, 1, 7); cg.fillRect(11, 8, 1, 7); cg.fillRect(15, 0, 1, 7); }
-    cg.fillStyle = 'rgba(255,255,255,0.10)';
-    if (bi === 1) { cg.fillRect(2, 2, 3, 1); cg.fillRect(9, 6, 3, 1); cg.fillRect(4, 11, 2, 1); }
-    else { cg.fillRect(0, 0, 7, 1); cg.fillRect(8, 0, 7, 1); cg.fillRect(4, 8, 7, 1); cg.fillRect(12, 8, 4, 1); cg.fillRect(0, 8, 3, 1); }
-    if (bi === 2) { cg.fillStyle = '#ef7d57'; cg.fillRect(5, 3, 1, 2); cg.fillRect(12, 11, 2, 1); }
+    plinth(wg, b);
+    // Mauerkrone: von oben gesehene Wand, ruhige Fläche; Kanten je nach offenen Seiten (tiles.ts)
+    const cap = capBase(b, bi, rnd), capEdge = capEdges(b), caps = capTiles(b, cap, capEdge);
     // Felsinneres ohne angrenzenden Boden
     const [top, tg] = mk(TS, TS);
     tg.fillStyle = b.top; tg.fillRect(0, 0, TS, TS);
@@ -253,7 +251,7 @@ export function bake(): void {
       g.fillStyle = '#ffcd75'; g.fillRect((f * 4 + 2) % TS, 7 + Math.round(Math.sin(((f * 4 + 2) % TS + f * 2) * 0.55) * 2), 2, 1);
       lava.push(c);
     }
-    tilesets.push({ floor, floorX, walls, lava, wall, top, cap, hi: b.capHi, grass, burnt, decals });
+    tilesets.push({ floor, floorX, walls, lava, wall, top, cap, hi: b.capHi, grass, burnt, decals, floorM: floorMacro(b, bi, rnd), caps, capEdge, bed: grassBed(b) });
   }
 }
 

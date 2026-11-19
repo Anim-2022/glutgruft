@@ -6,6 +6,7 @@ import { onDeath, drawDecals, drawDying, resetDeaths, reducedFx } from './deaths
 import { drawItemIcon, drawIcon, PERK_ICON } from './icons';
 import { Light, applyLight, AMBIENTS } from './light';
 import { dropShadow, drawAO, castFrom, castShadow, beginShadows, flushShadows } from './shade';
+import { floorTint, softEdged } from './tiles';
 import { sfx } from '../core/audio';
 import { tr } from '../core/i18n';
 import { Run, Actor, xpNeed, skillCost, skillReady, spellAt, itemText, itemValue, itemScore, perkInfo, skillModName, shotRange, RANKS, SORT_NAMES, BAG_MAX, RUNE_NAMES, availableNodes } from '../game/run';
@@ -196,35 +197,40 @@ export function drawRun(ctx: CanvasRenderingContext2D, run: Run, dt: number, tim
       if (front) { const hv = hash(x, y, 101) % 7; ctx.drawImage(ts.walls[hv < 5 ? 0 : hv - 4], dx, dy); }
       else {
         const c = [open(-1, -1), open(1, -1), open(-1, 1), open(1, 1)];
-        const inner = !(l || r || u || c.some(Boolean));
+        const bits = (u ? 1 : 0) | (l ? 2 : 0) | (r ? 4 : 0), inner = !(bits || c.some(Boolean));
         // Glutschmiede: in der Mauerkrone fließt hier und da Lava (vier Bilder, Phase je Feld versetzt)
         if (!inner && ts.lava.length && hash(x, y, 202) % 5 === 0) {
           ctx.drawImage(ts.lava[(Math.floor(time * 5) + x) % 4], dx, dy);
+          ctx.drawImage(ts.capEdge[bits], dx, dy);
           lights.push({ x, y, r: 1.8 * flick(i), col: '#ef7d57', a: 0.6 });
-        } else ctx.drawImage(inner ? ts.top : ts.cap, dx, dy);
+        } else ctx.drawImage(inner ? ts.top : ts.caps[bits], dx, dy); // Kanten nur zu offenen Seiten, Mitte dunkler
         ctx.fillStyle = ts.hi;
-        if (u) ctx.fillRect(dx, dy, TS, 2);
         if (c[0] && !l && !u) ctx.fillRect(dx, dy, 2, 2);
         if (c[1] && !r && !u) ctx.fillRect(dx + TS - 2, dy, 2, 2);
         if (c[2] && !l) ctx.fillRect(dx, dy + TS - 2, 2, 2);
         if (c[3] && !r) ctx.fillRect(dx + TS - 2, dy + TS - 2, 2, 2);
       }
-      // helle Kante zur offenen Seite: der Raumumriss ist rundum lesbar
-      ctx.fillStyle = ts.hi;
-      if (l) ctx.fillRect(dx, dy, 2, front ? 13 : TS);
-      if (r) ctx.fillRect(dx + TS - 2, dy, 2, front ? 13 : TS);
+      // Wandfront: helle Kante zur offenen Seite, der Raumumriss bleibt rundum lesbar
+      if (front) { ctx.fillStyle = ts.hi; if (l) ctx.fillRect(dx, dy, 2, 12); if (r) ctx.fillRect(dx + TS - 2, dy, 2, 12); }
       if (t === T.CRACKED) ctx.drawImage(sprites[(run.cracks.get(i) ?? 0) >= 2 ? 'crack2' : 'crack'], dx, dy);
       if (front && torches.has(i)) {
         ctx.drawImage(sprites[`torch${Math.floor(time * 7 + x) % 2}`], dx, dy);
         lights.push({ x, y: y + 0.6, r: 5 * flick(i), col: '#ef7d57' });
       }
     } else {
-      const hf = hash(x, y, 303);
-      ctx.drawImage(t === T.ICE ? sprites.ice : hf % 6 === 0 ? ts.floorX[(hf >>> 4) % ts.floorX.length] : ts.floor[(x * 7 + y * 13 + ((x * y) % 5)) % 4], dx, dy);
+      // Boden: Muster über 2×2 Felder, selten eine Sonderplatte; dazu eine weiche Helligkeitswelle
+      const hf = hash(x, y, 303), bio = biomeOf(run.floor);
+      ctx.drawImage(bio && hf % 9 === 0 ? ts.floorX[(hf >>> 4) % ts.floorX.length] : ts.floorM[hash(x >> 1, y >> 1, 404) % ts.floorM.length][(y & 1) * 2 + (x & 1)], dx, dy);
+      const tv = floorTint(x, y);
+      ctx.fillStyle = tv > 0 ? `rgba(255,255,255,${(tv * 0.045).toFixed(3)})` : `rgba(0,0,0,${(-tv * 0.11).toFixed(3)})`; ctx.fillRect(dx, dy, TS, TS);
+      // Ränder von Eis, Rasen und Brandfläche laufen gerastert in den Boden aus
+      const edge = (k: number) => { let e = 0; [[0, -1, 1], [-1, 0, 2], [1, 0, 4], [0, 1, 8]].forEach(([ex, ey, bit]) => { const n = run.tiles[i + ey * W + ex]; if (n !== k && !wallLike(n)) e |= bit; }); return e; };
+      if (t === T.ICE) ctx.drawImage(softEdged(sprites.ice, edge(T.ICE)), dx, dy);
+      if (t === T.GRASS) ctx.drawImage(softEdged(ts.bed, edge(T.GRASS)), dx, dy);
       drawAO(ctx, run.tiles, x, y, dx, dy);
       if (t === T.FLOOR) { const h = hash(x, y, run.seed + run.floor * 7); if (h % 9 === 0) ctx.drawImage(ts.decals[(h >>> 8) % ts.decals.length], dx, dy); }
       if (t === T.GRASS) ctx.drawImage(ts.grass[(x * 5 + y * 3) % 3], dx, dy);
-      else if (t === T.BURNT) ctx.drawImage(ts.burnt, dx, dy);
+      else if (t === T.BURNT) ctx.drawImage(softEdged(ts.burnt, edge(T.BURNT)), dx, dy);
       floorTiles.push(i);
     }
   }
