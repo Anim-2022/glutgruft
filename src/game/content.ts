@@ -198,7 +198,17 @@ export const EVENT = { biomeShare: 0.6, calmMin: 25, calmMax: 40, calmChance: 0.
   // Lohnstufen (nach dem ersten Messlauf deutlich gesenkt: mit Ereignissen stiegen Siege und Gold zu stark)
   mobXp: 0.35, gold1: 3, potion1: 0.3, souls2: 5, item2: 0.25, cons2: 1, item3: 0.5, gold3: 4, souls3: 8, twinHp: 0.55, twinAtk: 0.65, noteChance: 0.3 };
 // Versteckte Bodenfallen und Mimiks
-export const HAZARD = { minFloor: 2, spot: 0.35, spotSicht: 0.1, mimic: 0.12, mimicRarUp: 0.25 };
+// Schwierigkeit (Tester: das Spiel war zu leicht). Gegner, Heilung, Fallen und Ereignisse an einer Stelle.
+export const DIFF = {
+  mobHp: 1.18, mobAtk: 1.15, bossHp: 1.1,      // Gegnerwerte
+  roomDiv: 4,                                  // je roomDiv Ebenen ein Gegner mehr je Raum (vorher 5)
+  potionHeal: 0.38, chestPotion: 0.14, dropPotion: 0.015, // Heiltrank heilt 38 % (vorher 45 %), seltener in Truhen und bei Gegnern
+  fountain: 0.3, fountainHeal: 0.3,            // Brunnen seltener und schwächer
+  potionPrice: 1.3,                            // Heiltränke beim Händler teurer
+  trapDmg: 1.4, trapExtra: 1,                  // Fallen härter und eine mehr je Ebene
+  dangerWeight: 2,                             // gefährliche Ereignisse doppelt so oft gezogen
+};
+export const HAZARD = { minFloor: 2, spot: 0.35, spotSicht: 0.1, mimic: 0.18, mimicRarUp: 0.25 };
 // Texte der Knoten T2a, T2b, T3, T5
 export const NODE_TEXT: Partial<Record<ClassId, Record<string, [string, string]>>> = {
   magier: {

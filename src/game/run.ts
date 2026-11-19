@@ -2,7 +2,7 @@ import { RNG } from '../core/rng';
 import type { Meta } from '../core/save';
 import { W, H, T, Room, genDungeon, center, walkable, opaque, los, computeFov, distMap } from './dungeon';
 import { VS, CRATE_TEMPLATES, mirror, genIce, slide, iceStops, genLights, lightsPress, lightCell, LIGHTS_ALL, dartFires, DartLane } from './puzzles';
-import { CLASSES, ClassId, MOBS, PERKS, RELICS, Item, Offer, AFFIX, CONSUMABLES, UNIQUES, ULT, ULT_LEVEL, SKILL_UP, SYNERGIES, NEW_SKILLS, TUNE, treeNodes, treeNode, treePool, nodeText, MAGE_WHET, BOSS_BY_BIOME, BIOME_NAMES, FLOORS_PER_BIOME, LAST_FLOOR, biomeOf, spawnTable, FEATURES, HAZARD, EVENT, HUNTER } from './content';
+import { CLASSES, ClassId, MOBS, PERKS, RELICS, Item, Offer, AFFIX, CONSUMABLES, UNIQUES, ULT, ULT_LEVEL, SKILL_UP, SYNERGIES, NEW_SKILLS, TUNE, treeNodes, treeNode, treePool, nodeText, MAGE_WHET, BOSS_BY_BIOME, BIOME_NAMES, FLOORS_PER_BIOME, LAST_FLOOR, biomeOf, spawnTable, FEATURES, HAZARD, EVENT, HUNTER, DIFF } from './content';
 import { EVENTS, EVENT_BY_ID, NOTES } from './events';
 import type { EvState, EvPlan, EvApi, EvDef } from './events';
 
@@ -160,10 +160,10 @@ function spawnMob(run: Run, kind: string, x: number, y: number): Actor {
   const d = MOBS[kind];
   // Bosse wachsen mit der Tiefe mit, normale Gegner etwas langsamer als früher
   const s = 1 + 0.30 * (run.floor - 1);
-  const hp = d.boss ? Math.round(d.hp * (1.2 + 0.12 * run.floor)) : Math.round(d.hp * s);
+  const hp = d.boss ? Math.round(d.hp * (1.2 + 0.12 * run.floor) * DIFF.bossHp) : Math.round(d.hp * s * DIFF.mobHp);
   const m: Actor = {
     id: run.nextId++, kind, name: d.name, x, y, hp, maxHp: hp,
-    atk: d.atk + Math.round(run.floor * 0.8), def: d.def,
+    atk: Math.round((d.atk + run.floor * 0.8) * DIFF.mobAtk), def: d.def,
     st: {}, xp: d.xp, cd: 0, awake: false, boss: d.boss,
   };
   run.mobs.push(m);
@@ -411,7 +411,7 @@ function wares(run: Run): Offer[] {
 function stock(run: Run): Offer[] {
   const f = run.floor;
   return [
-    { kind: 'potion', name: 'Heiltrank', desc: 'Heilt einen großen Teil deines Lebens', price: 20 + 4 * f, sold: false, left: 3 },
+    { kind: 'potion', name: 'Heiltrank', desc: 'Heilt einen großen Teil deines Lebens', price: Math.round((20 + 4 * f) * DIFF.potionPrice), sold: false, left: 3 },
     { kind: 'bomb', name: 'Bombe', desc: 'Sprengt Gegner, Wände und Säulen', price: 10 + f, sold: false, left: 2 },
     ...wares(run),
     { kind: 'forge', name: 'Schmied', desc: `Waffe +1 Angriff, sonst Rüstung +1 Vert. (bis +${FORGE_MAX} je Stück)`, price: 30 + 4 * f, sold: false, left: 2 },
@@ -815,7 +815,7 @@ function nextFloor(run: Run) {
   for (let i = 1; i < rooms.length; i++) {
     const r = rooms[i];
     // auf Boss-Ebenen ein Gegner weniger je Raum
-    const n = (bossFloor && r === last) ? 0 : rng.int(1, 2) + Math.floor(run.floor / 5) - (bossFloor ? 1 : 0);
+    const n = (bossFloor && r === last) ? 0 : rng.int(1, 2) + Math.floor(run.floor / DIFF.roomDiv) - (bossFloor ? 1 : 0);
     for (let k = 0; k < n; k++) {
       const f = freeInRoom(run, r);
       if (f) spawnMob(run, rng.pick(table), f[0], f[1]);
@@ -847,7 +847,7 @@ function nextFloor(run: Run) {
     if (placeIn(run, rng.pick(rooms.slice(1)), T.TRADER)) run.shop = stock(run);
   }
   if (rng.chance(0.65)) addSecret(run, rooms);
-  if (rng.chance(0.45)) placeIn(run, rng.pick(rooms.slice(1)), T.FOUNTAIN);
+  if (rng.chance(DIFF.fountain)) placeIn(run, rng.pick(rooms.slice(1)), T.FOUNTAIN);
   // Schatzkammer hinter einem Gitter; den Schlüssel trägt ein Elitegegner am anderen Ende der Ebene
   const cands = run.mobs.filter(m => !m.boss);
   if (cands.length && rng.chance(0.6) && addSecret(run, rooms, true)) {
@@ -894,7 +894,7 @@ function addHazards(run: Run, start: Room, biome: number) {
     const n = DIRS4.filter(([ox, oy]) => walkable(t[(y + oy) * W + x + ox])).length;
     (n <= 2 ? corridor : open).push(y * W + x);
   }
-  const want = rng.int(2, 4) + Math.floor(run.floor / 5);
+  const want = rng.int(2, 4) + Math.floor(run.floor / 5) + DIFF.trapExtra;
   for (let k = 0, tries = 0; k < want && tries < 200; tries++) {
     const pool = corridor.length && rng.chance(0.7) ? corridor : open;
     if (!pool.length) break;
@@ -920,7 +920,7 @@ function stepHazard(run: Run, a: Actor) {
   switch (h.kind) {
     case 'stachel':
       if (shown) say(run, isP ? `${name}! Stacheln schießen aus dem Boden.` : `${a.name} tritt in eine ${name}!`);
-      damage(run, a, 3 + Math.floor(run.floor / 2), isP ? '#b13e53' : '#c9d4dc');
+      damage(run, a, Math.round((3 + run.floor / 2) * DIFF.trapDmg), isP ? '#b13e53' : '#c9d4dc');
       break;
     case 'pfeil': {
       // Der Pfeil kommt aus der nächsten Wand in einer der vier Richtungen
@@ -931,7 +931,7 @@ function stepHazard(run: Run, a: Actor) {
       }
       if (src && shown) run.fx.push({ k: 'arrow', x0: src[0], y0: src[1], x1: a.x, y1: a.y, col: '#c9d4dc', heavy: false });
       if (shown) say(run, isP ? `${name}! Ein Pfeil zischt aus der Wand.` : `${a.name} löst eine ${name} aus!`);
-      damage(run, a, 2 + Math.floor(run.floor / 2), isP ? '#b13e53' : '#c9d4dc');
+      damage(run, a, Math.round((2 + run.floor / 2) * DIFF.trapDmg), isP ? '#b13e53' : '#c9d4dc');
       break;
     }
     case 'gas':
@@ -1002,7 +1002,9 @@ function planEvents(run: Run, rooms: Room[]) {
     if (!cands.length) break;
     // Gebietsereignisse und allgemeine etwa 60 : 40
     const bio = cands.filter(c => c.biome !== undefined), gen = cands.filter(c => c.biome === undefined);
-    const d = rng.pick(bio.length && gen.length ? (rng.chance(EVENT.biomeShare) ? bio : gen) : cands);
+    const from = bio.length && gen.length ? (rng.chance(EVENT.biomeShare) ? bio : gen) : cands;
+    // gefährliche Ereignisse kommen öfter (DIFF.dangerWeight)
+    const d = rng.pick(from.flatMap(c => Array(c.cat === 'danger' ? DIFF.dangerWeight : 1).fill(c) as EvDef[]));
     if (d.trigger === 'room' && !free.length) continue;
     const plan: EvPlan = { id: d.id };
     if (d.trigger === 'room') plan.room = free.splice(rng.int(0, free.length - 1), 1)[0];
@@ -1666,7 +1668,7 @@ function kill(run: Run, m: Actor) {
     p.keys++;
     p.potions++;
     say(run, `${m.name} lässt einen Schlüssel und einen Heiltrank fallen.`);
-  } else if (run.rng.chance(0.025)) {
+  } else if (run.rng.chance(DIFF.dropPotion)) {
     p.potions++;
     say(run, `${m.name} lässt einen Heiltrank fallen.`);
   }
@@ -1821,7 +1823,7 @@ function chestLoot(run: Run, from: string, bump = 0) {
   const p = run.p;
   for (let k = has(p, 'muenze') ? 2 : 1; k > 0; k--) {
     const r = run.rng.next();
-    if (r < 0.22) { p.potions++; say(run, `${from}: ein Heiltrank.`); }
+    if (r < DIFF.chestPotion) { p.potions++; say(run, `${from}: ein Heiltrank.`); }
     else if (r < 0.38) { p.bombs += 2; say(run, `${from}: zwei Bomben.`); }
     else if (r < 0.70) takeItem(run, genItem(run, false, bump), from);
     else if (r < 0.80) takeItem(run, genConsumable(run), from);
@@ -2208,7 +2210,7 @@ export function act(run: Run, a: Action): void {
       } else if (t === T.MIMIC) { revealMimic(run, i, true); used = true; }
       else if (t === T.CHEST || t === T.CURSED) { openChest(run, i); used = true; }
       else if (t === T.FOUNTAIN) {
-        const n = Math.ceil(p.maxHp * 0.35);
+        const n = Math.ceil(p.maxHp * DIFF.fountainHeal);
         p.hp = Math.min(p.maxHp, p.hp + n);
         delete p.st.gift; delete p.st.brand;
         run.tiles[i] = T.FOUNTAIN_DRY;
@@ -2311,7 +2313,7 @@ export function act(run: Run, a: Action): void {
       else if (p.hp >= p.maxHp) say(run, 'Du bist bereits bei voller Gesundheit.');
       else {
         p.potions--;
-        const n = has(p, 'seelenkelch') ? p.maxHp : Math.ceil(p.maxHp * 0.45);
+        const n = has(p, 'seelenkelch') ? p.maxHp : Math.ceil(p.maxHp * DIFF.potionHeal);
         p.hp = Math.min(p.maxHp, p.hp + n);
         delete p.st.gift; delete p.st.brand;
         run.fx.push({ k: 'num', x: p.x, y: p.y, s: `+${n}`, col: '#a7f070' });

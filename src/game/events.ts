@@ -166,7 +166,7 @@ export const EVENTS: EvDef[] = [
     intro: ['Gitter fallen herab! Aus dem Boden schießen Stacheln.', 'Klack. Die Türen sind zu. Der Boden hat Löcher.'],
     start(a, e) { a.seal(e); spikeWarn(a, e); return true; },
     tick(a, e) {
-      a.strike(3 + Math.floor(a.floor / 2), 'spike');
+      a.strike(4 + Math.floor(a.floor * 0.7), 'spike');
       if (e.turns < e.limit) spikeWarn(a, e);
       return 'run';
     },
@@ -190,7 +190,7 @@ export const EVENTS: EvDef[] = [
     intro: ['Die Decke knirscht. Steine lösen sich!', 'Staub rieselt. Gleich kommt hier alles herunter.'],
     start(a, e) { if (a.roomTiles(e.room!).length <= 6) return false; rockWarn(a, e); return true; },
     tick(a, e) {
-      a.strike(4 + Math.floor(a.floor / 2), 'rock');
+      a.strike(5 + Math.floor(a.floor * 0.7), 'rock');
       if (e.turns < e.limit) rockWarn(a, e);
       return 'run';
     },
