@@ -1,5 +1,6 @@
 // Einfacher Autospieler für Balance- und Stabilitätsläufe.
 import { W, H, T, walkable } from '../src/game/dungeon';
+import { hunterWarn } from '../src/game/run';
 import { Run, Action, act, playerAtk, itemScore, availableNodes, maxTraps, skillReady, skillCost, lineFrom, forgeTarget } from '../src/game/run';
 import { CLASSES, MOBS } from '../src/game/content';
 
@@ -15,7 +16,8 @@ function stepTo(run: Run, goal: (x: number, y: number, i: number) => boolean, av
 function search(run: Run, goal: (x: number, y: number, i: number) => boolean, avoidFire: boolean, brittle: boolean, knownTraps: Set<number> | null): [number, number] | null {
   const p = run.p, start = p.y * W + p.x;
   const from = new Int32Array(W * H).fill(-1);
-  const warned = run.warn?.length ? new Set(run.warn) : null;
+  const hw = run.hunt ? hunterWarn(run) : [];
+  const warned = run.warn?.length || hw.length ? new Set([...(run.warn ?? []), ...hw]) : null;
   const q = [start];
   from[start] = start;
   for (let h = 0; h < q.length; h++) {
@@ -101,10 +103,11 @@ function decide(run: Run): Action {
   }
   if (p.hp < p.maxHp * 0.4 && p.potions > 0) return { t: 'potion' };
   // Ereignis: rot gewarnte Felder sofort verlassen
-  if (run.warn?.includes(p.y * W + p.x)) {
+  const danger = [...(run.warn ?? []), ...(run.hunt ? hunterWarn(run) : [])];
+  if (danger.includes(p.y * W + p.x)) {
     for (const [dx, dy] of DIRS) {
       const x = p.x + dx, y = p.y + dy, i = y * W + x;
-      if (walkable(run.tiles[i]) && !run.warn.includes(i) && !run.mobs.some(m => m.x === x && m.y === y)) return { t: 'move', dx, dy };
+      if (walkable(run.tiles[i]) && !danger.includes(i) && !run.mobs.some(m => m.x === x && m.y === y)) return { t: 'move', dx, dy };
     }
   }
   const dist = (m: { x: number; y: number }) => Math.max(Math.abs(m.x - p.x), Math.abs(m.y - p.y));

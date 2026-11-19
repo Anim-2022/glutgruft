@@ -1069,7 +1069,7 @@ if (SCHUETZE_NEU) ATTACK.schuetze = { f: [
 // Schwebende Wesen laufen nicht – sie wippen nur
 export const FLOATERS = new Set(['fledermaus', 'glutgeist', 'ratte']);
 // Wesen, die selbst leuchten: Radius in Feldern und Farbe
-export const GLOW: Record<string, [number, string]> = { glutgeist: [3.4, '#ef7d57'], fuerst: [5, '#ef7d57'], irrlicht: [2.6, '#73eff7'] };
+export const GLOW: Record<string, [number, string]> = { glutgeist: [3.4, '#ef7d57'], fuerst: [5, '#ef7d57'], irrlicht: [2.6, '#73eff7'], drache: [3.6, '#ef7d57'], tod: [2.4, '#9a4fc0'] };
 
 // Ereignisse: Leuchtpilz, Kühlplatte, Sporenei
 SPR.leuchtpilz = ['................', '................', '................', '.....ssss.......', '...sscwwcss.....', '..scccsscccs....', '..sccscccsccs...', '...ssssssssss...', '......gg........', '......gg....ss..',
@@ -1097,6 +1097,13 @@ export const RECOLORS: [string, string, Record<string, string>][] = [
   ['schatten_k', 'krieger', SHADOW], ['schatten_m', 'magier', SHADOW], ['schatten_w', 'waldlaeufer', SHADOW],
   ['rivale_k', 'krieger', RIVAL], ['rivale_m', 'magier', RIVAL], ['rivale_w', 'waldlaeufer', RIVAL],
   ['riesenpilz', 'sporling', { G: '#b13e53', F: '#7d2b45', T: '#5d275d', l: '#ef7d57' }],
+  // Jäger: große Gestalten aus den Bossbildern, umgefärbt
+  ['echse', 'golem', { g: '#38b764', d: '#257179', D: '#1e6b3a', S: '#a7f070', i: '#38b764', m: '#1e6b3a' }],
+  ['krake', 'mutter', { G: '#9a4fc0', F: '#5d275d', T: '#333c57', l: '#c9d4dc', r: '#5d275d' }],
+  ['drache', 'fuerst', { r: '#38b764', e: '#1e6b3a', R: '#257179', o: '#ffcd75' }],
+  ['medusa', 'sporling', { G: '#38b764', F: '#1e6b3a', T: '#257179', l: '#ffcd75' }],
+  ['schlange', 'ratte', { d: '#38b764', h: '#a7f070', g: '#ffcd75' }],
+  ['tod', 'koenig', { w: '#1a1c2c', g: '#333c57', y: '#9a4fc0', Y: '#5d275d', u: '#c9d4dc', r: '#5d275d' }],
 ];
 
 SPR.fountain = [E, E, '.......ss.......', '......scws......', '.....s.ss.s.....', '....s..cc..s....', '...gggggggggg...', '..gccscccscccg..', '..gcccccccccsg..', '..gggggggggggg..',
