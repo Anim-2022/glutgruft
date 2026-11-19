@@ -109,8 +109,10 @@ describe('Jäger', () => {
     expect(gaps).toEqual([30, 25, 20, 15]);
     for (let i = 1; i < spawns.length; i++) {
       expect(spawns[i].hp).toBeGreaterThan(spawns[i - 1].hp);
-      expect(spawns[i].atk).toBeGreaterThan(spawns[i - 1].atk);
+      expect(spawns[i].atk).toBeGreaterThanOrEqual(spawns[i - 1].atk); // Angriff steigt jede zweite Stufe
     }
+    expect(spawns[4].atk).toBeGreaterThan(spawns[2].atk);
+    expect(spawns[2].atk).toBeGreaterThan(spawns[0].atk);
     expect(r.log.some(l => l.includes('Stufe 3'))).toBe(true);
   });
 

@@ -1275,7 +1275,7 @@ function spawnHunter(run: Run, stage = 0): boolean {
   m.awake = true; m.st.born = run.turn;
   if (run.floor < HUNTER.weakBelow) { m.maxHp = m.hp = Math.round(m.hp * HUNTER.weak); m.atk = Math.max(1, Math.round(m.atk * HUNTER.weak)); }
   // Wer bleibt, wird härter gejagt: jeder weitere Jäger dieser Ebene ist stärker
-  if (stage > 0) { m.maxHp = m.hp = Math.round(m.hp * (1 + HUNTER.growHp * stage)); m.atk += HUNTER.growAtk * stage; m.name = `${m.name} (Stufe ${stage + 1})`; }
+  if (stage > 0) { m.maxHp = m.hp = Math.round(m.hp * (1 + HUNTER.growHp * stage)); m.atk += HUNTER.growAtk * Math.ceil(stage / 2); m.name = `${m.name} (Stufe ${stage + 1})`; }
   tele(run, `hunt_${kind}`);
   say(run, `DER JÄGER IST DA: ${m.name}!`);
   run.fx.push({ k: 'banner', title: 'DER JÄGER IST DA', sub: m.name, col: '#b13e53' }, { k: 'shake', n: 5 });

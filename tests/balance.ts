@@ -5,7 +5,7 @@
 // HAZARDS=on|off, MIMICS=on|off (neue Systeme; alle aus = Bit für Bit wie vorher), ECON=1 (Wirtschaftszeile auch ohne sie)
 import { defaultMeta } from '../src/core/save';
 import { newRun, act, Run, playerAtk, spellAt } from '../src/game/run';
-import { CLASS_ORDER, MOBS, treeNodes, ClassId, TUNE, FEATURES, HUNTER, EVENT } from '../src/game/content';
+import { CLASS_ORDER, MOBS, treeNodes, ClassId, TUNE, FEATURES, HUNTER, EVENT, DIFF, HAZARD } from '../src/game/content';
 import { botAction, setBuild, Build } from './bot';
 
 type Proc = { env: Record<string, string | undefined>; argv: string[]; execPath: string; stdout: { write(s: string): void }; getBuiltinModule(n: string): unknown };
@@ -36,6 +36,8 @@ FEATURES.eventForce = ENV.EVENT_FORCE ?? '';
 FEATURES.eventForceBiome = true; // Gebietsereignisse auch erzwungen nur in ihrem Gebiet
 // EVENT_SET=item2=0,relicChance=0 … überschreibt Ereigniswerte für Messläufe
 for (const kv of (ENV.EVENT_SET ?? '').split(',').filter(Boolean)) { const [k, v] = kv.split('='); (EVENT as Record<string, number>)[k] = +v; }
+// DIFF_SET=mobHp=1.1,… überschreibt die Schwierigkeit; mimic=… setzt den Mimik-Anteil
+for (const kv of (ENV.DIFF_SET ?? '').split(',').filter(Boolean)) { const [k, v] = kv.split('='); if (k === 'mimic') HAZARD.mimic = +v; else (DIFF as Record<string, number>)[k] = +v; }
 const EXTRA = FEATURES.hazards || FEATURES.mimics || FEATURES.events || FEATURES.hunters || ENV.ECON === '1';
 
 function runCell({ variant: full, set, mname, cls }: Cell): Result {
