@@ -5,9 +5,9 @@ import { threatOf, statusMarks } from './warn';
 import { onDeath, drawDecals, drawDying, resetDeaths, reducedFx } from './deaths';
 import { drawItemIcon, drawIcon, PERK_ICON } from './icons';
 import { Light, applyLight, AMBIENTS } from './light';
-import { dropShadow, drawAO, castFrom, castShadow, beginShadows, flushShadows } from './shade';
+import { dropShadow, drawAO } from './shade';
 import { floorTint, softEdged } from './tiles';
-import { propAt, drawProp, recolor } from './props';
+import { propsFor, drawProp, recolor } from './props';
 import { stepAmbient, drawAmbient, drawFog, resetAmbient, postFx } from './ambient';
 
 // Arena des Bosses: Fackeln brennen in seiner Farbe [außen, Kern], dazu eine Aura um ihn
@@ -186,9 +186,9 @@ export function drawRun(ctx: CanvasRenderingContext2D, run: Run, dt: number, tim
   view.ox = ox - sx; view.oy = oy - sy;
   ctx.fillStyle = '#08090f'; ctx.fillRect(0, 0, VW, VH);
   const bio = biomeOf(run.floor), ts = tilesets[bio], boss = run.floor % 5 === 0, fx = !reducedFx();
+  const props = propsFor(run.tiles, run.seed + run.floor);
   buildLight(run);
   const lights: Light[] = [], floorTiles: number[] = [];
-  beginShadows(VW, VH);
   const flick = (n: number) => 0.92 + 0.08 * Math.sin(time * 9 + n) + 0.04 * Math.sin(time * 23 + n * 1.7);
   const x0 = Math.max(0, Math.floor(cam.x / TS) - 1), x1 = Math.min(W - 1, x0 + VW / TS + 2);
   const y0 = Math.max(0, Math.floor(cam.y / TS) - 1), y1 = Math.min(H - 1, y0 + Math.ceil(VH / TS) + 2);
@@ -225,9 +225,9 @@ export function drawRun(ctx: CanvasRenderingContext2D, run: Run, dt: number, tim
         const tf = Math.floor(time * 7 + x) % 2;
         ctx.drawImage(boss ? torchOf(bio, tf) : sprites[`torch${tf}`], dx, dy);
         lights.push({ x, y: y + 0.6, r: (boss ? 5.5 : 5) * flick(i), col: boss ? BOSS_FLAME[bio][0] : '#ef7d57' });
-      } else if (front && hv < 5 && t === T.WALL) {
+      } else if (front && hv < 5 && t === T.WALL && !torches.has(i - 1) && !torches.has(i + 1)) {
         // Wanddekor (Ketten, Banner, Wurzeln …) nur auf der schlichten Grundwand
-        const pr = propAt(run.tiles, run.seed + run.floor, x, y);
+        const pr = props[i];
         if (pr) drawProp(ctx, bio, pr, x, y, dx, dy, time, lights);
       }
     } else {
@@ -242,7 +242,7 @@ export function drawRun(ctx: CanvasRenderingContext2D, run: Run, dt: number, tim
       if (t === T.GRASS) ctx.drawImage(softEdged(ts.bed, edge(T.GRASS)), dx, dy);
       drawAO(ctx, run.tiles, x, y, dx, dy);
       if (t === T.FLOOR) {
-        const pr = propAt(run.tiles, run.seed + run.floor, x, y);
+        const pr = props[i];
         if (pr) drawProp(ctx, bio, pr, x, y, dx, dy, time, lights);
         else { const h = hash(x, y, run.seed + run.floor * 7); if (h % 9 === 0) ctx.drawImage(ts.decals[(h >>> 8) % ts.decals.length], dx, dy); }
       }
@@ -356,8 +356,6 @@ export function drawRun(ctx: CanvasRenderingContext2D, run: Run, dt: number, tim
     const fly = FLY.has(a.kind), foot = by + 14;
     if (fly) dropShadow(ctx, bx + 8, foot, 8 + (Math.sin(time * 5 + a.id) > 0 ? 2 : 0), glow ? 0.5 : 0.8);
     else dropShadow(ctx, bx + 8, foot, a.boss ? 22 : 12, glow ? 0.5 : 1);
-    // Schlagschatten von der nächsten Flamme weg (Fackel, Feuer, Glutwesen)
-    if (!fly && !glow && !reducedFx() && !(a === p && deathT >= 0)) { const c = castFrom(lights, q.x, q.y); if (c) castShadow(masks[frame], bx + 8 + jx, foot, mirror, c); }
     // Ausweichen: Held flackert halbdurchsichtig
     if (statusMarks(a, a === p).includes('dodge')) ctx.globalAlpha = 0.55 + 0.25 * Math.sin(time * 18);
     blit(img);
@@ -554,7 +552,6 @@ export function drawRun(ctx: CanvasRenderingContext2D, run: Run, dt: number, tim
   for (const b of bolts) lights.push({ x: b.x1, y: b.y1, r: 2, col: b.col === '#1a1c2c' ? undefined : b.col, a: 0.7 });
   const amb = AMBIENTS[bio];
   applyLight(ctx, run, lights, ox, oy, boss ? { ...amb, dark: Math.min(0.9, amb.dark + 0.05) } : amb, VW, VH, fx);
-  flushShadows(ctx, run.tiles, run.vis, ox, oy, x0, y0, x1, y1);
   if (fx) drawAmbient(ctx, ox, oy, true); // Glutfunken leuchten selbst
   postFx(ctx, bio, VW, VH);
   // Schadenszahlen über der Dunkelheit, damit sie lesbar bleiben

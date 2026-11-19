@@ -136,27 +136,62 @@ function sets(): BiomeProps[] {
 }
 
 // ---- Platzierung (rein, testbar) ----
+// Erst Kandidaten nach festen Regeln, dann Abstand: von Kandidaten, die näher als SPACING Felder
+// beieinanderliegen, bleibt nur einer (der mit dem größten Hash) – keine Häufchen gleicher Dinge.
 export type PropKind = 'wall' | 'foot' | 'flat';
+export interface PropSpot { kind: PropKind; pick: number; }
+export const SPACING = 4;
 const hp = (x: number, y: number, s: number) => (Math.imul(x, 73856093) ^ Math.imul(y, 19349663) ^ Math.imul(s, 83492791)) >>> 0;
 
-// Welche Art Dekor gehört auf dieses Feld? null = keins
-export function propAt(tiles: Uint8Array, seed: number, x: number, y: number): { kind: PropKind; pick: number } | null {
-  if (x < 1 || y < 1 || x >= W - 1 || y >= H - 1) return null;
+function candidate(tiles: Uint8Array, seed: number, x: number, y: number): (PropSpot & { h: number }) | null {
+  if (x < 2 || y < 2 || x >= W - 2 || y >= H - 2) return null;
   const i = y * W + x, t = tiles[i], h = hp(x, y, seed);
-  const wall = (dx: number, dy: number) => wallLike(tiles[i + dy * W + dx]);
+  const at = (dx: number, dy: number) => tiles[i + dy * W + dx];
+  const wallAt = (dx: number, dy: number) => wallLike(at(dx, dy));
+  const free = (dx: number, dy: number) => !opaque(at(dx, dy)) && !wallLike(at(dx, dy));
   if (t === T.WALL) {
-    // Wandfront: unten offener Boden
-    return !wallLike(tiles[i + W]) && h % 4 === 0 ? { kind: 'wall', pick: h >>> 5 } : null;
+    // Wandfront auf gerader Strecke: links und rechts ebenfalls Front, kein Durchgang, keine Ecke
+    const front = (dx: number) => at(dx, 0) === T.WALL && free(dx, 1);
+    return front(0) && front(-1) && front(1) && h % 6 === 0 ? { kind: 'wall', pick: h >>> 5, h } : null;
   }
   if (t !== T.FLOOR) return null;
-  // am Wandfuß: Wand darüber, links, rechts und darunter frei – nie in einem Gang
-  if (wall(0, -1) && !wall(-1, 0) && !wall(1, 0) && !wall(0, 1) && !opaque(tiles[i + W]) && h % 5 === 0) return { kind: 'foot', pick: h >>> 5 };
-  // mitten im Raum: alle acht Nachbarn offen
-  for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) if ((dx || dy) && opaque(tiles[i + dy * W + dx])) return null;
-  return h % 17 === 0 ? { kind: 'flat', pick: h >>> 5 } : null;
+  // am Fuß einer geraden Wand in einem Raum, der mindestens drei Felder tief ist
+  if (wallAt(-1, -1) && wallAt(0, -1) && wallAt(1, -1) && free(-1, 0) && free(1, 0) && free(0, 1) && free(-1, 1) && free(1, 1) && free(0, 2))
+    return h % 8 === 0 ? { kind: 'foot', pick: h >>> 5, h } : null;
+  // flach im Boden nur in großen Räumen: 5×5 ringsum frei
+  for (let dy = -2; dy <= 2; dy++) for (let dx = -2; dx <= 2; dx++) if (!free(dx, dy)) return null;
+  return h % 23 === 0 ? { kind: 'flat', pick: h >>> 5, h } : null;
 }
 
-export function drawProp(ctx: CanvasRenderingContext2D, bi: number, p: { kind: PropKind; pick: number }, x: number, y: number, dx: number, dy: number, time: number, lights: Light[]) {
+// Dekor der ganzen Ebene; zwischengespeichert, neu berechnet, sobald sich die Karte ändert
+let cache: { seed: number; tiles: Uint8Array; map: (PropSpot | null)[] } | null = null;
+export function propsFor(tiles: Uint8Array, seed: number): (PropSpot | null)[] {
+  if (cache && cache.seed === seed && cache.tiles.length === tiles.length) {
+    let same = true;
+    for (let i = 0; i < tiles.length; i++) if (cache.tiles[i] !== tiles[i]) { same = false; break; }
+    if (same) return cache.map;
+  }
+  const cand: ((PropSpot & { h: number }) | null)[] = new Array(W * H).fill(null);
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) cand[y * W + x] = candidate(tiles, seed, x, y);
+  const map: (PropSpot | null)[] = new Array(W * H).fill(null);
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    const c = cand[y * W + x];
+    if (!c) continue;
+    let best = true;
+    for (let dy = -SPACING; dy <= SPACING && best; dy++) for (let dx = -SPACING; dx <= SPACING; dx++) {
+      const nx = x + dx, ny = y + dy;
+      if ((!dx && !dy) || nx < 0 || ny < 0 || nx >= W || ny >= H) continue;
+      const o = cand[ny * W + nx];
+      if (o && (o.h > c.h || (o.h === c.h && ny * W + nx < y * W + x))) { best = false; break; }
+    }
+    if (best) map[y * W + x] = { kind: c.kind, pick: c.pick };
+  }
+  cache = { seed, tiles: tiles.slice(), map };
+  return map;
+}
+export const propAt = (tiles: Uint8Array, seed: number, x: number, y: number) => propsFor(tiles, seed)[y * W + x];
+
+export function drawProp(ctx: CanvasRenderingContext2D, bi: number, p: PropSpot, x: number, y: number, dx: number, dy: number, time: number, lights: Light[]) {
   const list = sets()[bi][p.kind], prop = list[p.pick % list.length];
   const f = prop.frames.length > 1 ? Math.floor(time * 4 + x * 0.7 + y) % prop.frames.length : 0;
   ctx.drawImage(prop.frames[f], dx, dy);
