@@ -526,6 +526,60 @@ export const SPR: Record<string, string[]> = {
     '................',
     '................',
   ],
+  brazier: [
+    '................',
+    '................',
+    '................',
+    '................',
+    '................',
+    '................',
+    '..mmmmmmmmmmmm..',
+    '..miDkDkDkDkim..',
+    '...mmmmmmmmmm...',
+    '....miiiiiim....',
+    '.....mmmmmm.....',
+    '.......mm.......',
+    '.......mm.......',
+    '......mmmm......',
+    '.....miiiim.....',
+    '................',
+  ],
+  brazier_on: [
+    '................',
+    '.......y........',
+    '......yoy.......',
+    '.....yoroy......',
+    '....yoyyyoy.....',
+    '....oyyyyyo.....',
+    '..mmmmmmmmmmmm..',
+    '..miyoyoyoyoim..',
+    '...mmmmmmmmmm...',
+    '....miiiiiim....',
+    '.....mmmmmm.....',
+    '.......mm.......',
+    '.......mm.......',
+    '......mmmm......',
+    '.....miiiim.....',
+    '................',
+  ],
+  statue: [
+    '................',
+    '.....gggggg.....',
+    '....gddddddg....',
+    '...gddddddddg...',
+    '...gdrdddddddg..',
+    '...gddddddddkkk.',
+    '...gddddddddg...',
+    '....gddddddg....',
+    '.....gddddg.....',
+    '....gggggggg....',
+    '...gddddddddg...',
+    '...gdDdDdDdDg...',
+    '...gddddddddg...',
+    '..gggggggggggg..',
+    '..DDDDDDDDDDDD..',
+    '................',
+  ],
   lever: [
     '................',
     '................',
@@ -617,6 +671,9 @@ export const SPR: Record<string, string[]> = {
 };
 
 SPR.fire_b = SPR.fire_a.map(r => [...r].reverse().join(''));
+
+// Statue der Gegenseite schaut nach links
+SPR.statue_l = SPR.statue.map(r => [...r].reverse().join(''));
 
 // Zielplatte und Runen entstehen aus der Druckplatte
 SPR.goal = SPR.plate.map(r => r.replace(/y/g, 's'));

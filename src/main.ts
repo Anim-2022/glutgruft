@@ -1,7 +1,7 @@
 import { drawIcon, UPG_ICON } from './render/icons';
 import { VW, VH, bake, sprites, tilesets, text, panel, wrap, figure } from './render/gfx';
 import { getLang, setLang } from './core/i18n';
-import { drawRun, drawCard, setTutStep, drawTree, treeMove, treeFocus, treeCursor, resetView, setMouse, toggleMap, setTutorial, tileAt, getOverlay, setOverlay, invMove, invAction, invDrop, lootIndex, lootDone } from './render/draw';
+import { drawRun, drawCard, setTutStep, drawTree, treeMove, treeFocus, treeCursor, resetView, setMouse, toggleMap, setTutorial, tileAt, getOverlay, setOverlay, invMove, invAction, invDrop, invClick, lootIndex, lootDone } from './render/draw';
 import { sfx, soundOn, toggleSound, wakeAudio } from './core/audio';
 import { reducedFx, setReducedFx } from './render/deaths';
 import { loadMeta, saveMeta } from './core/save';
@@ -220,7 +220,15 @@ cv.addEventListener('mouseleave', () => setMouse(-1, -1));
 cv.addEventListener('click', e => {
   if (scene !== 'run' || !run) return;
   const r = cv.getBoundingClientRect();
-  const [x, y] = tileAt(((e.clientX - r.left) * VW) / r.width, ((e.clientY - r.top) * VH) / r.height);
+  const mx = ((e.clientX - r.left) * VW) / r.width, my = ((e.clientY - r.top) * VH) / r.height;
+  // Im Rucksack wählt und benutzt die Maus dieselben Zeilen wie die Tastatur
+  if (getOverlay() === 'inv') {
+    if (run.mode !== 'play') return;
+    const a = invClick(run, mx, my);
+    if (a) { act(run, a); sfx('pick'); storeRun(); }
+    return;
+  }
+  const [x, y] = tileAt(mx, my);
   act(run, { t: 'target', x, y });
 });
 

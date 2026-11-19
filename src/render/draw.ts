@@ -17,7 +17,7 @@ const bossTorch: HTMLCanvasElement[][] = [];
 const torchOf = (bi: number, f: number) => (bossTorch[bi] ??= [0, 1].map(k => recolor(sprites[`torch${k}`], { '#ef7d57': BOSS_FLAME[bi][0], '#ffcd75': BOSS_FLAME[bi][1] })))[f];
 import { sfx } from '../core/audio';
 import { tr } from '../core/i18n';
-import { Run, Actor, xpNeed, skillCost, skillReady, spellAt, itemText, itemValue, itemScore, perkInfo, skillModName, shotRange, RANKS, SORT_NAMES, BAG_MAX, RUNE_NAMES, availableNodes } from '../game/run';
+import { Run, Actor, xpNeed, skillCost, skillReady, spellAt, itemText, itemValue, itemScore, perkInfo, skillModName, shotRange, RANKS, SORT_NAMES, BAG_MAX, RUNE_NAMES, availableNodes, puzzleGoal, dartWarn, inVault, VAULT_NAMES } from '../game/run';
 import { ClassId, treeNodes, NEW_SKILLS, TUNE, BRANCH_NAMES, SKILL_UP, treeNode, nodeText, CLASSES, MOBS, PERKS, RELICS, RARITY, RARITY_COL, BIOME_NAMES, biomeOf, Item, AFFIX, CONSUMABLES, SLOT_NAMES, ULT, ULT_LEVEL, USE_ORDER, SYNERGIES } from '../game/content';
 
 const pos = new Map<number, { x: number; y: number }>();
@@ -107,14 +107,14 @@ function smooth(a: Actor, dt: number) {
 const OBJ_SHADOW: Record<number, [number, number]> = {
   [T.PILLAR]: [15, 14], [T.BARREL]: [14, 13], [T.CHEST]: [13, 16], [T.CHEST_OPEN]: [13, 16], [T.ALTAR]: [15, 14], [T.ALTAR_USED]: [15, 14],
   [T.TRADER]: [15, 14], [T.CRATE]: [15, 16], [T.CRATE_ON]: [15, 16], [T.TABLET]: [15, 14], [T.LEVER]: [14, 10], [T.CURSED]: [14, 15],
-  [T.FOUNTAIN]: [15, 15], [T.FOUNTAIN_DRY]: [15, 15],
+  [T.FOUNTAIN]: [15, 15], [T.FOUNTAIN_DRY]: [15, 15], [T.BRAZIER]: [15, 10], [T.BRAZIER_ON]: [15, 10], [T.STATUE]: [15, 14],
 };
 const FLY = new Set(['fledermaus', 'glutgeist']);
 
 const TILE_SPR: Record<number, string> = {
   [T.STAIRS]: 'stairs', [T.CHEST]: 'chest', [T.CHEST_OPEN]: 'chest_open', [T.ALTAR]: 'altar', [T.ALTAR_USED]: 'altar_used',
   [T.CRATE]: 'crate', [T.CRATE_ON]: 'crate', [T.PLATE]: 'plate', [T.LEVER]: 'lever', [T.TABLET]: 'tablet', [T.GOAL]: 'goal',
-  [T.CURSED]: 'cursed', [T.TRADER]: 'trader', [T.FOUNTAIN]: 'fountain', [T.FOUNTAIN_DRY]: 'fountain_dry', [T.GATE]: 'gate',
+  [T.CURSED]: 'cursed', [T.TRADER]: 'trader', [T.FOUNTAIN]: 'fountain', [T.FOUNTAIN_DRY]: 'fountain_dry', [T.GATE]: 'gate', [T.BRAZIER]: 'brazier', [T.BRAZIER_ON]: 'brazier_on', [T.STATUE]: 'statue',
   [T.BARREL]: 'barrel', [T.PILLAR]: 'pillar', [T.RUBBLE]: 'rubble', [T.FRAGILE]: 'crack', [T.FRAGILE2]: 'crack2',
 };
 
@@ -290,13 +290,22 @@ export function drawRun(ctx: CanvasRenderingContext2D, run: Run, dt: number, tim
     if (sh) dropShadow(ctx, dx + 8, dy + sh[0], sh[1]);
     // Lunte: Fass zittert im letzten Zug, Zähler der verbleibenden Züge darüber
     const fz = t === T.BARREL ? run.fuses.get(i) : undefined;
-    const sname = t === T.TRADER && Math.floor(time * 1.6 + x) % 2 ? 'trader_b' : s;
+    const sname = t === T.TRADER && Math.floor(time * 1.6 + x) % 2 ? 'trader_b' : t === T.STATUE && run.puzzle && x === run.puzzle.x + 6 ? 'statue_l' : s;
     if (s) ctx.drawImage(sprites[sname], dx + (fz === 1 ? Math.round(Math.sin(time * 60)) : 0), dy);
     if (t === T.TRADER && run.shop.some(o => !o.sold)) drawIcon(ctx, ['coin'], dx + 4, dy - 11 + Math.round(Math.sin(time * 3) * 1.5), '#ffcd75');
     if (fz !== undefined && run.vis[i]) { fuseTags.push({ x: dx + 8 - ox, y: dy - 10 - oy, n: fz }); lights.push({ x, y: y - 0.4, r: 1.3, col: '#ffcd75', a: 0.7 }); }
     if (t === T.CRATE_ON) { ctx.fillStyle = 'rgba(255,205,117,0.3)'; ctx.fillRect(dx + 1, dy + 1, 14, 14); }
     if (t === T.GOAL) { ctx.fillStyle = `rgba(115,239,247,${0.15 + 0.1 * Math.sin(time * 4)})`; ctx.fillRect(dx, dy, TS, TS); lights.push({ x, y, r: 2.2, col: '#73eff7', a: 0.8 }); }
     if (t === T.FOUNTAIN) lights.push({ x, y, r: 2.4, col: '#41a6f6', a: 0.7 });
+    if (t === T.BRAZIER_ON) lights.push({ x, y: y - 0.3, r: 2.2 * flick(i), col: '#ef7d57', a: 0.8 });
+    // Eiskristall: funkelnder Splitter auf dem Eis
+    if (t === T.ICE && run.puzzle?.gems?.includes(i)) {
+      const tw = Math.sin(time * 5 + i) > 0.6;
+      ctx.fillStyle = '#1a1c2c'; ctx.fillRect(dx + 6, dy + 2, 4, 12); ctx.fillRect(dx + 4, dy + 5, 8, 6);
+      ctx.fillStyle = '#73eff7'; ctx.fillRect(dx + 7, dy + 3, 2, 10); ctx.fillRect(dx + 5, dy + 6, 6, 4);
+      ctx.fillStyle = tw ? '#f4f4f4' : '#c9d4dc'; ctx.fillRect(dx + 7, dy + 4, 1, 4);
+      lights.push({ x, y, r: 1.6, col: '#73eff7', a: 0.6 });
+    }
     if (t === T.RUNE && run.puzzle) {
       const z = run.puzzle, k = z.runes[i];
       ctx.globalAlpha = z.dead ? 0.3 : 1;
@@ -319,6 +328,12 @@ export function drawRun(ctx: CanvasRenderingContext2D, run: Run, dt: number, tim
     if (t === T.STAIRS) lights.push({ x, y, r: 1.9 + 0.2 * Math.sin(time * 2), col: '#94b0c2', a: 0.8 }); // Wegweiser nach unten
   }
   for (const t of run.traps) ctx.drawImage(sprites.trap, t.x * TS + ox, t.y * TS + oy);
+  // Pfeilgang: Reihen, die im nächsten Zug schießen, leuchten rot
+  const lanes = dartWarn(run);
+  if (lanes.length && run.puzzle) {
+    ctx.fillStyle = `rgba(177,62,83,${(0.28 + 0.1 * Math.sin(time * 8)).toFixed(3)})`;
+    for (const ly of lanes) for (let lx = run.puzzle.x; lx < run.puzzle.x + 7; lx++) if (run.seen[ly * W + lx] && walkable(run.tiles[ly * W + lx])) ctx.fillRect(lx * TS + ox, ly * TS + oy, TS, TS);
+  }
   drawDying(ctx, run, ox, oy, lights, dt);
 
   // Status auf dem Sprite: Betäubung, Brand, Gift, Spröde, Schutzwall
@@ -686,8 +701,13 @@ function hud(ctx: CanvasRenderingContext2D, run: Run, time: number) {
     text(ctx, label, sx + 4, 27, col, 8);
     sx += w + 3;
   }
-  const z = run.puzzle;
-  if (z && z.kind === 'arena' && z.started && !z.solved && !z.dead) text(ctx, `Prüfung: noch ${z.timer} Züge`, VW / 2, 60, '#b13e53', 10, 'center');
+  // Ziel der Rätselkammer, solange man darin steht (und die laufende Prüfung)
+  const goal = puzzleGoal(run);
+  if (goal) {
+    const z = run.puzzle!, col = z.solved ? '#a7f070' : z.dead ? '#566c86' : z.kind === 'arena' && z.started ? '#b13e53' : '#73eff7', gw = tr(goal).length * 6 + 12;
+    ctx.fillStyle = 'rgba(8,9,15,0.7)'; ctx.fillRect(VW / 2 - gw / 2, 56, gw, 14);
+    text(ctx, goal, VW / 2, 59, col, 8, 'center');
+  }
 
   // Ebene und Vorräte: eine Zeile oben rechts
   const parts: [string | null, string, string][] = [[null, `[I] ${p.bag.length}/${BAG_MAX}`, p.bag.length >= BAG_MAX ? '#ef7d57' : p.bag.length ? '#ffcd75' : '#566c86']];
@@ -851,7 +871,15 @@ function lootCard(ctx: CanvasRenderingContext2D, run: Run) {
 
 // ---- Rucksack ----
 const inv = { col: 1, row: 0 };
+// Nach Anlegen/Ablegen wird der Rucksack neu sortiert: die Auswahl folgt dem bewegten Stück
+function invSync(run: Run) {
+  if (!run.invFocus) return;
+  inv.col = run.invFocus.col; inv.row = run.invFocus.row;
+  delete run.invFocus;
+}
 export function invMove(run: Run, dx: number, dy: number) {
+  invSync(run);
+  if (dx || dy) delete run.invNote;
   if (dx) inv.col = dx > 0 ? 1 : 0;
   const n = inv.col ? Math.max(1, run.p.bag.length) : 4;
   inv.row = Math.max(0, Math.min(n - 1, inv.row + dy));
@@ -865,11 +893,25 @@ export function invAction(run: Run, sell: boolean): import('../game/run').Action
   return sell ? { t: 'sell', i: inv.row } : { t: 'equip', i: inv.row };
 }
 export const invDrop = (run: Run): import('../game/run').Action | null => inv.col === 1 && run.p.bag[inv.row] ? { t: 'drop', i: inv.row } : null;
+// Maus: Klick wählt eine Zeile, ein zweiter Klick auf dieselbe Zeile führt sie aus (wie [ENTER])
+const INV_BOX = { x: 20, y: 22 };
+export function invClick(run: Run, mx: number, my: number): import('../game/run').Action | null {
+  invSync(run);
+  const { x, y } = INV_BOX, bx = x + 226, bw = 172;
+  let hit: { col: 0 | 1; row: number } | null = null;
+  for (let i = 0; i < 4; i++) { const gy = y + 139 + i * 25; if (mx >= x + 14 && mx < x + 214 && my >= gy && my < gy + 22) hit = { col: 0, row: i }; }
+  run.p.bag.forEach((_, i) => { const gy = y + 46 + i * 19; if (mx >= bx && mx < bx + bw && my >= gy && my < gy + 16) hit = { col: 1, row: i }; });
+  if (!hit) return null;
+  if (hit.col === inv.col && hit.row === inv.row) return invAction(run, false);
+  inv.col = hit.col; inv.row = hit.row;
+  delete run.invNote;
+  return null;
+}
 const lookOf = (p: Run['p']) => heroLook(p.cls, p.gear[0]?.rar ?? 0, p.gear[1]?.rar ?? -1, p.gear[0]?.wk ?? -1);
 const cut = (s: string, n: number) => { s = tr(s); return s.length > n ? s.slice(0, n - 2) + '..' : s; };
 
 function invSheet(ctx: CanvasRenderingContext2D, run: Run, time: number) {
-  const p = run.p, x = 20, y = 22, w = VW - 40, h = VH - 44;
+  const p = run.p, { x, y } = INV_BOX, w = VW - 2 * x, h = VH - 2 * y;
   invMove(run, 0, 0);
   ctx.fillStyle = 'rgba(13,14,23,0.8)'; ctx.fillRect(0, 0, VW, VH);
   panel(ctx, x, y, w, h, '#ffcd75');
@@ -920,8 +962,10 @@ function invSheet(ctx: CanvasRenderingContext2D, run: Run, time: number) {
   } else text(ctx, inv.col ? '' : 'leer', dx + 7, y + 42, '#566c86', 8);
   const keys = !cur ? '' : inv.col === 0 ? '[ENTER] ablegen' : `[ENTER] ${cur.use ? 'benutzen' : 'anlegen'} · [X] verkaufen (${itemValue(cur)} Gold) · [ENTF] wegwerfen`;
   text(ctx, keys, x + 14, y + h - 28, '#ffcd75', 8);
+  // Ergebnis der letzten Handlung – das Protokoll liegt hinter dem Rucksack
+  if (run.invNote) text(ctx, cut(run.invNote, 34), x + 14, y + h - 44, /Kein Platz|Fluch|nicht/.test(run.invNote) ? '#ef7d57' : '#a7f070', 8);
   { arrow(ctx, x + 14, y + h - 14, true); text(ctx, 'besser als angelegt', x + 22, y + h - 15, '#566c86', 8); arrow(ctx, x + 150, y + h - 14, false); text(ctx, 'schlechter', x + 158, y + h - 15, '#566c86', 8); }
-  text(ctx, 'Pfeile: wählen · [I] oder [ESC] schließen', x + w - 14, y + h - 15, '#566c86', 8, 'right');
+  text(ctx, 'Pfeile oder Klick: wählen · [I] oder [ESC] schließen', x + w - 14, y + h - 15, '#566c86', 8, 'right');
 }
 
 function charSheet(ctx: CanvasRenderingContext2D, run: Run) {
@@ -1012,6 +1056,8 @@ const TILE_NAMES: Record<number, string> = {
   [T.BARREL]: 'Fass – anstoßen zündet die Lunte', [T.PILLAR]: 'Säule – stürzt bei Explosion ein', [T.GRASS]: 'Bewuchs – brennbar',
   [T.FRAGILE]: 'Brüchiger Boden', [T.FRAGILE2]: 'Brüchiger Boden – bricht beim nächsten Tritt', [T.CRATE]: 'Kiste – schiebbar', [T.CRATE_ON]: 'Kiste auf Platte',
   [T.PLATE]: 'Druckplatte', [T.LEVER]: 'Hebel – setzt die Kisten zurück', [T.ICE]: 'Eis – du rutschst', [T.TABLET]: 'Steintafel', [T.GOAL]: 'Zielplatte',
+  [T.BRAZIER]: 'Glutschale, erloschen – Tritt schaltet sie und die Nachbarn um', [T.BRAZIER_ON]: 'Glutschale, brennt – Tritt schaltet sie und die Nachbarn um',
+  [T.STATUE]: 'Pfeilstatue – schießt quer durch ihre Reihe',
 };
 
 function tooltip(ctx: CanvasRenderingContext2D, run: Run, ox: number, oy: number) {
@@ -1028,8 +1074,12 @@ function tooltip(ctx: CanvasRenderingContext2D, run: Run, ox: number, oy: number
     if (tags.length) lines.push(tags.join(' · '));
   } else {
     const t = run.tiles[i];
-    if (t === T.RUNE && run.puzzle) lines.push(`Rune: ${RUNE_NAMES[run.puzzle.runes[i]]}`);
+    const z = run.puzzle;
+    if (t === T.RUNE && z) lines.push(`Rune: ${RUNE_NAMES[z.runes[i]]}`);
     else if (TILE_NAMES[t]) lines.push(TILE_NAMES[t]);
+    if (t === T.ICE && z?.gems?.includes(i)) lines.push('Eiskristall – darauf anhalten');
+    // Rätselkammer schon von der Tür aus erkennbar: Name und Lohn
+    if (z && (inVault(run, tx, ty) || (tx === z.x + 3 && ty === z.y + 7))) lines.push(`${VAULT_NAMES[z.kind]} – ${z.solved ? 'gelöst' : z.dead ? 'verloren' : 'Lohn: Reliquie'}`);
     if (run.fire.has(i)) lines.push('Feuer');
   }
   if (!lines.length) return;
@@ -1059,7 +1109,7 @@ function minimap(ctx: CanvasRenderingContext2D, run: Run, time: number) {
       if (!big) continue;
       ctx.fillStyle = '#262b44';
     } else ctx.fillStyle = t === T.STAIRS || t === T.GATE ? '#ffcd75' : t === T.CHEST || t === T.CURSED ? '#c98a3a' : t === T.FOUNTAIN ? '#73eff7' : t === T.TRADER ? '#38b764' : t === T.CRACKED ? '#b13e53'
-      : (t >= T.CRATE && t <= T.GOAL) ? '#41a6f6' : run.fire.has(i) ? '#ef7d57' : run.vis[i] ? '#94b0c2' : '#566c86';
+      : ((t >= T.CRATE && t <= T.GOAL) || (t >= T.BRAZIER && t <= T.STATUE)) ? '#41a6f6' : run.fire.has(i) ? '#ef7d57' : run.vis[i] ? '#94b0c2' : '#566c86';
     ctx.fillRect(x0 + x * s, y0 + y * s, s, s);
   }
   for (const m of run.mobs) if (run.vis[m.y * W + m.x]) { ctx.fillStyle = m.elite ? '#ffcd75' : '#b13e53'; ctx.fillRect(x0 + m.x * s, y0 + m.y * s, s, s); }
