@@ -213,7 +213,7 @@ export const EVENTS: EvDef[] = [
     lost: (a, e) => (e.data.stolen ? `Die Ratte ist mit ${e.data.stolen} Gold verschwunden.` : 'Die Ratte ist verschwunden.'),
   },
   {
-    id: 'goblin', cat: 'challenge', trigger: 'calm', title: 'Schatzgoblin!', tier: 2, limit: 20, vanish: true,
+    id: 'goblin', cat: 'challenge', trigger: 'calm', title: 'Schatzgoblin!', tier: 3, limit: 20, vanish: true,
     intro: ['Ein Goblin mit einem prall gefüllten Sack kichert und rennt los!', 'Klimper, klimper – ein Schatzgoblin!'],
     start(a, e) { const s = a.near(4, 7); if (!s) return false; a.spawn(e, 'goblin', s[0], s[1]); return true; },
     tick: killAll,
