@@ -851,7 +851,15 @@ function lootCard(ctx: CanvasRenderingContext2D, run: Run) {
 
 // ---- Rucksack ----
 const inv = { col: 1, row: 0 };
+// Nach Anlegen/Ablegen wird der Rucksack neu sortiert: die Auswahl folgt dem bewegten Stück
+function invSync(run: Run) {
+  if (!run.invFocus) return;
+  inv.col = run.invFocus.col; inv.row = run.invFocus.row;
+  delete run.invFocus;
+}
 export function invMove(run: Run, dx: number, dy: number) {
+  invSync(run);
+  if (dx || dy) delete run.invNote;
   if (dx) inv.col = dx > 0 ? 1 : 0;
   const n = inv.col ? Math.max(1, run.p.bag.length) : 4;
   inv.row = Math.max(0, Math.min(n - 1, inv.row + dy));
@@ -865,11 +873,25 @@ export function invAction(run: Run, sell: boolean): import('../game/run').Action
   return sell ? { t: 'sell', i: inv.row } : { t: 'equip', i: inv.row };
 }
 export const invDrop = (run: Run): import('../game/run').Action | null => inv.col === 1 && run.p.bag[inv.row] ? { t: 'drop', i: inv.row } : null;
+// Maus: Klick wählt eine Zeile, ein zweiter Klick auf dieselbe Zeile führt sie aus (wie [ENTER])
+const INV_BOX = { x: 20, y: 22 };
+export function invClick(run: Run, mx: number, my: number): import('../game/run').Action | null {
+  invSync(run);
+  const { x, y } = INV_BOX, bx = x + 226, bw = 172;
+  let hit: { col: 0 | 1; row: number } | null = null;
+  for (let i = 0; i < 4; i++) { const gy = y + 139 + i * 25; if (mx >= x + 14 && mx < x + 214 && my >= gy && my < gy + 22) hit = { col: 0, row: i }; }
+  run.p.bag.forEach((_, i) => { const gy = y + 46 + i * 19; if (mx >= bx && mx < bx + bw && my >= gy && my < gy + 16) hit = { col: 1, row: i }; });
+  if (!hit) return null;
+  if (hit.col === inv.col && hit.row === inv.row) return invAction(run, false);
+  inv.col = hit.col; inv.row = hit.row;
+  delete run.invNote;
+  return null;
+}
 const lookOf = (p: Run['p']) => heroLook(p.cls, p.gear[0]?.rar ?? 0, p.gear[1]?.rar ?? -1, p.gear[0]?.wk ?? -1);
 const cut = (s: string, n: number) => { s = tr(s); return s.length > n ? s.slice(0, n - 2) + '..' : s; };
 
 function invSheet(ctx: CanvasRenderingContext2D, run: Run, time: number) {
-  const p = run.p, x = 20, y = 22, w = VW - 40, h = VH - 44;
+  const p = run.p, { x, y } = INV_BOX, w = VW - 2 * x, h = VH - 2 * y;
   invMove(run, 0, 0);
   ctx.fillStyle = 'rgba(13,14,23,0.8)'; ctx.fillRect(0, 0, VW, VH);
   panel(ctx, x, y, w, h, '#ffcd75');
@@ -920,8 +942,10 @@ function invSheet(ctx: CanvasRenderingContext2D, run: Run, time: number) {
   } else text(ctx, inv.col ? '' : 'leer', dx + 7, y + 42, '#566c86', 8);
   const keys = !cur ? '' : inv.col === 0 ? '[ENTER] ablegen' : `[ENTER] ${cur.use ? 'benutzen' : 'anlegen'} · [X] verkaufen (${itemValue(cur)} Gold) · [ENTF] wegwerfen`;
   text(ctx, keys, x + 14, y + h - 28, '#ffcd75', 8);
+  // Ergebnis der letzten Handlung – das Protokoll liegt hinter dem Rucksack
+  if (run.invNote) text(ctx, cut(run.invNote, 34), x + 14, y + h - 44, /Kein Platz|Fluch|nicht/.test(run.invNote) ? '#ef7d57' : '#a7f070', 8);
   { arrow(ctx, x + 14, y + h - 14, true); text(ctx, 'besser als angelegt', x + 22, y + h - 15, '#566c86', 8); arrow(ctx, x + 150, y + h - 14, false); text(ctx, 'schlechter', x + 158, y + h - 15, '#566c86', 8); }
-  text(ctx, 'Pfeile: wählen · [I] oder [ESC] schließen', x + w - 14, y + h - 15, '#566c86', 8, 'right');
+  text(ctx, 'Pfeile oder Klick: wählen · [I] oder [ESC] schließen', x + w - 14, y + h - 15, '#566c86', 8, 'right');
 }
 
 function charSheet(ctx: CanvasRenderingContext2D, run: Run) {

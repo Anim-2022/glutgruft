@@ -75,6 +75,8 @@ export interface Run {
   pool: string[];  // Knoten, die in diesem Lauf lernbar sind (Lager)
   perkQ: number;   // noch ausstehende Wahl einer Gabe
   runeUsed?: boolean; // Schutzrune auf dieser Ebene verbraucht
+  invFocus?: { col: 0 | 1; row: number }; // Rucksack: Auswahl folgt dem zuletzt bewegten Stück
+  invNote?: string;                       // Rucksack: Ergebnis der letzten Handlung
   souls: number; kills: number; turn: number; nextId: number;
 }
 
@@ -213,10 +215,13 @@ function addAff(p: Player, id: string, v: number) {
   else if (id === 'macht') p.pow += v / 100;
 }
 
+// Leben bleibt anteilig erhalten (20/40 → +10 → 25/50 → zurück 20/40). Abgerundet in beide Richtungen,
+// damit wiederholtes An- und Ablegen nie heilt.
 function wear(p: Player, it: Item, sign: 1 | -1) {
   p.atk += sign * it.atk; p.def += sign * it.def; p.crit += sign * it.crit;
+  const max0 = p.maxHp;
   p.maxHp = Math.max(5, p.maxHp + sign * it.hp);
-  if (sign > 0 && it.hp > 0) p.hp += it.hp;
+  if (p.maxHp !== max0 && p.hp > 0) p.hp = Math.max(1, Math.floor((p.hp * p.maxHp) / max0));
   p.hp = Math.min(p.hp, p.maxHp);
   for (const [id, v] of it.aff ?? []) addAff(p, id, sign * v);
 }
@@ -300,32 +305,40 @@ function cursedHold(run: Run, it: Item | null): boolean {
   return true;
 }
 
-// Rucksack: kostet keinen Zug
+// Rucksack: kostet keinen Zug. Anlegen tauscht atomar (das alte Stück nimmt den Platz des neuen im
+// Rucksack ein, braucht also keinen freien Platz); Ablegen braucht einen freien Platz, sonst bleibt alles,
+// wie es ist. run.invFocus sagt der Anzeige, wo das betroffene Stück nach dem Sortieren liegt,
+// run.invNote, was geschehen ist (das Protokoll ist hinter dem Rucksack nicht zu sehen).
+function invNote(run: Run, s: string) { run.invNote = s; say(run, s); }
 function manage(run: Run, a: Action): boolean {
   const p = run.p;
   if (a.t === 'equip') {
     const it = p.bag[a.i];
     if (!it) return true;
+    if (it.use || it.slot >= 4) { invNote(run, `${it.name} lässt sich nicht anlegen.`); return true; }
     const cur = p.gear[it.slot];
-    if (cursedHold(run, cur)) return true;
+    if (cursedHold(run, cur)) { run.invNote = run.log[run.log.length - 1]; return true; }
     if (cur) { wear(p, cur, -1); p.bag[a.i] = cur; } else p.bag.splice(a.i, 1);
     wear(p, it, 1);
     p.gear[it.slot] = it;
     if (it.cursed) it.lock = run.floor;
     delete it.neu;
     sortBag(p);
-    say(run, `${it.name} angelegt.`);
+    run.invFocus = { col: 0, row: it.slot };
+    invNote(run, cur ? `${it.name} angelegt, ${cur.name} im Rucksack.` : `${it.name} angelegt.`);
     return true;
   }
   if (a.t === 'unequip') {
     const cur = p.gear[a.slot];
-    if (!cur || cursedHold(run, cur)) return true;
-    if (p.bag.length >= BAG_MAX) { say(run, 'Der Rucksack ist voll.'); return true; }
+    if (!cur) return true;
+    if (cursedHold(run, cur)) { run.invNote = run.log[run.log.length - 1]; return true; }
+    if (p.bag.length >= BAG_MAX) { invNote(run, 'Kein Platz im Rucksack.'); return true; }
     wear(p, cur, -1);
     p.gear[a.slot] = null;
     p.bag.push(cur);
     sortBag(p);
-    say(run, `${cur.name} abgelegt.`);
+    run.invFocus = { col: 1, row: p.bag.indexOf(cur) };
+    invNote(run, `${cur.name} abgelegt.`);
     return true;
   }
   if (a.t === 'sell') {
@@ -333,14 +346,14 @@ function manage(run: Run, a: Action): boolean {
     if (!it) return true;
     p.bag.splice(a.i, 1);
     p.gold += itemValue(it);
-    say(run, `${it.name} für ${itemValue(it)} Gold verkauft.`);
+    invNote(run, `${it.name} für ${itemValue(it)} Gold verkauft.`);
     return true;
   }
   if (a.t === 'drop') {
     const it = p.bag[a.i];
     if (!it) return true;
     p.bag.splice(a.i, 1);
-    say(run, `${it.name} weggeworfen.`);
+    invNote(run, `${it.name} weggeworfen.`);
     return true;
   }
   if (a.t === 'sort') { p.sort = (p.sort + 1) % 3; sortBag(p); return true; }
@@ -1789,7 +1802,7 @@ const SAVE_VERSION = 5;
 
 export function serialize(run: Run): string {
   return JSON.stringify({
-    ...run, v: SAVE_VERSION, rng: run.rng.s, fx: [],
+    ...run, v: SAVE_VERSION, rng: run.rng.s, fx: [], invFocus: undefined, invNote: undefined,
     tiles: [...run.tiles], seen: [...run.seen], vis: [...run.vis],
     fire: [...run.fire], fuses: [...run.fuses], cracks: [...run.cracks],
   });

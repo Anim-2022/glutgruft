@@ -73,7 +73,8 @@ const EN: Record<string, string> = {
   ' Angriff': ' attack', ' Vert.': ' def.', ' Leben': ' health', ' % Krit': ' % crit', ', verflucht': ', cursed', ' · verflucht': ' · cursed',
   ' angelegt.': ' equipped.', ' abgelegt.': ' unequipped.', ' – im Rucksack [I].': ' – in backpack [I].',
   ' – Rucksack voll, für ': ' – backpack full, sold for ', ' Gold verkauft.': ' gold.', ' für ': ' for ',
-  'Der Rucksack ist voll.': 'The backpack is full.',
+  'Der Rucksack ist voll.': 'The backpack is full.', 'Kein Platz im Rucksack.': 'No room in the backpack.',
+  ' angelegt, ': ' equipped, ', ' im Rucksack.': ' in the backpack.', ' lässt sich nicht anlegen.': ' cannot be equipped.',
   'Der Fluch hält ': 'The curse holds ', ' fest – erst auf der nächsten Ebene löst er sich.': ' tight – it only lets go on the next level.',
   'Verfluchte Truhe': 'Cursed chest', 'Händler': 'Trader', 'Truhe': 'Chest',
   // Meldungen
@@ -128,7 +129,7 @@ const EN: Record<string, string> = {
   'Im Rucksack: ': 'In backpack: ', 'Leer. Truhen und Händler füllen ihn.': 'Empty. Chests and traders fill it.',
   'Ersetzt: ': 'Replaces: ', 'Dieser Platz ist noch frei.': 'This slot is still free.',
   '[ENTER] anlegen · [X] verkaufen (': '[ENTER] equip · [X] sell (', '[ENTER] ablegen': '[ENTER] unequip',
-  'Pfeile: wählen · [I] oder [ESC] schließen': 'Arrows: select · [I] or [ESC] close',
+  'Pfeile oder Klick: wählen · [I] oder [ESC] schließen': 'Arrows or click: select · [I] or [ESC] close',
   '   Zug ': '   Turn ', 'Fähigkeiten': 'Skills', 'Besiegt': 'Kills', 'Seelensplitter': 'Soul shards',
   'AUSRÜSTUNG': 'EQUIPMENT', 'RELIQUIEN': 'RELICS', 'Noch keine – löse Rätselkammern.': 'None yet – solve puzzle chambers.',
   'GABEN': 'BOONS', 'Noch keine – steige eine Stufe auf.': 'None yet – gain a level.',
