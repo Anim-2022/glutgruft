@@ -2,7 +2,7 @@ import { RNG } from '../core/rng';
 import type { Meta } from '../core/save';
 import { W, H, T, Room, genDungeon, center, walkable, opaque, los, computeFov, distMap } from './dungeon';
 import { VS, CRATE_TEMPLATES, mirror, genIce, slide, iceStops, genLights, lightsPress, lightCell, LIGHTS_ALL, dartFires, DartLane } from './puzzles';
-import { CLASSES, ClassId, MOBS, PERKS, RELICS, Item, Offer, AFFIX, CONSUMABLES, UNIQUES, ULT, ULT_LEVEL, SKILL_UP, SYNERGIES, NEW_SKILLS, TUNE, treeNodes, treeNode, treePool, nodeText, MAGE_WHET, BOSS_BY_BIOME, BIOME_NAMES, FLOORS_PER_BIOME, LAST_FLOOR, biomeOf, spawnTable, FEATURES, HAZARD, EVENT } from './content';
+import { CLASSES, ClassId, MOBS, PERKS, RELICS, Item, Offer, AFFIX, CONSUMABLES, UNIQUES, ULT, ULT_LEVEL, SKILL_UP, SYNERGIES, NEW_SKILLS, TUNE, treeNodes, treeNode, treePool, nodeText, MAGE_WHET, BOSS_BY_BIOME, BIOME_NAMES, FLOORS_PER_BIOME, LAST_FLOOR, biomeOf, spawnTable, FEATURES, HAZARD, EVENT, HUNTER } from './content';
 import { EVENTS, EVENT_BY_ID, NOTES } from './events';
 import type { EvState, EvPlan, EvApi, EvDef } from './events';
 
@@ -107,6 +107,10 @@ export interface Run {
   evNote?: number;           // Ebene des letzten Fundzettels
   relicOps?: number;         // zusätzliche Reliquienwahlen aus Ereignissen
   warn?: number[];           // Felder, die im nächsten Zug getroffen werden
+  // Jäger (nur gesetzt, wenn eingeschaltet)
+  floorTurns?: number;       // Züge auf dieser Ebene
+  hunt?: { next: number; n: number } | null; // nächster Jäger bei floorTurns = next; n schon erschienen
+  entry?: [number, number];  // Eingang der Ebene
   mud?: number[];            // Schlamm eines Ereignisses: wer hineintritt, steckt einen Zug fest
   souls: number; kills: number; turn: number; nextId: number;
 }
@@ -860,6 +864,7 @@ function nextFloor(run: Run) {
   if (run.mud?.length) run.mud = [];
   if (FEATURES.events && !bossFloor) planEvents(run, rooms);
   else if (run.evQ?.length) run.evQ = [];
+  if (FEATURES.hunters) { run.floorTurns = 0; run.entry = [run.p.x, run.p.y]; run.hunt = bossFloor ? null : { next: HUNTER.first, n: 0 }; }
   computeFov(run.tiles, run.p.x, run.p.y, fovR(run), run.vis, run.seen);
   say(run, `Ebene ${run.floor} – ${BIOME_NAMES[biome]}`);
   if (bossFloor) say(run, 'Etwas Mächtiges lauert hier ...');
@@ -1226,6 +1231,193 @@ export function eventGoal(run: Run): { title: string; goal: string; col: string 
   return { title: d.title, goal: d.goal(evApi(run), e), col: d.cat === 'danger' ? '#ef7d57' : d.cat === 'challenge' ? '#ffcd75' : '#73eff7' };
 }
 
+// ---------- Jäger: wer zu lange auf einer Ebene bleibt, wird gejagt ----------
+
+const isHunter = (m: Actor) => !!MOBS[m.kind].hunter;
+
+// Am Ende jedes Zugs (nur mit eingeschalteten Jägern)
+function hunterTick(run: Run) {
+  const h = run.hunt;
+  if (!h || run.mode !== 'play' || run.p.hp <= 0) return;
+  run.floorTurns = (run.floorTurns ?? 0) + 1;
+  const t = run.floorTurns;
+  if (t === HUNTER.first - HUNTER.warn) say(run, 'Etwas verfolgt dich ...');
+  if (t < h.next) return;
+  // aufgeschoben (nicht verloren): in der Rätselkammer, in einem versiegelten Ereignis, bei voller Zahl
+  if (inVault(run, run.p.x, run.p.y) || run.ev?.seal?.length || run.mobs.filter(isHunter).length >= HUNTER.cap) return;
+  if (spawnHunter(run)) { h.n++; h.next = t + HUNTER.interval; }
+}
+
+function spawnHunter(run: Run): boolean {
+  const p = run.p, rng = run.rng;
+  // nur Jäger, die auf dieser Tiefe schon vorkommen (auch erzwungene – sonst wartet der Jäger)
+  const pool = HUNTER.pool.filter(([k, , f]) => run.floor >= f && (!FEATURES.hunterForce || k === FEATURES.hunterForce));
+  if (!pool.length) return false;
+  let kind = pool[0][0];
+  if (pool.length > 1) {
+    let r = rng.int(1, pool.reduce((a, [, w]) => a + w, 0));
+    for (const [k, w] of pool) { if ((r -= w) <= 0) { kind = k; break; } }
+  }
+  // nahe dem Eingang der Ebene, auf einem freien Feld, das den Helden erreicht, nicht direkt neben ihm
+  const [ex, ey] = run.entry ?? [p.x, p.y];
+  const de = distMap(run.tiles, ex, ey), dp = distMap(run.tiles, p.x, p.y);
+  let best = -1;
+  for (let i = 0; i < W * H; i++) {
+    const x = i % W, y = (i / W) | 0;
+    if (de[i] < 0 || dp[i] < 0 || cheb(p, { x, y }) < 5 || run.tiles[i] !== T.FLOOR || !isFree(run, x, y) || inVault(run, x, y)) continue;
+    if (best < 0 || de[i] < de[best]) best = i;
+  }
+  if (best < 0) return false;
+  const m = spawnMob(run, kind, best % W, (best / W) | 0);
+  m.awake = true; m.st.born = run.turn;
+  if (run.floor < HUNTER.weakBelow) { m.maxHp = m.hp = Math.round(m.hp * HUNTER.weak); m.atk = Math.max(1, Math.round(m.atk * HUNTER.weak)); }
+  tele(run, `hunt_${kind}`);
+  say(run, `DER JÄGER IST DA: ${m.name}!`);
+  run.fx.push({ k: 'banner', title: 'DER JÄGER IST DA', sub: m.name, col: '#b13e53' }, { k: 'shake', n: 5 });
+  return true;
+}
+
+// ein Schritt auf den Helden zu (über die Wegkarte); false, wenn es nicht weitergeht
+function stepToward(run: Run, m: Actor, dist: Int16Array): boolean {
+  let best: number[] | null = null, bd = dist[m.y * W + m.x];
+  if (bd < 0) return false;
+  for (const [ox, oy] of DIRS4) {
+    const x = m.x + ox, y = m.y + oy;
+    if (!isFree(run, x, y)) continue;
+    const v = dist[y * W + x];
+    if (v >= 0 && v < bd) { bd = v; best = [x, y]; }
+  }
+  if (!best) return false;
+  moveMob(run, m, best[0], best[1]);
+  return m.hp > 0;
+}
+const orth = (run: Run, m: Actor) => Math.abs(run.p.x - m.x) + Math.abs(run.p.y - m.y) === 1;
+const walk = (run: Run, m: Actor, dist: Int16Array, n: number) => { for (let k = 0; k < n && !orth(run, m); k++) if (!stepToward(run, m, dist)) break; };
+
+// Felder, die ein Jäger im nächsten Zug trifft (Tentakel, Feueratem, Sense) – für Anzeige und Bot
+export function hunterWarn(run: Run): number[] {
+  const out: number[] = [];
+  for (const m of run.mobs) {
+    if (m.st.tt !== undefined) out.push(m.st.tt);
+    if (m.st.bt) for (const i of breathLine(run, m)) out.push(i);
+    if (m.st.zt) for (const i of scythe(run, m)) out.push(i);
+  }
+  return out;
+}
+// Sense: ein Bogen aus drei Feldern quer zur Richtung des Todes, mittig auf dem Helden –
+// ein Schritt zur Seite oder nach hinten führt hinaus
+function scythe(run: Run, m: Actor): number[] {
+  const out: number[] = [];
+  for (const k of [-1, 0, 1]) {
+    const x = m.st.zx + (m.st.zv ? 0 : k), y = m.st.zy + (m.st.zv ? k : 0);
+    if (x >= 0 && y >= 0 && x < W && y < H && walkable(run.tiles[y * W + x])) out.push(y * W + x);
+  }
+  return out;
+}
+// Der Tod holt nur aus, wenn der Held mit einem Schritt aus dem Bogen käme
+function canEscape(run: Run, m: Actor): boolean {
+  const p = run.p, zv = Math.abs(p.x - m.x) >= Math.abs(p.y - m.y);
+  return DIRS4.some(([dx, dy]) => (zv ? dx !== 0 : dy !== 0) && isFree(run, p.x + dx, p.y + dy));
+}
+function breathLine(run: Run, m: Actor): number[] {
+  const out: number[] = [];
+  let x = m.x, y = m.y;
+  for (let k = 0; k < 3; k++) { x += m.st.bdx; y += m.st.bdy; if (x < 0 || y < 0 || x >= W || y >= H || opaque(run.tiles[y * W + x])) break; out.push(y * W + x); }
+  return out;
+}
+
+function hunterAct(run: Run, m: Actor, dist: Int16Array) {
+  const p = run.p, near = cheb(m, p);
+  if (m.cd > 0 && m.kind !== 'medusa') m.cd--;
+  switch (m.kind) {
+    case 'echse': // bewegt sich bis zu zwei Felder ODER beißt
+      if (orth(run, m)) { hitPlayer(run, m, true); if (p.hp > 0 && run.rng.chance(0.15)) { p.st.gift = Math.max(p.st.gift ?? 0, 3); run.fx.push({ k: 'num', x: p.x, y: p.y, s: 'Gift', col: '#38b764' }); } }
+      else walk(run, m, dist, 2);
+      return;
+    case 'krake': // Tentakel auf bis zu 3 Felder, einen Zug vorher angekündigt
+      if (m.st.tt !== undefined) {
+        const t = m.st.tt; delete m.st.tt;
+        run.fx.push({ k: 'bolt', x0: m.x, y0: m.y, x1: t % W, y1: (t / W) | 0, col: '#9a4fc0' });
+        if (p.y * W + p.x === t) hitPlayer(run, m, true); else run.fx.push({ k: 'num', x: t % W, y: (t / W) | 0, s: 'verfehlt', col: '#94b0c2' });
+        m.cd = HUNTER.krakeCd;
+        return;
+      }
+      if (orth(run, m)) { hitPlayer(run, m, true); return; } // direkt daneben: zuschlagen statt ausholen
+      if (near <= 3 && !m.cd) { m.st.tt = p.y * W + p.x; run.fx.push({ k: 'num', x: m.x, y: m.y, s: '!', col: '#9a4fc0' }); return; }
+      walk(run, m, dist, 1);
+      return;
+    case 'drache': // fliegt bis zu drei Felder ODER beißt ODER speit Feuer (einen Zug vorher angekündigt)
+      if (m.st.bt) {
+        delete m.st.bt;
+        run.fx.push({ k: 'boom', x: m.x + m.st.bdx, y: m.y + m.st.bdy, r: 1 });
+        for (const i of breathLine(run, m)) {
+          const x = i % W, y = (i / W) | 0;
+          ignite(run, x, y, 3);
+          if (p.x === x && p.y === y) damage(run, p, m.atk, '#ef7d57');
+        }
+        m.cd = 3;
+        return;
+      }
+      if (orth(run, m)) { hitPlayer(run, m, true); return; }
+      if (!m.cd && near <= 3 && near >= 2 && (p.x === m.x || p.y === m.y || Math.abs(p.x - m.x) === Math.abs(p.y - m.y))) {
+        m.st.bt = 1; m.st.bdx = Math.sign(p.x - m.x); m.st.bdy = Math.sign(p.y - m.y);
+        if (breathLine(run, m).includes(p.y * W + p.x)) { say(run, `${m.name} holt tief Luft ...`); return; }
+        delete m.st.bt;
+      }
+      walk(run, m, dist, 3);
+      return;
+    case 'medusa':
+      if (orth(run, m)) hitPlayer(run, m, true); else walk(run, m, dist, 1);
+      return;
+    case 'tod': // Sense: Zone um den Helden, einen Zug vorher angekündigt; wer drinbleibt, stirbt
+      if (m.st.zt) {
+        delete m.st.zt;
+        const inZone = scythe(run, m).includes(p.y * W + p.x);
+        run.fx.push({ k: 'swipe', x: m.st.zx, y: m.st.zy, dx: 1, dy: 0, big: true });
+        m.cd = HUNTER.todCd;
+        if (inZone) {
+          say(run, 'Die Sense trifft. Der Tod holt dich.');
+          tele(run, 'todExec');
+          p.hp = 0; // Rüstung und Schild helfen nicht – nur Lebensretter wie Eisenwille
+          run.fx.push({ k: 'shake', n: 8 });
+          fatal(run);
+        } else say(run, 'Die Sense trifft ins Leere.');
+        return;
+      }
+      if (m.st.born !== run.turn && !m.cd && near <= 2 && canEscape(run, m)) {
+        m.st.zt = 1; m.st.zx = p.x; m.st.zy = p.y; m.st.zv = Math.abs(p.x - m.x) >= Math.abs(p.y - m.y) ? 1 : 0;
+        say(run, 'DER TOD HOLT AUS! Raus aus dem Feld!');
+        run.fx.push({ k: 'banner', title: 'DER TOD HOLT AUS', sub: 'Verlasse das rote Feld!', col: '#b13e53' });
+        return;
+      }
+      if (orth(run, m)) { hitPlayer(run, m, true); return; }
+      walk(run, m, dist, 3);
+      return;
+  }
+}
+
+// Medusa: wer sie trifft, weckt Schlangen (höchstens eine je Zug, vier zugleich)
+function medusaHurt(run: Run, m: Actor) {
+  if (m.hp <= 0 || m.st.sumT === run.turn) return;
+  if (run.mobs.filter(o => o.kind === 'schlange' && o.st.mom === m.id).length >= HUNTER.snakes) return;
+  const spot = DIRS4.map(([ox, oy]) => [m.x + ox, m.y + oy]).find(([x, y]) => isFree(run, x, y));
+  if (!spot) return;
+  m.st.sumT = run.turn;
+  const s = spawnMob(run, 'schlange', spot[0], spot[1]);
+  s.awake = true; s.st.mom = m.id;
+  say(run, 'Aus Medusas Haar fällt eine Schlange!');
+}
+
+// Anzeige oben: Zugzähler und Warnung vor dem nächsten Jäger
+export function hunterInfo(run: Run): { text: string; col: string } | null {
+  if (!run.hunt) return null;
+  const t = run.floorTurns ?? 0, h = run.hunt;
+  if (h.n) return { text: `Nächster Jäger: ${Math.max(0, h.next - t)} Züge`, col: '#b13e53' };
+  if (t >= HUNTER.first - 10) return { text: `Die Jagd beginnt bald ... ${Math.max(0, HUNTER.first - t)}`, col: '#b13e53' };
+  if (t >= HUNTER.first - HUNTER.warn) return { text: 'Etwas verfolgt dich ...', col: '#ef7d57' };
+  return { text: `Züge: ${t}`, col: '#566c86' };
+}
+
 function ignite(run: Run, x: number, y: number, turns = 3) {
   if (x < 0 || y < 0 || x >= W || y >= H) return;
   const i = y * W + x, t = run.tiles[i];
@@ -1322,6 +1514,8 @@ function tickWorld(run: Run) {
 // Betäubt ein Ziel. Danach ist es kurz immun, Bosse nur einen Zug lang betäubt.
 function stun(run: Run, a: Actor, turns: number) {
   if (a.st.immun) return;
+  // betäubte Jäger brechen ihren angekündigten Angriff ab
+  if (a.st.zt || a.st.bt || a.st.tt !== undefined) { delete a.st.zt; delete a.st.bt; delete a.st.tt; }
   a.st.stun = (a.boss ? 1 : turns) + (has(run.p, 'frostkern') ? 1 : 0);
 }
 
@@ -1347,6 +1541,7 @@ function damage(run: Run, dst: Actor, amt: number, col = '#f4f4f4', crit = false
   run.fx.push({ k: 'flash', id: dst.id });
   run.fx.push({ k: 'num', x: dst.x, y: dst.y, s: crit ? `${amt}!` : `${amt}`, col: crit ? '#ffcd75' : col });
   if (dst !== run.p && dst.hp <= 0) kill(run, dst);
+  else if (dst.kind === 'medusa' && playerActing) medusaHurt(run, dst);
   // Schutzrune: einmal je Ebene ein Blinzeln, wenn das Leben knapp wird
   if (dst === p && p.hp > 0 && p.hp < p.maxHp * 0.3 && p.cls === 'magier' && hasNode(p, 'n2_2b') && !run.runeUsed) {
     const spot = blinkSpot(run);
@@ -1446,6 +1641,7 @@ function kill(run: Run, m: Actor) {
     }
   }
   if (run.target === m.id) run.target = 0;
+  if (MOBS[m.kind].hunter) tele(run, `huntKill_${m.kind}`);
   if (p.vamp) p.hp = Math.min(p.maxHp, p.hp + p.vamp);
   if (p.cls === 'waldlaeufer') gain(p, 1);
   if (m.boss) {
@@ -2197,6 +2393,7 @@ function mobAct(run: Run, m: Actor, dist: Int16Array) {
   if (m.kind === 'mimik' && m.cd) { m.cd = 0; return; }
   if (d.ai === 'flee' || d.ai === 'wisp') { fleeAct(run, m, dist, d.ai === 'wisp'); return; }
   if (d.ai === 'idle') return;
+  if (d.hunter) { hunterAct(run, m, dist); return; }
   const man = Math.abs(p.x - m.x) + Math.abs(p.y - m.y);
   if (d.ai === 'boss' && ++m.cd >= 5) {
     m.cd = 0;
@@ -2335,6 +2532,7 @@ function endTurn(run: Run) {
   }
   if (p.st.netz) p.st.netz--;
   if (run.ev || run.evQ?.length) evTick(run);
+  if (run.hunt) hunterTick(run);
   fatal(run);
 }
 

@@ -17,7 +17,7 @@ const bossTorch: HTMLCanvasElement[][] = [];
 const torchOf = (bi: number, f: number) => (bossTorch[bi] ??= [0, 1].map(k => recolor(sprites[`torch${k}`], { '#ef7d57': BOSS_FLAME[bi][0], '#ffcd75': BOSS_FLAME[bi][1] })))[f];
 import { sfx } from '../core/audio';
 import { tr } from '../core/i18n';
-import { Run, Actor, xpNeed, skillCost, skillReady, spellAt, itemText, itemValue, itemScore, perkInfo, skillModName, shotRange, RANKS, SORT_NAMES, BAG_MAX, RUNE_NAMES, availableNodes, puzzleGoal, eventGoal, dartWarn, inVault, VAULT_NAMES, HAZARD_NAMES } from '../game/run';
+import { Run, Actor, xpNeed, skillCost, skillReady, spellAt, itemText, itemValue, itemScore, perkInfo, skillModName, shotRange, RANKS, SORT_NAMES, BAG_MAX, RUNE_NAMES, availableNodes, puzzleGoal, eventGoal, hunterWarn, hunterInfo, dartWarn, inVault, VAULT_NAMES, HAZARD_NAMES } from '../game/run';
 import { ClassId, treeNodes, NEW_SKILLS, TUNE, BRANCH_NAMES, SKILL_UP, treeNode, nodeText, CLASSES, MOBS, PERKS, RELICS, RARITY, RARITY_COL, BIOME_NAMES, biomeOf, Item, AFFIX, CONSUMABLES, SLOT_NAMES, ULT, ULT_LEVEL, USE_ORDER, SYNERGIES } from '../game/content';
 
 const pos = new Map<number, { x: number; y: number }>();
@@ -341,10 +341,11 @@ export function drawRun(ctx: CanvasRenderingContext2D, run: Run, dt: number, tim
     for (const ly of lanes) for (let lx = run.puzzle.x; lx < run.puzzle.x + 7; lx++) if (run.seen[ly * W + lx] && walkable(run.tiles[ly * W + lx])) ctx.fillRect(lx * TS + ox, ly * TS + oy, TS, TS);
   }
   // Ereignis: Felder, die im nächsten Zug getroffen werden, und das Zielfeld (Geist, leuchtende Truhe)
-  if (run.warn?.length) {
+  const hw = run.hunt ? hunterWarn(run) : [];
+  if (run.warn?.length || hw.length) {
     // rote Felder: Fläche plus heller Rand, damit sie auch auf rötlichem Boden (Schmiede) auffallen
     const pulse = 0.32 + 0.12 * Math.sin(time * 9);
-    for (const i of run.warn) {
+    for (const i of [...(run.warn ?? []), ...hw]) {
       if (!run.seen[i]) continue;
       const x = (i % W) * TS + ox, y = ((i / W) | 0) * TS + oy;
       ctx.fillStyle = `rgba(177,62,83,${pulse.toFixed(3)})`; ctx.fillRect(x, y, TS, TS);
@@ -768,6 +769,10 @@ function hud(ctx: CanvasRenderingContext2D, run: Run, time: number) {
       text(ctx, s, VW / 2, 59, ev.col, 8, 'center');
     }
   }
+
+  // Jäger: Zugzähler und Warnung unter der Vorratszeile
+  const hi = hunterInfo(run);
+  if (hi) text(ctx, hi.text, VW - 6, 20, hi.col, 8, 'right');
 
   // Ebene und Vorräte: eine Zeile oben rechts
   const parts: [string | null, string, string][] = [[null, `[I] ${p.bag.length}/${BAG_MAX}`, p.bag.length >= BAG_MAX ? '#ef7d57' : p.bag.length ? '#ffcd75' : '#566c86']];

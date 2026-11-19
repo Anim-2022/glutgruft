@@ -608,6 +608,27 @@ const EN: Record<string, string> = {
   "Steh auf einer Kühlplatte": "Stand on a cooling plate",
   "Die Glutader hat dich verbrannt.": "The ember vein burned you.",
   "Halte Abstand zu den Fässern": "Keep away from the barrels",
+  // Jäger
+  "Riesenechse": "Giant lizard",
+  "Landkrake": "Land kraken",
+  "Drache": "Dragon",
+  "Medusa": "Medusa",
+  "Schlange": "Snake",
+  "Der Tod": "Death",
+  "Etwas verfolgt dich ...": "Something is following you ...",
+  "DER JÄGER IST DA": "THE HUNTER IS HERE",
+  "DER JÄGER IST DA: ": "THE HUNTER IS HERE: ",
+  "Nächster Jäger: ": "Next hunter: ",
+  "Die Jagd beginnt bald ... ": "The hunt begins soon ... ",
+  "Züge: ": "Turns: ",
+  " holt tief Luft ...": " takes a deep breath ...",
+  "Die Sense trifft. Der Tod holt dich.": "The scythe strikes. Death takes you.",
+  "Die Sense trifft ins Leere.": "The scythe hits nothing.",
+  "DER TOD HOLT AUS! Raus aus dem Feld!": "DEATH WINDS UP! Get off the tile!",
+  "DER TOD HOLT AUS": "DEATH WINDS UP",
+  "Verlasse das rote Feld!": "Leave the red tile!",
+  "Aus Medusas Haar fällt eine Schlange!": "A snake drops from Medusa's hair!",
+  "verfehlt": "missed",
 };
 
 const exact = new Map(Object.entries(EN));

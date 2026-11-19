@@ -5,7 +5,7 @@
 // HAZARDS=on|off, MIMICS=on|off (neue Systeme; alle aus = Bit für Bit wie vorher), ECON=1 (Wirtschaftszeile auch ohne sie)
 import { defaultMeta } from '../src/core/save';
 import { newRun, act, Run, playerAtk, spellAt } from '../src/game/run';
-import { CLASS_ORDER, MOBS, treeNodes, ClassId, TUNE, FEATURES, EVENT } from '../src/game/content';
+import { CLASS_ORDER, MOBS, treeNodes, ClassId, TUNE, FEATURES, HUNTER, EVENT } from '../src/game/content';
 import { botAction, setBuild, Build } from './bot';
 
 type Proc = { env: Record<string, string | undefined>; argv: string[]; execPath: string; stdout: { write(s: string): void }; getBuiltinModule(n: string): unknown };
@@ -27,12 +27,16 @@ const TUNE0 = { ...TUNE };
 FEATURES.hazards = ENV.HAZARDS !== 'off';
 FEATURES.mimics = ENV.MIMICS !== 'off';
 FEATURES.events = ENV.EVENTS !== 'off';
+FEATURES.hunters = ENV.HUNTERS !== 'off';
+FEATURES.hunterForce = ENV.HUNTER_FORCE ?? '';
+if (ENV.HUNTER_INTERVAL) HUNTER.interval = +ENV.HUNTER_INTERVAL;
+if (ENV.HUNTER_FIRST) HUNTER.first = +ENV.HUNTER_FIRST;
 FEATURES.eventRate = +(ENV.EVENT_RATE ?? FEATURES.eventRate);
 FEATURES.eventForce = ENV.EVENT_FORCE ?? '';
 FEATURES.eventForceBiome = true; // Gebietsereignisse auch erzwungen nur in ihrem Gebiet
 // EVENT_SET=item2=0,relicChance=0 … überschreibt Ereigniswerte für Messläufe
 for (const kv of (ENV.EVENT_SET ?? '').split(',').filter(Boolean)) { const [k, v] = kv.split('='); (EVENT as Record<string, number>)[k] = +v; }
-const EXTRA = FEATURES.hazards || FEATURES.mimics || FEATURES.events || ENV.ECON === '1';
+const EXTRA = FEATURES.hazards || FEATURES.mimics || FEATURES.events || FEATURES.hunters || ENV.ECON === '1';
 
 function runCell({ variant: full, set, mname, cls }: Cell): Result {
   const [variant, ...tunes] = full.split(':');
@@ -53,12 +57,15 @@ function runCell({ variant: full, set, mname, cls }: Cell): Result {
     const freq: Record<string, number> = {};
     let goldTotal = 0, goldSpent = 0, potBought = 0, potFound = 0, bombBought = 0, goldLeft = 0, bossDeaths = 0;
     const tele: Record<string, number> = {}, rar = [0, 0, 0, 0]; let relics = 0, items = 0, cons = 0;
+    const floorT: number[] = []; // Züge je abgeschlossener Ebene (für die Jäger-Schwelle)
     for (let s = 1; s <= N; s++) {
       const run = newRun(s * 7919 + 13 + set * 1000003, cls, meta);
       if (drop.length) run.pool = run.pool.filter(id => !drop.some(d => id === d || id.endsWith(`_${d}`)));
-      let cur = -1, F0: F | null = null; const resHist: number[] = [];
+      let cur = -1, F0: F | null = null, fT0 = 0; const resHist: number[] = [];
       for (let i = 0; i < 14000 && run.mode !== 'dead' && run.mode !== 'win'; i++) {
         if (run.floor !== cur) {
+          if (cur > 0) floorT.push(run.turn - fT0);
+          fT0 = run.turn;
           cur = run.floor; F0 = fl[cur] ??= { turns: 0, hpLost: 0, potUsed: 0, kills: 0, goldIn: 0, lvlIn: 0, atkIn: 0, maxHpIn: 0, n: 0, deaths: 0, shopVisits: 0, goldAtShop: 0, dmgTaken: [] };
           F0.n++; F0.goldIn += run.p.gold; F0.lvlIn += run.p.lvl; F0.atkIn += run.p.atk; F0.maxHpIn += run.p.maxHp;
         }
@@ -91,6 +98,8 @@ function runCell({ variant: full, set, mname, cls }: Cell): Result {
         if ((run.mode as string) === 'dead') {
           F0!.deaths++;
           if (run.ev) { (run.tele ??= {})[`evDeath_${run.ev.id}`] = 1; run.tele.evDeath = (run.tele.evDeath ?? 0) + 1; }
+          const hk = run.mobs.find(m => MOBS[m.kind].hunter && Math.max(Math.abs(m.x - run.p.x), Math.abs(m.y - run.p.y)) <= 5);
+          if (hk) { (run.tele ??= {})[`huntDeath_${hk.kind}`] = (run.tele[`huntDeath_${hk.kind}`] ?? 0) + 1; }
           const adj = run.mobs.filter(m => Math.max(Math.abs(m.x - run.p.x), Math.abs(m.y - run.p.y)) <= 5 && run.vis[m.y*64+m.x]).map(m => m.kind + (m.elite ? '*' : ''));
           const key = adj.length ? [...new Set(adj)].sort().join('+') : (run.p.st.gift ? 'gift' : run.p.st.brand ? 'brand' : 'other');
           killers[key] = (killers[key] ?? 0) + 1; if (run.mobs.some(m => m.boss && run.vis[m.y*64+m.x])) bossDeaths++;
@@ -115,6 +124,14 @@ function runCell({ variant: full, set, mname, cls }: Cell): Result {
         const started = ids.reduce((a, id) => a + (tele[`evStart_${id}`] ?? 0), 0), won = ids.reduce((a, id) => a + (tele[`evWon_${id}`] ?? 0), 0);
         out.push(`Ereignisse/Lauf: gestartet ${(started / N).toFixed(2)}, geschafft ${(won / N).toFixed(2)}, entfallen ${t('evSkip')}, Tode im Ereignis ${t('evDeath')} · Lohn/Lauf: Gold ${t('evGold')}, Seelen ${t('evSouls')}, Gegenstände ${t('evItems')}, Reliquienwahl ${t('evRelic')}`);
         out.push('Ereignis: ' + ids.map(id => `${id} ${tele[`evStart_${id}`] ?? 0}/${tele[`evWon_${id}`] ?? 0}/${tele[`evDeath_${id}`] ?? 0}`).join('  ') + '  (gestartet/geschafft/Tode)');
+      }
+      {
+        const q = (f: number) => { const v = [...floorT].sort((a, b) => a - b); return v.length ? v[Math.min(v.length - 1, Math.floor(f * v.length))] : 0; };
+        out.push(`Züge je Ebene: p50 ${q(0.5)}, p75 ${q(0.75)}, p90 ${q(0.9)}, p95 ${q(0.95)}, max ${q(1)}`);
+        if (FEATURES.hunters) {
+          const ks = ['echse', 'krake', 'drache', 'medusa', 'tod'];
+          out.push('Jäger (erschienen/besiegt/Tode): ' + ks.map(k => `${k} ${tele[`hunt_${k}`] ?? 0}/${tele[`huntKill_${k}`] ?? 0}/${tele[`huntDeath_${k}`] ?? 0}`).join('  ') + `  · Sense ${tele.todExec ?? 0}`);
+        }
       }
       out.push(`Fallen/Lauf: ausgelöst ${t('trapHit')}, Schaden ${t('trapDmg')}, von Gegnern ${t('trapMob')}, entdeckt ${t('trapSpot')} · Mimiks/Lauf: getroffen ${t('mimicMet')}, besiegt ${t('mimicKilled')}, Seltenheit+1 ${t('mimicRarUp')}`);
     }
