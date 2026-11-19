@@ -29,6 +29,7 @@ FEATURES.mimics = ENV.MIMICS !== 'off';
 FEATURES.events = ENV.EVENTS !== 'off';
 FEATURES.eventRate = +(ENV.EVENT_RATE ?? FEATURES.eventRate);
 FEATURES.eventForce = ENV.EVENT_FORCE ?? '';
+FEATURES.eventForceBiome = true; // Gebietsereignisse auch erzwungen nur in ihrem Gebiet
 // EVENT_SET=item2=0,relicChance=0 … überschreibt Ereigniswerte für Messläufe
 for (const kv of (ENV.EVENT_SET ?? '').split(',').filter(Boolean)) { const [k, v] = kv.split('='); (EVENT as Record<string, number>)[k] = +v; }
 const EXTRA = FEATURES.hazards || FEATURES.mimics || FEATURES.events || ENV.ECON === '1';

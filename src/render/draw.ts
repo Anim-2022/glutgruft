@@ -352,13 +352,23 @@ export function drawRun(ctx: CanvasRenderingContext2D, run: Run, dt: number, tim
       ctx.fillRect(x + 1, y + 1, TS - 2, 1); ctx.fillRect(x + 1, y + TS - 2, TS - 2, 1); ctx.fillRect(x + 1, y + 2, 1, TS - 4); ctx.fillRect(x + TS - 2, y + 2, 1, TS - 4);
     }
   }
-  const mark = run.ev?.mark;
-  if (mark !== undefined) {
-    const mx = mark % W, my = (mark / W) | 0, chest = !!run.ev!.data.chest;
-    ctx.globalAlpha = 0.75 + 0.25 * Math.sin(time * 5);
-    ctx.drawImage(sprites[chest ? 'chest' : 'irrlicht'], mx * TS + ox, my * TS + oy - (chest ? 0 : 2 + Math.round(Math.sin(time * 3))));
-    ctx.globalAlpha = 1;
-    lights.push({ x: mx, y: my, r: 2.6 + 0.3 * Math.sin(time * 4), col: chest ? '#ffcd75' : '#73eff7', a: 0.9 });
+  // Ziele: Geist, leuchtende Truhe, Altar (eins) oder Kerzen, Pilze, Kühlplatten (mehrere)
+  if (run.ev && (run.ev.mark !== undefined || run.ev.marks?.length)) {
+    const e = run.ev, look = e.data.look ?? 0, chest = !!e.data.chest;
+    const LOOK: [string, string][] = [[chest ? 'chest' : 'irrlicht', chest ? '#ffcd75' : '#73eff7'], ['brazier', '#ffcd75'], ['leuchtpilz', '#73eff7'], ['kuehl', '#41a6f6'], ['altar', '#a7f070']];
+    const [spr, col] = LOOK[look] ?? LOOK[0], bob = look === 0 && !chest;
+    for (const i of e.mark !== undefined ? [e.mark] : e.marks!) {
+      const mx = i % W, my = (i / W) | 0;
+      ctx.globalAlpha = 0.75 + 0.25 * Math.sin(time * 5 + i);
+      ctx.drawImage(sprites[spr], mx * TS + ox, my * TS + oy - (bob ? 2 + Math.round(Math.sin(time * 3)) : 0));
+      ctx.globalAlpha = 1;
+      lights.push({ x: mx, y: my, r: 2.2 + 0.3 * Math.sin(time * 4 + i), col, a: 0.85 });
+    }
+  }
+  // Schlamm eines Ereignisses
+  if (run.mud?.length) {
+    ctx.fillStyle = 'rgba(90,58,40,0.55)';
+    for (const i of run.mud) if (run.seen[i]) ctx.fillRect((i % W) * TS + ox, ((i / W) | 0) * TS + oy, TS, TS);
   }
   drawDying(ctx, run, ox, oy, lights, dt);
 
@@ -1173,8 +1183,8 @@ function minimap(ctx: CanvasRenderingContext2D, run: Run, time: number) {
   if (Math.floor(time * 3) % 2) {
     ctx.fillStyle = '#ffcd75';
     for (const m of run.mobs) if (m.ev) ctx.fillRect(x0 + m.x * s - 1, y0 + m.y * s - 1, s + 2, s + 2);
-    const mk = run.ev?.mark;
-    if (mk !== undefined) { ctx.fillStyle = '#73eff7'; ctx.fillRect(x0 + (mk % W) * s - 1, y0 + ((mk / W) | 0) * s - 1, s + 2, s + 2); }
+    ctx.fillStyle = '#73eff7';
+    for (const mk of run.ev?.mark !== undefined ? [run.ev.mark] : run.ev?.marks ?? []) ctx.fillRect(x0 + (mk % W) * s - 1, y0 + ((mk / W) | 0) * s - 1, s + 2, s + 2);
   }
   if (big || Math.floor(time * 4) % 2) {
     ctx.fillStyle = '#f4f4f4';

@@ -107,6 +107,7 @@ export interface Run {
   evNote?: number;           // Ebene des letzten Fundzettels
   relicOps?: number;         // zusätzliche Reliquienwahlen aus Ereignissen
   warn?: number[];           // Felder, die im nächsten Zug getroffen werden
+  mud?: number[];            // Schlamm eines Ereignisses: wer hineintritt, steckt einen Zug fest
   souls: number; kills: number; turn: number; nextId: number;
 }
 
@@ -856,6 +857,7 @@ function nextFloor(run: Run) {
   if (FEATURES.hazards && !bossFloor && run.floor >= HAZARD.minFloor) addHazards(run, rooms[0], biome);
   if (run.ev) { tele(run, `evLost_${run.ev.id}`); tele(run, 'evAbandon'); run.ev = null; }
   if (run.warn?.length) run.warn = [];
+  if (run.mud?.length) run.mud = [];
   if (FEATURES.events && !bossFloor) planEvents(run, rooms);
   else if (run.evQ?.length) run.evQ = [];
   computeFov(run.tiles, run.p.x, run.p.y, fovR(run), run.vis, run.seen);
@@ -976,7 +978,7 @@ function revealMimic(run: Run, i: number, bite: boolean) {
 // Plant die Ereignisse einer Ebene. Ohne eingeschaltete Ereignisse: keine Zufallszahl, kein Zustand.
 function planEvents(run: Run, rooms: Room[]) {
   run.ev = null; run.warn = [];
-  const rate = FEATURES.eventRate, rng = run.rng;
+  const rate = FEATURES.eventRate, rng = run.rng, biome = biomeOf(run.floor);
   let n = rate >= 2 ? 2 : rate === 1 ? 1 + (rng.chance(EVENT.second) ? 1 : 0) : 0;
   const q: EvPlan[] = [];
   run.evQ = q; run.evCalm = 0;
@@ -986,14 +988,16 @@ function planEvents(run: Run, rooms: Room[]) {
   const used = (run.evUsed ??= []);
   for (; n > 0; n--) {
     let cands: EvDef[];
-    if (FEATURES.eventForce) cands = EVENTS.filter(d => d.id === FEATURES.eventForce);
+    if (FEATURES.eventForce) cands = EVENTS.filter(d => d.id === FEATURES.eventForce && (!FEATURES.eventForceBiome || d.biome === undefined || d.biome === biome));
     else {
-      const ok = (d: EvDef, deck: boolean) => (!deck || !used.includes(d.id)) && !(run.evDanger && d.cat === 'danger') && (d.trigger === 'calm' || free.length > 0) && !q.some(pl => pl.id === d.id);
+      const ok = (d: EvDef, deck: boolean) => (d.biome === undefined || d.biome === biome) && (!deck || !used.includes(d.id)) && !(run.evDanger && d.cat === 'danger') && (d.trigger === 'calm' || free.length > 0) && !q.some(pl => pl.id === d.id);
       cands = EVENTS.filter(d => ok(d, true));
       if (!cands.length) cands = EVENTS.filter(d => ok(d, false)); // Deck aufgebraucht: von vorn
     }
     if (!cands.length) break;
-    const d = rng.pick(cands);
+    // Gebietsereignisse und allgemeine etwa 60 : 40
+    const bio = cands.filter(c => c.biome !== undefined), gen = cands.filter(c => c.biome === undefined);
+    const d = rng.pick(bio.length && gen.length ? (rng.chance(EVENT.biomeShare) ? bio : gen) : cands);
     if (d.trigger === 'room' && !free.length) continue;
     const plan: EvPlan = { id: d.id };
     if (d.trigger === 'room') plan.room = free.splice(rng.int(0, free.length - 1), 1)[0];
@@ -1058,14 +1062,48 @@ function evApi(run: Run): EvApi {
       const hit = run.warn ?? [];
       run.warn = [];
       if (!hit.length) return;
-      run.fx.push({ k: 'shake', n: kind === 'rock' ? 3 : 2 });
+      run.fx.push({ k: 'shake', n: kind === 'rock' || kind === 'hammer' ? 3 : 2 });
       for (const i of hit) {
         const x = i % W, y = (i / W) | 0;
-        if (kind === 'rock') run.fx.push({ k: 'debris', x, y });
+        if (kind === 'rock' || kind === 'hammer') run.fx.push({ k: 'debris', x, y });
+        if (kind === 'fire') ignite(run, x, y, 3);
         const a = p.x === x && p.y === y ? p : mobAt(run, x, y);
-        if (a && a.hp > 0) damage(run, a, dmg, '#b13e53');
+        if (!a || a.hp <= 0) continue;
+        if (kind === 'gas') { a.st.gift = Math.max(a.st.gift ?? 0, 3); run.fx.push({ k: 'num', x, y, s: 'Gift', col: '#38b764' }); }
+        if (dmg > 0) damage(run, a, dmg, '#b13e53');
       }
       tele(run, 'evStrike');
+    },
+    elite(m, mul, name) { m.maxHp = m.hp = Math.round(m.hp * mul); m.atk += 2; m.xp *= 2; m.name = name; },
+    rival(e, x, y) {
+      const other = (['krieger', 'magier', 'waldlaeufer'] as const).filter(c => c !== p.cls), cls = other[rng.int(0, other.length - 1)];
+      const m = api.spawn(e, `rivale_${cls[0]}`, x, y), c = CLASSES[cls];
+      m.maxHp = m.hp = Math.round(c.hp * (0.7 + 0.12 * run.floor));
+      m.atk = Math.round(c.atk + 0.7 * run.floor); m.def = c.def;
+      m.xp = Math.round((12 + 2 * run.floor) * EVENT.mobXp);
+      return m;
+    },
+    barrel(x, y, fuse) {
+      const i = y * W + x;
+      if (run.tiles[i] !== T.FLOOR || mobAt(run, x, y) || (p.x === x && p.y === y)) return false;
+      run.tiles[i] = T.BARREL; run.fuses.set(i, fuse);
+      return true;
+    },
+    hurt(n, why) { if (p.hp > 0) { damage(run, p, n, '#9a4fc0'); tele(run, `evHurt`); if (p.hp <= 0) say(run, why); } },
+    heal(frac) { const n = Math.min(p.maxHp - p.hp, Math.ceil(p.maxHp * frac)); p.hp += n; if (n) run.fx.push({ k: 'num', x: p.x, y: p.y, s: `+${n}`, col: '#a7f070' }); return n; },
+    mud(tiles) { run.mud = tiles; },
+    isFloor: i => run.tiles[i] === T.FLOOR || run.tiles[i] === T.GRASS || run.tiles[i] === T.BURNT,
+    free: i => isFree(run, i % W, (i / W) | 0) && !inVault(run, i % W, (i / W) | 0),
+    reward: tier => evReward(run, tier),
+    remove(m) { run.mobs = run.mobs.filter(o => o.id !== m.id); },
+    near2(x, y, min, max) {
+      const out: number[] = [];
+      for (let yy = y - max; yy <= y + max; yy++) for (let xx = x - max; xx <= x + max; xx++) {
+        if (xx < 0 || yy < 0 || xx >= W || yy >= H) continue;
+        const d = Math.max(Math.abs(xx - x), Math.abs(yy - y));
+        if (d >= min && d <= max && walkable(run.tiles[yy * W + xx]) && !inVault(run, xx, yy)) out.push(yy * W + xx);
+      }
+      return out;
     },
     wake(e, max, range) {
       const d = distMap(run.tiles, p.x, p.y);
@@ -1137,7 +1175,7 @@ function evStart(run: Run, plan: EvPlan): boolean {
 function evEnd(run: Run, won: boolean) {
   const e = run.ev!, d = EVENT_BY_ID[e.id], a = evApi(run);
   for (const [i, t] of e.seal ?? []) if (run.tiles[i] === T.GATE) run.tiles[i] = t;
-  run.warn = [];
+  run.warn = []; if (run.mud?.length) run.mud = [];
   for (const m of run.mobs) if (e.mobs.includes(m.id)) m.ev = false;
   if (d.vanish && a.alive(e).length) a.vanish(e);
   run.ev = null;
@@ -2038,7 +2076,7 @@ export function act(run: Run, a: Action): void {
           run.fx.push({ k: 'shake', n: 8 });
           used = false;
           fatal(run);
-        } else { afterStep(run); stepHazard(run, p); }
+        } else { afterStep(run); stepHazard(run, p); if (run.mud?.includes(i)) { p.st.netz = 2; say(run, 'Du steckst im Schlamm fest!'); } }
       }
       break;
     }
@@ -2158,6 +2196,7 @@ function mobAct(run: Run, m: Actor, dist: Int16Array) {
   if (!m.awake) { if (run.vis[m.y * W + m.x]) m.awake = true; return; }
   if (m.kind === 'mimik' && m.cd) { m.cd = 0; return; }
   if (d.ai === 'flee' || d.ai === 'wisp') { fleeAct(run, m, dist, d.ai === 'wisp'); return; }
+  if (d.ai === 'idle') return;
   const man = Math.abs(p.x - m.x) + Math.abs(p.y - m.y);
   if (d.ai === 'boss' && ++m.cd >= 5) {
     m.cd = 0;

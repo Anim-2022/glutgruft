@@ -75,7 +75,8 @@ describe('Ereignisse: Planung', () => {
       // Wiederholung nur, wenn alle noch ungezogenen Ereignisse gefährlich und damit gerade gesperrt sind
       used.forEach((id, i) => {
         if (!used.slice(0, i).includes(id)) return;
-        const rest = EVENTS.filter(d => !used.slice(0, i).includes(d.id));
+        // Gebietsereignisse anderer Gebiete sind gesperrt – geprüft werden die allgemeinen
+        const rest = EVENTS.filter(d => d.biome === undefined && !used.slice(0, i).includes(d.id));
         expect(rest.every(d => d.cat === 'danger') && (rest.length === 0 || EVENT_BY_ID[used[i - 1]].cat === 'danger'), `Seed ${seed}: ${used.join(',')}`).toBe(true);
       });
       for (let i = 1; i < used.length; i++) {
@@ -93,7 +94,8 @@ describe('Ereignisse: Planung', () => {
   it('Kategorien: jede Art kommt vor, alle Ereignisse haben Titel, Einleitung und Zeitgrenze', () => {
     const cats = new Set(EVENTS.map(e => e.cat));
     expect([...cats].sort()).toEqual(['challenge', 'danger', 'flavour']);
-    expect(EVENTS.length).toBe(14);
+    expect(EVENTS.filter(e => e.biome === undefined).length).toBe(14);
+    for (const b of [0, 1, 2]) expect(EVENTS.filter(e => e.biome === b).length).toBe(8);
     for (const e of EVENTS) { expect(e.intro.length).toBeGreaterThan(0); expect(e.limit).toBeGreaterThan(0); expect(e.limit).toBeLessThanOrEqual(150); }
   });
 });
