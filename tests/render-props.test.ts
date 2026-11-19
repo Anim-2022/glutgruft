@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { RNG } from '../src/core/rng';
 import { genDungeon, W, H, T, wallLike, walkable } from '../src/game/dungeon';
-import { propAt } from '../src/render/props';
+import { propAt, SPACING } from '../src/render/props';
 
 // Dekor ist reine Darstellung: fest am Feld, nur auf Wandfront oder freiem Boden, nie in einem Gang
 describe('Dekor je Biom', () => {
@@ -15,16 +15,24 @@ describe('Dekor je Biom', () => {
         expect(propAt(tiles, seed, x, y)).toEqual(p);
         if (!p) continue;
         n++;
-        if (p.kind === 'wall') { expect(tiles[i]).toBe(T.WALL); expect(wallLike(tiles[i + W])).toBe(false); continue; }
+        if (p.kind === 'wall') {
+          // gerade Wandstrecke: auch links und rechts Front
+          for (const d of [-1, 0, 1]) { expect(tiles[i + d]).toBe(T.WALL); expect(wallLike(tiles[i + d + W])).toBe(false); }
+          continue;
+        }
         expect(tiles[i]).toBe(T.FLOOR);
         if (p.kind === 'foot') {
-          expect(wallLike(tiles[i - W])).toBe(true);
-          // links, rechts und unten offen: kein Gang wird optisch versperrt
-          for (const d of [-1, 1, W]) expect(walkable(tiles[i + d])).toBe(true);
+          for (const d of [-W - 1, -W, -W + 1]) expect(wallLike(tiles[i + d])).toBe(true);
+          // links, rechts und zwei Felder nach unten offen: Raum, kein Gang
+          for (const d of [-1, 1, W, 2 * W]) expect(walkable(tiles[i + d])).toBe(true);
         }
-        if (p.kind === 'flat') for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) expect(wallLike(tiles[i + dy * W + dx])).toBe(false);
+        if (p.kind === 'flat') for (let dy = -2; dy <= 2; dy++) for (let dx = -2; dx <= 2; dx++) expect(wallLike(tiles[i + dy * W + dx])).toBe(false);
       }
-      expect(n).toBeGreaterThan(5);
+      expect(n).toBeGreaterThan(2);
+      // nie zwei Stücke dicht beieinander
+      const spots: [number, number][] = [];
+      for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) if (propAt(tiles, seed, x, y)) spots.push([x, y]);
+      for (const [ax, ay] of spots) for (const [bx, by] of spots) if (ax !== bx || ay !== by) expect(Math.max(Math.abs(ax - bx), Math.abs(ay - by))).toBeGreaterThan(SPACING);
       expect(tiles).toEqual(before);
     }
   });

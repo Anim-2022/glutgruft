@@ -48,7 +48,7 @@ export type Fx =
   | { k: 'lunge'; id: number; dx: number; dy: number }
   | { k: 'flash'; id: number }
   | { k: 'die'; x: number; y: number; kind: string }
-  | { k: 'boom'; x: number; y: number; r: number }
+  | { k: 'boom'; x: number; y: number; r: number; barrel?: boolean }
   | { k: 'debris'; x: number; y: number }
   | { k: 'loot'; item: Item; how: 'worn' | 'bag' | 'sold' }
   | { k: 'bolt'; x0: number; y0: number; x1: number; y1: number; col: string }
@@ -276,7 +276,7 @@ function useItem(run: Run, i: number): boolean {
       const spots: number[] = [];
       for (let k = 0; k < W * H; k++) {
         const q = { x: k % W, y: (k / W) | 0 };
-        if (!run.seen[k] || run.tiles[k] !== T.FLOOR || !isFree(run, q.x, q.y) || cheb(q, p) < 6) continue;
+        if (!run.seen[k] || (run.tiles[k] !== T.FLOOR && run.tiles[k] !== T.BURNT) || !isFree(run, q.x, q.y) || cheb(q, p) < 6) continue;
         if (run.mobs.every(m => cheb(m, q) >= 6)) spots.push(k);
       }
       if (!spots.length) { say(run, 'Du kennst keinen sicheren Ort.'); return false; }
@@ -736,21 +736,40 @@ function ignite(run: Run, x: number, y: number, turns = 3) {
   run.fire.set(i, Math.max(run.fire.get(i) ?? 0, t === T.GRASS ? turns + 1 : turns));
 }
 
-export function explode(run: Run, x: number, y: number, r = 1) {
+// Fester Wert je Feld und Zug (statt Zufall): Brandspuren und Lunten verändern den Zufallsstrom nicht
+const spot = (x: number, y: number, s: number) => (Math.imul(x, 73856093) ^ Math.imul(y, 19349663) ^ Math.imul(s, 83492791)) >>> 0;
+
+// Explosion. r = 1: Quadrat 3×3 (Bombe). r ≥ 2: rund (Fass), nur was die Druckwelle vom Zentrum
+// aus erreicht – nicht durch Wände; im äußeren Ring 60 % Schaden. Der Boden verbrennt (bleibt Brandfläche),
+// nahe am Zentrum glimmt er kurz weiter.
+export function explode(run: Run, x: number, y: number, r = 1, barrel = false) {
   const p = run.p;
-  run.fx.push({ k: 'boom', x, y, r }, { k: 'shake', n: 6 });
-  const chain: number[] = [];
+  run.fx.push({ k: 'boom', x, y, r, barrel }, { k: 'shake', n: r >= 2 ? 9 : 6 });
+  const ring = (xx: number, yy: number) => Math.max(Math.abs(xx - x), Math.abs(yy - y));
+  const blast = new Set<number>();
   for (let yy = y - r; yy <= y + r; yy++) for (let xx = x - r; xx <= x + r; xx++) {
     if (xx < 1 || yy < 1 || xx >= W - 1 || yy >= H - 1) continue;
-    const i = yy * W + xx, t = run.tiles[i];
+    const dx = xx - x, dy = yy - y;
+    if (r >= 2 && (dx * dx + dy * dy > r * r + 1 || !los(run.tiles, x, y, xx, yy))) continue;
+    blast.add(yy * W + xx);
+  }
+  const chain: number[] = [];
+  for (const i of blast) {
+    const xx = i % W, yy = (i / W) | 0, t = run.tiles[i];
     if (t === T.CRACKED) breakWall(run, i);
     else if (t === T.PILLAR) collapse(run, xx, yy);
     else if (t === T.BARREL) chain.push(i);
     else if (t === T.GRASS) ignite(run, xx, yy);
+    else if (t === T.FLOOR && r >= 2) {
+      const h = spot(xx, yy, run.turn + run.floor * 977);
+      if (ring(xx, yy) <= 1 || h % 10 < 6) run.tiles[i] = T.BURNT;
+      if (ring(xx, yy) === 1 && h % 3 === 0) ignite(run, xx, yy, 2);
+    }
   }
-  const dmg = 6 + Math.round(2.5 * run.floor);
-  for (const m of run.mobs.filter(m => Math.abs(m.x - x) <= r && Math.abs(m.y - y) <= r)) damage(run, m, dmg, '#ef7d57');
-  if (!has(p, 'pulverfass') && Math.abs(p.x - x) <= r && Math.abs(p.y - y) <= r) damage(run, p, Math.ceil(dmg * 0.3), '#b13e53');
+  const dmg = 6 + Math.round(2.5 * run.floor), at = (q: { x: number; y: number }) => blast.has(q.y * W + q.x);
+  const dmgAt = (q: { x: number; y: number }) => (ring(q.x, q.y) <= 1 ? dmg : Math.round(dmg * 0.6));
+  for (const m of run.mobs.filter(at)) damage(run, m, dmgAt(m), '#ef7d57');
+  if (!has(p, 'pulverfass') && at(p)) damage(run, p, Math.ceil(dmgAt(p) * 0.3), '#b13e53');
   for (const i of chain) if (run.tiles[i] === T.BARREL) burst(run, i);
 }
 
@@ -764,7 +783,7 @@ function breakWall(run: Run, i: number) {
 function burst(run: Run, i: number) {
   run.tiles[i] = T.BURNT;
   run.fuses.delete(i);
-  explode(run, i % W, (i / W) | 0, 1);
+  explode(run, i % W, (i / W) | 0, 2, true);
 }
 
 // Eine Säule stürzt ein und begräbt, was direkt daneben steht.
@@ -784,15 +803,16 @@ function tickWorld(run: Run) {
     if (run.tiles[i] !== T.BARREL) { run.fuses.delete(i); continue; }
     if (t <= 1) burst(run, i); else run.fuses.set(i, t - 1);
   }
-  // Feuer breitet sich über Bewuchs aus und brennt herunter
+  // Feuer breitet sich über Bewuchs aus und brennt herunter: frisches Feuer springt eher über
+  // als verglimmendes; was abgebrannt ist, bleibt Brandfläche
   for (const [i, t] of [...run.fire]) {
-    const x = i % W, y = (i / W) | 0;
+    const x = i % W, y = (i / W) | 0, spread = t >= 3 ? 0.7 : t === 2 ? 0.5 : 0.25;
     for (const [ox, oy] of DIRS4) {
       const n = (y + oy) * W + x + ox, nt = run.tiles[n];
       if (nt === T.BARREL) ignite(run, x + ox, y + oy);
-      else if (nt === T.GRASS && !run.fire.has(n) && run.rng.chance(0.55)) ignite(run, x + ox, y + oy);
+      else if (nt === T.GRASS && !run.fire.has(n) && run.rng.chance(spread)) ignite(run, x + ox, y + oy);
     }
-    if (t <= 1) { run.fire.delete(i); if (run.tiles[i] === T.GRASS) run.tiles[i] = T.BURNT; }
+    if (t <= 1) { run.fire.delete(i); if (run.tiles[i] === T.GRASS || run.tiles[i] === T.FLOOR) run.tiles[i] = T.BURNT; }
     else run.fire.set(i, t - 1);
   }
 }
@@ -1492,7 +1512,7 @@ export function act(run: Run, a: Action): void {
         used = true;
       } else if (t === T.CRATE || t === T.CRATE_ON) {
         const bx = nx + a.dx, by = ny + a.dy, bi = by * W + bx, bt = run.tiles[bi];
-        if ((bt === T.FLOOR || bt === T.PLATE) && !mobAt(run, bx, by)) {
+        if ((bt === T.FLOOR || bt === T.BURNT || bt === T.PLATE) && !mobAt(run, bx, by)) {
           run.tiles[bi] = bt === T.PLATE ? T.CRATE_ON : T.CRATE;
           run.tiles[i] = t === T.CRATE_ON ? T.PLATE : T.FLOOR;
           p.x = nx; p.y = ny; used = true;
@@ -1512,7 +1532,8 @@ export function act(run: Run, a: Action): void {
         used = true;
         afterStep(run);
       } else if (t === T.BARREL) {
-        if (!run.fuses.has(i)) { run.fuses.set(i, 2); say(run, 'Die Lunte brennt – weg hier!'); }
+        // Lunte: 2 oder 3 Züge Zeit, um Abstand zu gewinnen (der Zähler sinkt schon am Ende dieses Zugs)
+        if (!run.fuses.has(i)) { run.fuses.set(i, 3 + (spot(nx, ny, run.turn) % 2)); say(run, 'Die Lunte brennt – weg hier!'); }
         used = true;
       }
       else if (t === T.ALTAR) {
