@@ -1094,6 +1094,7 @@ function evApi(run: Run): EvApi {
     isFloor: i => run.tiles[i] === T.FLOOR || run.tiles[i] === T.GRASS || run.tiles[i] === T.BURNT,
     free: i => isFree(run, i % W, (i / W) | 0) && !inVault(run, i % W, (i / W) | 0),
     reward: tier => evReward(run, tier),
+    remove(m) { run.mobs = run.mobs.filter(o => o.id !== m.id); },
     near2(x, y, min, max) {
       const out: number[] = [];
       for (let yy = y - max; yy <= y + max; yy++) for (let xx = x - max; xx <= x + max; xx++) {

@@ -50,6 +50,7 @@ export interface EvApi {
   mud(tiles: number[]): void;              // Schlamm: wer hineintritt, steckt einen Zug fest
   isFloor(i: number): boolean;
   free(i: number): boolean;                // begehbar und von niemandem besetzt
+  remove(m: EvActor): void;                // verschwindet ohne Beute
   reward(tier: number): string;
   near2(x: number, y: number, min: number, max: number): number[]; // begehbare Felder im Abstand [min, max] (Schachbrett) um x, y
   wake(e: EvState, max: number, range: number): number;
@@ -392,6 +393,129 @@ export const EVENTS: EvDef[] = [
     },
     goal: (a, e) => `Erreiche den Altar, der Fluch zehrt · noch ${left(e)} Züge`,
     lost: () => 'Der Fluch verfliegt von selbst – diesmal.',
+  },
+  // ===================== Pilzhöhle (Gebiet 1) =====================
+  {
+    id: 'sporenwolke', cat: 'danger', trigger: 'calm', biome: 1, title: 'Sporenwolke', tier: 2, limit: 8, survive: true,
+    intro: ['Ein Pilz platzt. Eine grüne Wolke breitet sich aus!', 'Pfff – und die Luft wird grün und dick.'],
+    start(a, e) {
+      const s = a.near(2, 4);
+      if (!s) return false;
+      e.data.sx = s[0]; e.data.sy = s[1];
+      a.warn(a.near2(s[0], s[1], 0, 0));
+      return true;
+    },
+    tick(a, e) {
+      a.strike(1, 'gas');
+      if (e.turns < e.limit) a.warn(a.near2(e.data.sx, e.data.sy, e.turns, e.turns));
+      return 'run';
+    },
+    goal: (a, e) => `Weiche der grünen Welle aus · noch ${left(e)} Züge`,
+  },
+  {
+    id: 'pilzring', cat: 'challenge', trigger: 'room', biome: 1, title: 'Pilzring', tier: 2, limit: 30,
+    intro: ['Ein Ring aus Pilzen leuchtet auf. Wer darin ausharrt, wird belohnt.', 'Die Pilze summen. Stell dich in den Kreis!'],
+    start(a, e) {
+      const r = e.room!, cx = r.x + (r.w >> 1), cy = r.y + (r.h >> 1);
+      e.marks = a.near2(cx, cy, 0, 1).filter(i => a.isFloor(i));
+      e.data.look = 2; e.data.hold = 0;
+      return e.marks.length >= 3;
+    },
+    tick(a, e) {
+      if (e.marks!.some(m => a.atPlayer(m))) e.data.hold++;
+      if (e.data.hold >= 5) return 'won';
+      if (e.turns % 3 === 1 && e.total < 3) { const s = shuffled(a, a.edge(e.room!))[0]; if (s) a.spawn(e, 'sporling', s[0], s[1]); }
+      return 'run';
+    },
+    goal: (a, e) => `Halte den Pilzring ${e.data.hold}/5 · noch ${left(e)} Züge`,
+    lost: () => 'Der Ring verblasst.',
+  },
+  {
+    id: 'leuchtpilze', cat: 'flavour', trigger: 'calm', biome: 1, title: 'Leuchtpilze', tier: 0, limit: 25, survive: true,
+    intro: ['Ringsum leuchten blaue Pilze. Sie riechen ... gesund.', 'Blaue Pilze! Die heilen, sagt man.'],
+    start(a, e) {
+      const ms: number[] = [];
+      for (let k = 0; k < 6 && ms.length < 3; k++) { const s = a.near(2, 9); if (s && !ms.includes(s[1] * W + s[0])) ms.push(s[1] * W + s[0]); }
+      if (!ms.length) return false;
+      e.marks = ms; e.data.look = 2; e.data.need = ms.length; e.data.healed = 0;
+      return true;
+    },
+    tick(a, e) { take(a, e, () => { e.data.healed += a.heal(0.12); }); return e.marks!.length ? 'run' : 'won'; },
+    goal: (a, e) => `Sammle die Leuchtpilze ${e.data.need - e.marks!.length}/${e.data.need} · noch ${left(e)} Züge`,
+    won: (a, e) => (e.data.need - e.marks!.length ? `${e.data.healed} Leben, ${a.souls(3 * (e.data.need - e.marks!.length))} Seelen` : 'die Pilze sind verwelkt'),
+  },
+  {
+    id: 'fledermaeuse', cat: 'challenge', trigger: 'calm', biome: 1, title: 'Fledermausschwarm', tier: 1, limit: 30,
+    intro: ['Flatter, flatter – ein ganzer Schwarm!', 'Die Decke bewegt sich. Die Decke sind Fledermäuse.'],
+    start(a, e) {
+      for (let k = 0; k < 4 + (a.floor >= 8 ? 1 : 0); k++) { const s = a.near(3, 6); if (s) a.spawn(e, 'fledermaus', s[0], s[1]); }
+      return e.mobs.length > 0;
+    },
+    tick: killAll,
+    goal: (a, e) => `Vertreibe den Schwarm ${beaten(a, e)}`,
+  },
+  {
+    id: 'wurzeln', cat: 'challenge', trigger: 'calm', biome: 1, title: 'Wurzelgriff', tier: 1, limit: 30,
+    intro: ['Wurzeln schießen aus dem Boden und packen deine Füße!', 'Etwas greift nach deinen Knöcheln. Holz. Lebendiges Holz.'],
+    start(a, e) {
+      const s = a.near(3, 6);
+      if (!s) return false;
+      a.root(2);
+      spawnAt(a, e, [[s[0], s[1]]], 1);
+      const s2 = a.near(3, 6); if (s2 && (s2[0] !== s[0] || s2[1] !== s[1])) a.spawn(e, 'sporling', s2[0], s2[1]);
+      a.warn(a.near2(a.p.x, a.p.y, 1, 1));
+      return true;
+    },
+    tick(a, e) { a.strike(2, 'spike'); return killAll(a, e); },
+    goal: (a, e) => `Reiß dich los und besiege sie ${beaten(a, e)}`,
+  },
+  {
+    id: 'schlamm', cat: 'challenge', trigger: 'room', biome: 1, title: 'Schlammflut', tier: 2, limit: 35,
+    intro: ['Brauner Schlamm quillt aus dem Boden. Wer hineintritt, bleibt stecken!', 'Blubb. Der Boden wird zu Brei.'],
+    start(a, e) {
+      const pi = a.p.y * W + a.p.x;
+      a.mud(a.roomTiles(e.room!).filter(i => i !== pi && a.isFloor(i) && a.chance(0.35)));
+      return spawnAt(a, e, shuffled(a, a.edge(e.room!)), 2 + (a.floor >= 8 ? 1 : 0));
+    },
+    tick: killAll,
+    goal: (a, e) => `Besiege sie, meide den Schlamm ${beaten(a, e)}`,
+  },
+  {
+    id: 'riesenpilz', cat: 'danger', trigger: 'room', biome: 1, title: 'Riesenpilz', tier: 2, limit: 15, survive: true,
+    intro: ['Ein riesiger Pilz pulsiert. Gleich platzt er!', 'Der Pilz in der Mitte bläht sich auf. Und wieder. Und wieder.'],
+    start(a, e) {
+      const t = far(a, e, 3);
+      if (t < 0) return false;
+      a.spawn(e, 'riesenpilz', t % W, (t / W) | 0);
+      e.data.px = t % W; e.data.py = (t / W) | 0;
+      return true;
+    },
+    tick(a, e) {
+      a.strike(2, 'gas');
+      if (!a.alive(e).length) return 'won';
+      if (e.turns % 3 === 2) a.warn(a.near2(e.data.px, e.data.py, 1, 2));
+      return 'run';
+    },
+    goal: (a, e) => `Zerstöre den Riesenpilz oder halte Abstand · noch ${left(e)} Züge`,
+  },
+  {
+    id: 'brutnest', cat: 'challenge', trigger: 'room', biome: 1, title: 'Brutnest', tier: 0, limit: 40,
+    intro: ['Grüne Eier pulsieren. Zerstöre sie, bevor sie schlüpfen!', 'Ein Nest. Es zuckt. Schnell!'],
+    start(a, e) {
+      e.data.hatch = 8;
+      for (let k = 0; k < 3; k++) { const t = far(a, e, 2); if (t >= 0) a.spawn(e, 'ei', t % W, (t / W) | 0); }
+      return e.mobs.length > 0;
+    },
+    tick(a, e) {
+      if (e.turns === e.data.hatch) {
+        const eggs = a.alive(e).filter(m => m.name === 'Sporenei');
+        if (eggs.length) { a.say('Die Eier schlüpfen!'); e.data.hatched = 1; }
+        for (const m of eggs) { a.remove(m); a.spawn(e, 'sporling', m.x, m.y); }
+      }
+      return a.alive(e).some(m => m.hp > 0) ? 'run' : 'won';
+    },
+    goal: (a, e) => (e.data.hatched ? `Besiege die Brut ${beaten(a, e)}` : `Zerstöre die Eier · schlüpfen in ${Math.max(0, e.data.hatch - e.turns)} Zügen`),
+    won: (a, e) => (e.data.hatched ? a.reward(1) : a.reward(2)),
   },
 ];
 
