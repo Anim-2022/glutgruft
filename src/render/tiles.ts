@@ -174,3 +174,44 @@ export function grassBed(b: BiomeCols): HTMLCanvasElement {
   g.globalAlpha = 1;
   return c;
 }
+
+// ---- Brandfläche: Rußschleier, Rußflecken, verkohlte Risse, Asche; dichter Kern, wo ringsum alles verbrannt ist ----
+export function scorchTiles(rnd: () => number): { scorch: HTMLCanvasElement[]; core: HTMLCanvasElement; char: HTMLCanvasElement[] } {
+  const scorch: HTMLCanvasElement[] = [];
+  const blot = (g: CanvasRenderingContext2D, col: string, cx: number, cy: number, rx: number, ry: number) => {
+    for (let y = Math.floor(cy - ry); y <= cy + ry; y++) for (let x = Math.floor(cx - rx); x <= cx + rx; x++) {
+      if (x < 0 || y < 0 || x >= TS || y >= TS) continue;
+      if (((x - cx) / rx) ** 2 + ((y - cy) / ry) ** 2 <= 1) px(g, col, x, y);
+    }
+  };
+  for (let v = 0; v < 3; v++) {
+    const [c, g] = mk(TS, TS);
+    px(g, 'rgba(12,10,16,0.5)', 0, 0, TS, TS);
+    for (let k = 0; k < 3; k++) blot(g, 'rgba(8,6,12,0.45)', 2 + rnd() * 12, 2 + rnd() * 12, 2 + rnd() * 3, 1.5 + rnd() * 2);
+    // verkohlte Risse
+    let x = 2 + ((rnd() * 12) | 0), y = 1 + ((rnd() * 4) | 0);
+    for (let s = 0; s < 8; s++) { px(g, 'rgba(5,6,12,0.8)', x, y); x = Math.max(0, Math.min(15, x + ((rnd() * 3) | 0) - 1)); y = Math.min(15, y + 1 + ((rnd() * 2) | 0) - (s % 3 ? 0 : 1)); }
+    // Asche
+    for (let k = 0; k < 6; k++) px(g, rnd() < 0.6 ? '#566c86' : '#8b8f9c', (rnd() * 16) | 0, (rnd() * 16) | 0);
+    scorch.push(c);
+  }
+  const [core, cg] = mk(TS, TS);
+  px(cg, 'rgba(5,6,12,0.3)', 0, 0, TS, TS);
+  blot(cg, 'rgba(5,6,12,0.3)', 8, 8, 6, 5);
+  // Reste: verkohlte Dauben und ein Fassreif, ein angekohlter Balken
+  const char: HTMLCanvasElement[] = [];
+  {
+    const [c, g] = mk(TS, TS);
+    px(g, '#1c0f14', 3, 9, 5, 2); px(g, '#5a3a28', 3, 9, 4, 1); px(g, '#ef7d57', 7, 9);
+    px(g, '#1c0f14', 9, 5, 2, 5); px(g, '#5a3a28', 9, 5, 1, 4);
+    px(g, '#4a4d58', 5, 12, 6, 1); px(g, '#4a4d58', 4, 11); px(g, '#4a4d58', 11, 11); px(g, '#8b8f9c', 6, 12, 2, 1);
+    char.push(c);
+  }
+  {
+    const [c, g] = mk(TS, TS);
+    px(g, '#1c0f14', 2, 7, 10, 2); px(g, '#5a3a28', 3, 7, 7, 1); px(g, '#05060c', 6, 8, 1, 1); px(g, '#b13e53', 11, 7);
+    px(g, '#566c86', 12, 10, 2, 1); px(g, '#566c86', 4, 11, 1, 1);
+    char.push(c);
+  }
+  return { scorch, core, char };
+}

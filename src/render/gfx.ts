@@ -4,7 +4,7 @@ export const VW = 640, VH = 360, TS = 16;
 import { PAL, SPR, ACTORS, NO_OUTLINE, VIEWS, FLOATERS, WEAPON_ART, WeaponArt, DECALS } from './sprites';
 import { tr } from '../core/i18n';
 import { poseFrames } from './poses';
-import { floorMacro, capBase, capEdges, capTiles, plinth, grassBed } from './tiles';
+import { floorMacro, capBase, capEdges, capTiles, plinth, grassBed, scorchTiles } from './tiles';
 export { PAL };
 
 export const sprites: Record<string, HTMLCanvasElement> = {};
@@ -26,6 +26,7 @@ export interface TileSet {
   floorM: HTMLCanvasElement[][]; // Bodenmuster 2×2: Spielart → vier Viertel
   caps: HTMLCanvasElement[]; capEdge: HTMLCanvasElement[]; // Mauerkrone und ihre Kanten je offene Seiten (Bit 1 oben, 2 links, 4 rechts)
   bed: HTMLCanvasElement; // Moosgrund unter Gras
+  scorch: HTMLCanvasElement[]; scorchCore: HTMLCanvasElement; char: HTMLCanvasElement[]; // Brandfläche, dichter Kern, verkohlte Reste
 }
 export const tilesets: TileSet[] = [];
 
@@ -251,7 +252,7 @@ export function bake(): void {
       g.fillStyle = '#ffcd75'; g.fillRect((f * 4 + 2) % TS, 7 + Math.round(Math.sin(((f * 4 + 2) % TS + f * 2) * 0.55) * 2), 2, 1);
       lava.push(c);
     }
-    tilesets.push({ floor, floorX, walls, lava, wall, top, cap, hi: b.capHi, grass, burnt, decals, floorM: floorMacro(b, bi, rnd), caps, capEdge, bed: grassBed(b) });
+    tilesets.push({ floor, floorX, walls, lava, wall, top, cap, hi: b.capHi, grass, burnt, decals, floorM: floorMacro(b, bi, rnd), caps, capEdge, bed: grassBed(b), ...(({ scorch, core, char }) => ({ scorch, scorchCore: core, char }))(scorchTiles(rnd)) });
   }
 }
 

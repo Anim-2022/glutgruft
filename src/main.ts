@@ -443,6 +443,7 @@ requestAnimationFrame(frame);
 // Für automatisierte Tests
 (window as unknown as { __g: unknown }).__g = { get run() { return run; }, get scene() { return scene; }, meta, sprites,
   start(seed: number, cls: 'krieger' | 'magier' | 'waldlaeufer') { resetView(); run = newRun(seed, cls, meta); scene = 'run'; return run; },
+  act(a: Action) { if (run) act(run, a); },
   // Abstieg bis Ebene n (für Bildschirmfotos): Treppe unter den Helden legen und hinabsteigen
   goto(n: number) {
     if (!run) return;

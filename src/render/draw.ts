@@ -9,6 +9,7 @@ import { dropShadow, drawAO } from './shade';
 import { floorTint, softEdged } from './tiles';
 import { propsFor, drawProp, recolor } from './props';
 import { stepAmbient, drawAmbient, drawFog, resetAmbient, postFx } from './ambient';
+import { drawFlames, smoke, drawSmoke, resetFire, trackBurns, drawEmbers } from './fire';
 
 // Arena des Bosses: Fackeln brennen in seiner Farbe [außen, Kern], dazu eine Aura um ihn
 const BOSS_FLAME: [string, string][] = [['#9a4fc0', '#c9d4dc'], ['#38b764', '#a7f070'], ['#ef7d57', '#f4f4f4']];
@@ -25,6 +26,7 @@ const flashes = new Map<number, number>();
 const nums: { x: number; y: number; s: string; col: string; t: number }[] = [];
 const bolts: { x0: number; y0: number; x1: number; y1: number; col: string; t: number }[] = [];
 const booms: { x: number; y: number; r: number; t: number }[] = [];
+const fuseTags: { x: number; y: number; n: number }[] = []; // Zähler über brennenden Lunten (nach dem Licht gezeichnet)
 const bits: { x: number; y: number; vx: number; vy: number; col: string; t: number; g?: number }[] = [];
 let shake = 0;
 // Fähigkeitseffekte (nur Darstellung)
@@ -92,7 +94,7 @@ export function resetView() {
   pos.clear(); lunges.clear(); flashes.clear();
   nums.length = 0; bolts.length = 0; bits.length = 0; booms.length = 0; shake = 0;
   shots.length = 0; rings.length = 0; sparks.length = 0; bashes.length = 0; swipes.length = 0; deathT = -1; poses.clear();
-  resetDeaths(); resetAmbient();
+  resetDeaths(); resetAmbient(); resetFire(); fuseTags.length = 0;
 }
 
 function smooth(a: Actor, dt: number) {
@@ -129,7 +131,15 @@ export function drawRun(ctx: CanvasRenderingContext2D, run: Run, dt: number, tim
       case 'flash': flashes.set(f.id, FLASH_T); if (f.id === 0) sfx('hurt'); break;
       case 'die': shake = Math.max(shake, onDeath(run, f.kind, f.x, f.y)); sfx('kill'); break;
       case 'loot': loot = { item: f.item, how: f.how, t: 0 }; sfx('pick'); break;
-      case 'boom': booms.push({ x: f.x, y: f.y, r: f.r, t: 0 }); sfx('boom'); break;
+      case 'boom': {
+        booms.push({ x: f.x, y: f.y, r: f.r, t: 0 }); sfx('boom');
+        const bx = f.x * TS + 8, by = f.y * TS + 8;
+        if (!reducedFx()) smoke(bx, by - 2, 4 + f.r * 5, true);
+        burstBits(bx, by, 6 + f.r * 6, ['#ffcd75', '#ef7d57', '#f4f4f4'], 40, 120, 50);
+        // Fass: Dauben und Reifen fliegen davon
+        if (f.barrel) burstBits(bx, by, 14, ['#8a5a3a', '#5a3a28', '#1c0f14', '#4a4d58'], 50, 130, 70);
+        break;
+      }
       case 'fireball': case 'arrow': {
         // Schütze: Held oder Gegner auf dem Startfeld zeigt seine Angriffs- bzw. Zauberpose
         if (f.x0 === run.p.x && f.y0 === run.p.y) pose(0, f.k === 'fireball' ? 'c' : 'a', 0.26);
@@ -247,7 +257,14 @@ export function drawRun(ctx: CanvasRenderingContext2D, run: Run, dt: number, tim
         else { const h = hash(x, y, run.seed + run.floor * 7); if (h % 9 === 0) ctx.drawImage(ts.decals[(h >>> 8) % ts.decals.length], dx, dy); }
       }
       if (t === T.GRASS) ctx.drawImage(ts.grass[(x * 5 + y * 3) % 3], dx, dy);
-      else if (t === T.BURNT) ctx.drawImage(softEdged(ts.burnt, edge(T.BURNT)), dx, dy);
+      else if (t === T.BURNT) {
+        // Brandfläche: Ruß mit gerastertem Rand, dichter Kern wo ringsum alles verbrannt ist, ab und zu verkohlte Reste
+        const hb = hash(x, y, 505), e = edge(T.BURNT);
+        ctx.drawImage(softEdged(ts.scorch[hb % ts.scorch.length], e), dx, dy);
+        if (!e) ctx.drawImage(ts.scorchCore, dx, dy);
+        if (hb % 5 === 0) ctx.drawImage(ts.char[(hb >>> 4) % ts.char.length], dx, dy);
+        drawEmbers(ctx, i, x, y, dx, dy, time, lights); // frisch verbrannt: glimmt nach
+      }
       floorTiles.push(i);
     }
   }
@@ -260,7 +277,10 @@ export function drawRun(ctx: CanvasRenderingContext2D, run: Run, dt: number, tim
     if (t === T.CRATE_ON) ctx.drawImage(sprites.plate, dx, dy);
     const sh = OBJ_SHADOW[t];
     if (sh) dropShadow(ctx, dx + 8, dy + sh[0], sh[1]);
-    if (s) ctx.drawImage(sprites[s], dx, dy);
+    // Lunte: Fass zittert im letzten Zug, Zähler der verbleibenden Züge darüber
+    const fz = t === T.BARREL ? run.fuses.get(i) : undefined;
+    if (s) ctx.drawImage(sprites[s], dx + (fz === 1 ? Math.round(Math.sin(time * 60)) : 0), dy);
+    if (fz !== undefined && run.vis[i]) { fuseTags.push({ x: dx + 8 - ox, y: dy - 10 - oy, n: fz }); lights.push({ x, y: y - 0.4, r: 1.3, col: '#ffcd75', a: 0.7 }); }
     if (t === T.CRATE_ON) { ctx.fillStyle = 'rgba(255,205,117,0.3)'; ctx.fillRect(dx + 1, dy + 1, 14, 14); }
     if (t === T.GOAL) { ctx.fillStyle = `rgba(115,239,247,${0.15 + 0.1 * Math.sin(time * 4)})`; ctx.fillRect(dx, dy, TS, TS); lights.push({ x, y, r: 2.2, col: '#73eff7', a: 0.8 }); }
     if (t === T.FOUNTAIN) lights.push({ x, y, r: 2.4, col: '#41a6f6', a: 0.7 });
@@ -275,8 +295,12 @@ export function drawRun(ctx: CanvasRenderingContext2D, run: Run, dt: number, tim
       ctx.fillStyle = '#ef7d57'; ctx.fillRect(dx + 6, dy, 1, 1); ctx.fillRect(dx + 9, dy - 2, 1, 1);
     }
     if (run.fire.has(i) && run.vis[i]) {
-      ctx.drawImage(sprites[Math.floor(time * 8 + x + y) % 2 ? 'fire_a' : 'fire_b'], dx, dy - 2);
-      lights.push({ x, y, r: 3 * flick(i), col: '#ef7d57' });
+      // Flammen wachsen mit der Restdauer; frisches Feuer raucht und sprüht Funken
+      const k = Math.min(1, (run.fire.get(i) ?? 1) / 3);
+      drawFlames(ctx, dx, dy, x, y, k, time);
+      lights.push({ x, y, r: (2.2 + 1.4 * k) * flick(i), col: '#ef7d57' });
+      if (fx && Math.random() < dt * (0.8 + 2.5 * k)) smoke(x * TS + 8, y * TS + 4 - 4 * k);
+      if (fx && Math.random() < dt * 5 * k) bits.push({ x: x * TS + 3 + Math.random() * 10, y: y * TS + 6, vx: (Math.random() - 0.5) * 10, vy: -25 - Math.random() * 20, col: Math.random() < 0.5 ? '#ffcd75' : '#ef7d57', t: 0, g: -15 });
     }
     if (t === T.ALTAR) lights.push({ x, y, r: 2.6 + 0.3 * Math.sin(time * 3), col: '#73eff7', a: 0.8 });
     if (t === T.STAIRS) lights.push({ x, y, r: 1.9 + 0.2 * Math.sin(time * 2), col: '#94b0c2', a: 0.8 }); // Wegweiser nach unten
@@ -406,6 +430,7 @@ export function drawRun(ctx: CanvasRenderingContext2D, run: Run, dt: number, tim
   for (const [m, q] of order) if (m.boss && !GLOW[m.kind]) lights.push({ x: q.x, y: q.y, r: 3.2, col: BOSS_FLAME[bio][0], a: 0.5 });
   // Schwebeteilchen: Staub, Sporen, Asche liegen im Lichtschein
   if (fx) { stepAmbient(bio, run.tiles, run.vis, x0, y0, x1, y1, dt); drawAmbient(ctx, ox, oy, false); }
+  drawSmoke(ctx, ox, oy, dt);
 
   for (let i = bits.length - 1; i >= 0; i--) {
     const b = bits[i];
@@ -419,8 +444,14 @@ export function drawRun(ctx: CanvasRenderingContext2D, run: Run, dt: number, tim
   for (let i = booms.length - 1; i >= 0; i--) {
     const b = booms[i];
     b.t += dt;
-    if (b.t > 0.32) { booms.splice(i, 1); continue; }
-    const f = b.t / 0.32, cx = b.x * TS + 8 + ox, cy = b.y * TS + 8 + oy, rad = (b.r + 0.5) * TS * (0.4 + 0.6 * f);
+    const dur = 0.28 + 0.06 * b.r;
+    if (b.t > dur) { booms.splice(i, 1); continue; }
+    const f = b.t / dur, cx = b.x * TS + 8 + ox, cy = b.y * TS + 8 + oy, rad = (b.r + 0.5) * TS * (0.4 + 0.6 * f);
+    // Druckwelle: dünner Ring, der schneller wächst als der Feuerball
+    const wr = (b.r + 1) * TS * Math.min(1, f * 1.6), steps = Math.max(24, Math.round(wr * 1.4));
+    ctx.globalAlpha = Math.max(0, 0.8 - f);
+    ctx.fillStyle = '#f4f4f4';
+    for (let k = 0; k < steps; k++) { const a = (k / steps) * Math.PI * 2; ctx.fillRect(Math.round(cx + Math.cos(a) * wr), Math.round(cy + Math.sin(a) * wr * 0.8), 1, 1); }
     for (let yy = -rad; yy <= rad; yy += 2) for (let xx = -rad; xx <= rad; xx += 2) {
       const d = Math.hypot(xx, yy) / rad;
       if (d > 1 || d < f * 0.9 - 0.25) continue;
@@ -548,12 +579,14 @@ export function drawRun(ctx: CanvasRenderingContext2D, run: Run, dt: number, tim
     }
     ctx.globalAlpha = 1;
   }
-  for (const b of booms) lights.push({ x: b.x, y: b.y, r: 6 * (1 - b.t / 0.32) + 1, col: '#ffcd75' });
+  for (const b of booms) lights.push({ x: b.x, y: b.y, r: (4 + 1.5 * b.r) * Math.max(0, 1 - b.t / (0.28 + 0.06 * b.r)) + 1, col: '#ffcd75' });
   for (const b of bolts) lights.push({ x: b.x1, y: b.y1, r: 2, col: b.col === '#1a1c2c' ? undefined : b.col, a: 0.7 });
   const amb = AMBIENTS[bio];
   applyLight(ctx, run, lights, ox, oy, boss ? { ...amb, dark: Math.min(0.9, amb.dark + 0.05) } : amb, VW, VH, fx);
   if (fx) drawAmbient(ctx, ox, oy, true); // Glutfunken leuchten selbst
   postFx(ctx, bio, VW, VH);
+  // Lunten-Zähler über der Dunkelheit
+  for (const f of fuseTags.splice(0)) text(ctx, String(f.n), f.x + ox, f.y + oy + (f.n === 1 ? Math.round(Math.sin(time * 30)) : 0), f.n === 1 ? '#b13e53' : '#ffcd75', 8, 'center');
   // Schadenszahlen über der Dunkelheit, damit sie lesbar bleiben
   for (let i = nums.length - 1; i >= 0; i--) {
     const n = nums[i];
