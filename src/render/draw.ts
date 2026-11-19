@@ -17,7 +17,7 @@ const bossTorch: HTMLCanvasElement[][] = [];
 const torchOf = (bi: number, f: number) => (bossTorch[bi] ??= [0, 1].map(k => recolor(sprites[`torch${k}`], { '#ef7d57': BOSS_FLAME[bi][0], '#ffcd75': BOSS_FLAME[bi][1] })))[f];
 import { sfx } from '../core/audio';
 import { tr } from '../core/i18n';
-import { Run, Actor, xpNeed, skillCost, skillReady, spellAt, itemText, itemValue, itemScore, perkInfo, skillModName, shotRange, RANKS, SORT_NAMES, BAG_MAX, RUNE_NAMES, availableNodes, puzzleGoal, dartWarn, inVault, VAULT_NAMES, HAZARD_NAMES } from '../game/run';
+import { Run, Actor, xpNeed, skillCost, skillReady, spellAt, itemText, itemValue, itemScore, perkInfo, skillModName, shotRange, RANKS, SORT_NAMES, BAG_MAX, RUNE_NAMES, availableNodes, puzzleGoal, eventGoal, dartWarn, inVault, VAULT_NAMES, HAZARD_NAMES } from '../game/run';
 import { ClassId, treeNodes, NEW_SKILLS, TUNE, BRANCH_NAMES, SKILL_UP, treeNode, nodeText, CLASSES, MOBS, PERKS, RELICS, RARITY, RARITY_COL, BIOME_NAMES, biomeOf, Item, AFFIX, CONSUMABLES, SLOT_NAMES, ULT, ULT_LEVEL, USE_ORDER, SYNERGIES } from '../game/content';
 
 const pos = new Map<number, { x: number; y: number }>();
@@ -128,6 +128,7 @@ export function drawRun(ctx: CanvasRenderingContext2D, run: Run, dt: number, tim
       case 'flash': flashes.set(f.id, FLASH_T); if (f.id === 0) sfx('hurt'); break;
       case 'die': shake = Math.max(shake, onDeath(run, f.kind, f.x, f.y)); sfx('kill'); break;
       case 'loot': loot = { item: f.item, how: f.how, t: 0 }; sfx('pick'); break;
+      case 'banner': banner = { title: f.title, sub: f.sub, col: f.col, t: 0 }; sfx(f.title === 'GESCHAFFT!' ? 'solve' : 'level'); break;
       case 'boom': {
         booms.push({ x: f.x, y: f.y, r: f.r, t: 0 }); sfx('boom');
         const bx = f.x * TS + 8, by = f.y * TS + 8;
@@ -339,6 +340,26 @@ export function drawRun(ctx: CanvasRenderingContext2D, run: Run, dt: number, tim
     ctx.fillStyle = `rgba(177,62,83,${(0.28 + 0.1 * Math.sin(time * 8)).toFixed(3)})`;
     for (const ly of lanes) for (let lx = run.puzzle.x; lx < run.puzzle.x + 7; lx++) if (run.seen[ly * W + lx] && walkable(run.tiles[ly * W + lx])) ctx.fillRect(lx * TS + ox, ly * TS + oy, TS, TS);
   }
+  // Ereignis: Felder, die im nächsten Zug getroffen werden, und das Zielfeld (Geist, leuchtende Truhe)
+  if (run.warn?.length) {
+    // rote Felder: Fläche plus heller Rand, damit sie auch auf rötlichem Boden (Schmiede) auffallen
+    const pulse = 0.32 + 0.12 * Math.sin(time * 9);
+    for (const i of run.warn) {
+      if (!run.seen[i]) continue;
+      const x = (i % W) * TS + ox, y = ((i / W) | 0) * TS + oy;
+      ctx.fillStyle = `rgba(177,62,83,${pulse.toFixed(3)})`; ctx.fillRect(x, y, TS, TS);
+      ctx.fillStyle = `rgba(255,120,120,${(pulse + 0.3).toFixed(3)})`;
+      ctx.fillRect(x + 1, y + 1, TS - 2, 1); ctx.fillRect(x + 1, y + TS - 2, TS - 2, 1); ctx.fillRect(x + 1, y + 2, 1, TS - 4); ctx.fillRect(x + TS - 2, y + 2, 1, TS - 4);
+    }
+  }
+  const mark = run.ev?.mark;
+  if (mark !== undefined) {
+    const mx = mark % W, my = (mark / W) | 0, chest = !!run.ev!.data.chest;
+    ctx.globalAlpha = 0.75 + 0.25 * Math.sin(time * 5);
+    ctx.drawImage(sprites[chest ? 'chest' : 'irrlicht'], mx * TS + ox, my * TS + oy - (chest ? 0 : 2 + Math.round(Math.sin(time * 3))));
+    ctx.globalAlpha = 1;
+    lights.push({ x: mx, y: my, r: 2.6 + 0.3 * Math.sin(time * 4), col: chest ? '#ffcd75' : '#73eff7', a: 0.9 });
+  }
   drawDying(ctx, run, ox, oy, lights, dt);
 
   // Status auf dem Sprite: Betäubung, Brand, Gift, Spröde, Schutzwall
@@ -429,6 +450,10 @@ export function drawRun(ctx: CanvasRenderingContext2D, run: Run, dt: number, tim
       for (let n = aura ? 3 : 1; n > 0; n--) if (Math.random() < dt * 9) bits.push({ x: (q.x * TS) + (aura ? -4 + Math.random() * 24 : 4 + Math.random() * 8), y: q.y * TS + (aura ? -8 + Math.random() * 20 : 2 + Math.random() * 6), vx: (Math.random() - 0.5) * 10, vy: -18 - Math.random() * 14, col: Math.random() < 0.5 ? '#ffcd75' : '#ef7d57', t: 0, g: -10 });
     }
     if (a === p && p.gear[2] && v === 'f') { ctx.fillStyle = RARITY_COL[p.gear[2].rar]; ctx.fillRect(dx + 7, dy + 9, 2, 1); ctx.fillRect(dx + 7, dy + 10, 2, 1); }
+    if (a.ev && a !== p) {
+      // Ereignisgegner: kleines Ausrufezeichen über dem Kopf
+      ctx.fillStyle = '#ffcd75'; ctx.fillRect(dx + 7, dy - 6, 2, 3); ctx.fillRect(dx + 7, dy - 2, 2, 1);
+    }
     if (a.elite) {
       ctx.fillStyle = '#ffcd75';
       ctx.fillRect(dx + 5, dy - 3, 1, 2); ctx.fillRect(dx + 8, dy - 4, 1, 3); ctx.fillRect(dx + 11, dy - 3, 1, 2); ctx.fillRect(dx + 5, dy - 1, 7, 1);
@@ -634,6 +659,18 @@ export function drawRun(ctx: CanvasRenderingContext2D, run: Run, dt: number, tim
   tooltip(ctx, run, ox - sx, oy - sy);
   if (loot) { loot.t += dt; if (loot.t > 7) loot = null; }
   hud(ctx, run, time);
+  if (banner) {
+    banner.t += dt;
+    if (banner.t > 3.2) banner = null;
+    else {
+      const a = Math.min(1, banner.t * 5, (3.2 - banner.t) * 2), sub = tr(banner.sub), w = Math.max(tr(banner.title).length * 12, sub.length * 6) + 28;
+      ctx.globalAlpha = a;
+      panel(ctx, VW / 2 - w / 2, 78, w, 44, banner.col);
+      text(ctx, banner.title, VW / 2, 84, banner.col, 16, 'center');
+      text(ctx, banner.sub, VW / 2, 106, '#f4f4f4', 8, 'center');
+      ctx.globalAlpha = 1;
+    }
+  }
   if (mapMode) minimap(ctx, run, time);
   if (overlay === 'char') charSheet(ctx, run);
   else if (overlay === 'help') helpSheet(ctx);
@@ -674,7 +711,7 @@ function slots(run: Run): Slot[] {
   return out;
 }
 
-const STATUS: [string, string, string][] = [['brand', 'Brand', '#ef7d57'], ['gift', 'Gift', '#38b764'], ['stark', 'Kriegsschrei', '#b13e53'], ['wall', 'Bollwerk', '#41a6f6'], ['dodge', 'Ausweichen', '#94b0c2'], ['konter', 'Konter', '#ffcd75']];
+const STATUS: [string, string, string][] = [['netz', 'Netz', '#c9d4dc'], ['brand', 'Brand', '#ef7d57'], ['gift', 'Gift', '#38b764'], ['stark', 'Kriegsschrei', '#b13e53'], ['wall', 'Bollwerk', '#41a6f6'], ['dodge', 'Ausweichen', '#94b0c2'], ['konter', 'Konter', '#ffcd75']];
 
 let logSeen = '', logAt = 0;
 
@@ -712,6 +749,14 @@ function hud(ctx: CanvasRenderingContext2D, run: Run, time: number) {
     const z = run.puzzle!, col = z.solved ? '#a7f070' : z.dead ? '#566c86' : z.kind === 'arena' && z.started ? '#b13e53' : '#73eff7', gw = tr(goal).length * 6 + 12;
     ctx.fillStyle = 'rgba(8,9,15,0.7)'; ctx.fillRect(VW / 2 - gw / 2, 56, gw, 14);
     text(ctx, goal, VW / 2, 59, col, 8, 'center');
+  } else {
+    // Ziel des laufenden Ereignisses
+    const ev = eventGoal(run);
+    if (ev) {
+      const s = `${ev.title} – ${ev.goal}`, gw = tr(s).length * 6 + 12;
+      ctx.fillStyle = 'rgba(8,9,15,0.7)'; ctx.fillRect(VW / 2 - gw / 2, 56, gw, 14);
+      text(ctx, s, VW / 2, 59, ev.col, 8, 'center');
+    }
   }
 
   // Ebene und Vorräte: eine Zeile oben rechts
@@ -800,6 +845,7 @@ function hud(ctx: CanvasRenderingContext2D, run: Run, time: number) {
 
 // ---- Gegenstände ----
 let loot: { item: Item; how: 'worn' | 'bag' | 'sold'; t: number } | null = null;
+let banner: { title: string; sub: string; col: string; t: number } | null = null;
 // Platz des zuletzt gefundenen Stücks im Rucksack, solange die Fundkarte sichtbar ist
 export const lootIndex = (run: Run) => loot && loot.how === 'bag' ? run.p.bag.indexOf(loot.item) : -1;
 export const lootDone = () => { if (loot) { loot.how = 'worn'; loot.t = Math.max(loot.t, 4.5); } };
@@ -1123,6 +1169,13 @@ function minimap(ctx: CanvasRenderingContext2D, run: Run, time: number) {
     ctx.fillRect(x0 + x * s, y0 + y * s, s, s);
   }
   for (const m of run.mobs) if (run.vis[m.y * W + m.x]) { ctx.fillStyle = m.elite ? '#ffcd75' : '#b13e53'; ctx.fillRect(x0 + m.x * s, y0 + m.y * s, s, s); }
+  // Ereignis: Gesuchte und Zielfeld sind immer auf der Karte
+  if (Math.floor(time * 3) % 2) {
+    ctx.fillStyle = '#ffcd75';
+    for (const m of run.mobs) if (m.ev) ctx.fillRect(x0 + m.x * s - 1, y0 + m.y * s - 1, s + 2, s + 2);
+    const mk = run.ev?.mark;
+    if (mk !== undefined) { ctx.fillStyle = '#73eff7'; ctx.fillRect(x0 + (mk % W) * s - 1, y0 + ((mk / W) | 0) * s - 1, s + 2, s + 2); }
+  }
   if (big || Math.floor(time * 4) % 2) {
     ctx.fillStyle = '#f4f4f4';
     if (big) ctx.fillRect(x0 + run.p.x * s - 1, y0 + run.p.y * s - 1, s + 2, s + 2); else ctx.fillRect(x0 + run.p.x - 1, y0 + run.p.y - 1, 3, 3);

@@ -5,7 +5,7 @@
 // HAZARDS=on|off, MIMICS=on|off (neue Systeme; alle aus = Bit für Bit wie vorher), ECON=1 (Wirtschaftszeile auch ohne sie)
 import { defaultMeta } from '../src/core/save';
 import { newRun, act, Run, playerAtk, spellAt } from '../src/game/run';
-import { CLASS_ORDER, MOBS, treeNodes, ClassId, TUNE, FEATURES } from '../src/game/content';
+import { CLASS_ORDER, MOBS, treeNodes, ClassId, TUNE, FEATURES, EVENT } from '../src/game/content';
 import { botAction, setBuild, Build } from './bot';
 
 type Proc = { env: Record<string, string | undefined>; argv: string[]; execPath: string; stdout: { write(s: string): void }; getBuiltinModule(n: string): unknown };
@@ -26,7 +26,12 @@ type Result = { out: string[]; sum: string; su: Record<string, number>; freq: Re
 const TUNE0 = { ...TUNE };
 FEATURES.hazards = ENV.HAZARDS !== 'off';
 FEATURES.mimics = ENV.MIMICS !== 'off';
-const EXTRA = FEATURES.hazards || FEATURES.mimics || ENV.ECON === '1';
+FEATURES.events = ENV.EVENTS !== 'off';
+FEATURES.eventRate = +(ENV.EVENT_RATE ?? FEATURES.eventRate);
+FEATURES.eventForce = ENV.EVENT_FORCE ?? '';
+// EVENT_SET=item2=0,relicChance=0 … überschreibt Ereigniswerte für Messläufe
+for (const kv of (ENV.EVENT_SET ?? '').split(',').filter(Boolean)) { const [k, v] = kv.split('='); (EVENT as Record<string, number>)[k] = +v; }
+const EXTRA = FEATURES.hazards || FEATURES.mimics || FEATURES.events || ENV.ECON === '1';
 
 function runCell({ variant: full, set, mname, cls }: Cell): Result {
   const [variant, ...tunes] = full.split(':');
@@ -84,6 +89,7 @@ function runCell({ variant: full, set, mname, cls }: Cell): Result {
         }
         if ((run.mode as string) === 'dead') {
           F0!.deaths++;
+          if (run.ev) { (run.tele ??= {})[`evDeath_${run.ev.id}`] = 1; run.tele.evDeath = (run.tele.evDeath ?? 0) + 1; }
           const adj = run.mobs.filter(m => Math.max(Math.abs(m.x - run.p.x), Math.abs(m.y - run.p.y)) <= 5 && run.vis[m.y*64+m.x]).map(m => m.kind + (m.elite ? '*' : ''));
           const key = adj.length ? [...new Set(adj)].sort().join('+') : (run.p.st.gift ? 'gift' : run.p.st.brand ? 'brand' : 'other');
           killers[key] = (killers[key] ?? 0) + 1; if (run.mobs.some(m => m.boss && run.vis[m.y*64+m.x])) bossDeaths++;
@@ -103,6 +109,12 @@ function runCell({ variant: full, set, mname, cls }: Cell): Result {
     if (EXTRA) {
       const t = (k: string) => ((tele[k] ?? 0) / N).toFixed(2);
       out.push(`Wirtschaft/Lauf: Reliquien ${(relics / N).toFixed(2)}, Gegenstände ${(items / N).toFixed(1)} (Seltenheit ${rar.map(r => (r / N).toFixed(1)).join('/')}), Verbrauchsgüter ${(cons / N).toFixed(1)}, Seelen ${(souls / N).toFixed(0)}`);
+      if (FEATURES.events) {
+        const ids = [...new Set(Object.keys(tele).filter(k => k.startsWith('evStart_')).map(k => k.slice(8)))].sort();
+        const started = ids.reduce((a, id) => a + (tele[`evStart_${id}`] ?? 0), 0), won = ids.reduce((a, id) => a + (tele[`evWon_${id}`] ?? 0), 0);
+        out.push(`Ereignisse/Lauf: gestartet ${(started / N).toFixed(2)}, geschafft ${(won / N).toFixed(2)}, entfallen ${t('evSkip')}, Tode im Ereignis ${t('evDeath')} · Lohn/Lauf: Gold ${t('evGold')}, Seelen ${t('evSouls')}, Gegenstände ${t('evItems')}, Reliquienwahl ${t('evRelic')}`);
+        out.push('Ereignis: ' + ids.map(id => `${id} ${tele[`evStart_${id}`] ?? 0}/${tele[`evWon_${id}`] ?? 0}/${tele[`evDeath_${id}`] ?? 0}`).join('  ') + '  (gestartet/geschafft/Tode)');
+      }
       out.push(`Fallen/Lauf: ausgelöst ${t('trapHit')}, Schaden ${t('trapDmg')}, von Gegnern ${t('trapMob')}, entdeckt ${t('trapSpot')} · Mimiks/Lauf: getroffen ${t('mimicMet')}, besiegt ${t('mimicKilled')}, Seltenheit+1 ${t('mimicRarUp')}`);
     }
     out.push('Eb  n  Tod  Züge  HPverl  Tränke Kills  Gold  Lvl  Atk  MaxHP  maxHit  medHit');

@@ -2,7 +2,9 @@ import { RNG } from '../core/rng';
 import type { Meta } from '../core/save';
 import { W, H, T, Room, genDungeon, center, walkable, opaque, los, computeFov, distMap } from './dungeon';
 import { VS, CRATE_TEMPLATES, mirror, genIce, slide, iceStops, genLights, lightsPress, lightCell, LIGHTS_ALL, dartFires, DartLane } from './puzzles';
-import { CLASSES, ClassId, MOBS, PERKS, RELICS, Item, Offer, AFFIX, CONSUMABLES, UNIQUES, ULT, ULT_LEVEL, SKILL_UP, SYNERGIES, NEW_SKILLS, TUNE, treeNodes, treeNode, treePool, nodeText, MAGE_WHET, BOSS_BY_BIOME, BIOME_NAMES, FLOORS_PER_BIOME, LAST_FLOOR, biomeOf, spawnTable, FEATURES, HAZARD } from './content';
+import { CLASSES, ClassId, MOBS, PERKS, RELICS, Item, Offer, AFFIX, CONSUMABLES, UNIQUES, ULT, ULT_LEVEL, SKILL_UP, SYNERGIES, NEW_SKILLS, TUNE, treeNodes, treeNode, treePool, nodeText, MAGE_WHET, BOSS_BY_BIOME, BIOME_NAMES, FLOORS_PER_BIOME, LAST_FLOOR, biomeOf, spawnTable, FEATURES, HAZARD, EVENT } from './content';
+import { EVENTS, EVENT_BY_ID, NOTES } from './events';
+import type { EvState, EvPlan, EvApi, EvDef } from './events';
 
 export interface Actor {
   id: number; kind: string; name: string;
@@ -10,6 +12,7 @@ export interface Actor {
   st: Record<string, number>; // Statuseffekte -> verbleibende Züge
   xp: number; cd: number; awake: boolean; boss?: boolean; arena?: boolean; elite?: boolean;
   f?: [number, number]; // Blickrichtung
+  ev?: boolean;          // gehört zu einem laufenden Ereignis
 }
 
 export interface Player extends Actor {
@@ -67,7 +70,8 @@ export type Fx =
   | { k: 'bash'; x: number; y: number; dx: number; dy: number }
   | { k: 'arrow'; x0: number; y0: number; x1: number; y1: number; col: string; heavy: boolean }
   | { k: 'swipe'; x: number; y: number; dx: number; dy: number; big: boolean }
-  | { k: 'pdeath'; x: number; y: number };
+  | { k: 'pdeath'; x: number; y: number }
+  | { k: 'banner'; title: string; sub: string; col: string };
 
 // Versteckte Bodenfalle. seen: der Held hat sie entdeckt (oder sie wurde ausgelöst) – dann ist sie sichtbar.
 export type HazardKind = 'stachel' | 'pfeil' | 'gas' | 'glut';
@@ -93,6 +97,16 @@ export interface Run {
   runeUsed?: boolean; // Schutzrune auf dieser Ebene verbraucht
   invFocus?: { col: 0 | 1; row: number }; // Rucksack: Auswahl folgt dem zuletzt bewegten Stück
   invNote?: string;                       // Rucksack: Ergebnis der letzten Handlung
+  // Zufällige Ereignisse (nur gesetzt, wenn eingeschaltet)
+  ev?: EvState | null;       // laufendes Ereignis
+  evQ?: EvPlan[];            // für diese Ebene geplant
+  evUsed?: string[];         // Deck: in diesem Lauf schon gezogen
+  evCalm?: number;           // Züge ohne sichtbaren wachen Gegner
+  evDanger?: boolean;        // zuletzt gezogenes Ereignis war gefährlich
+  evRooms?: Room[];          // Räume der Ebene (für Raumereignisse)
+  evNote?: number;           // Ebene des letzten Fundzettels
+  relicOps?: number;         // zusätzliche Reliquienwahlen aus Ereignissen
+  warn?: number[];           // Felder, die im nächsten Zug getroffen werden
   souls: number; kills: number; turn: number; nextId: number;
 }
 
@@ -470,7 +484,7 @@ export function perkInfo(p: Player, id: string): { name: string; desc: string; k
 }
 // Name der gewählten Ausprägung einer Fähigkeit, sonst leer
 export const skillModName = (p: Player, i: number) => { const m = p.skillMod[i], up = SKILL_UP[`${p.cls}${i}`]; return m === 1 ? up.a[0] : m === 2 ? up.b[0] : ''; };
-const fovR = (run: Run) => FOV_R + (has(run.p, 'geisterlicht') ? 3 : 0) + (run.p.aff.sicht ?? 0);
+const fovR = (run: Run) => FOV_R + (has(run.p, 'geisterlicht') ? 3 : 0) + (run.p.aff.sicht ?? 0) - (run.ev?.data.fog ? 3 : 0);
 
 // Sucht 9x9 massiven Fels, höhlt 7x7 aus und gräbt von der Tür (unten Mitte) einen Gang zum Rest der Ebene.
 function addVault(run: Run, rooms: Room[]): boolean {
@@ -840,6 +854,10 @@ function nextFloor(run: Run) {
     e.atk += 2; e.xp *= 2;
   }
   if (FEATURES.hazards && !bossFloor && run.floor >= HAZARD.minFloor) addHazards(run, rooms[0], biome);
+  if (run.ev) { tele(run, `evLost_${run.ev.id}`); tele(run, 'evAbandon'); run.ev = null; }
+  if (run.warn?.length) run.warn = [];
+  if (FEATURES.events && !bossFloor) planEvents(run, rooms);
+  else if (run.evQ?.length) run.evQ = [];
   computeFov(run.tiles, run.p.x, run.p.y, fovR(run), run.vis, run.seen);
   say(run, `Ebene ${run.floor} – ${BIOME_NAMES[biome]}`);
   if (bossFloor) say(run, 'Etwas Mächtiges lauert hier ...');
@@ -848,7 +866,7 @@ function nextFloor(run: Run) {
 // ---------- Versteckte Fallen und Mimiks ----------
 
 const tele = (run: Run, k: string, n = 1) => { (run.tele ??= {})[k] = (run.tele[k] ?? 0) + n; };
-const FLYERS = new Set(['fledermaus', 'glutgeist']);
+const FLYERS = new Set(['fledermaus', 'glutgeist', 'irrlicht']);
 const HAZARD_KINDS: HazardKind[][] = [['stachel', 'stachel', 'pfeil'], ['stachel', 'gas', 'gas', 'pfeil'], ['stachel', 'glut', 'glut', 'pfeil']];
 const BLOCKERS: number[] = [T.CHEST, T.CURSED, T.MIMIC, T.TRADER, T.ALTAR, T.FOUNTAIN, T.TABLET, T.STAIRS, T.LEVER];
 
@@ -952,6 +970,223 @@ function revealMimic(run: Run, i: number, bite: boolean) {
 }
 
 // ---------- Zerstörung und Feuer ----------
+
+// ---------- Zufällige Ereignisse ----------
+
+// Plant die Ereignisse einer Ebene. Ohne eingeschaltete Ereignisse: keine Zufallszahl, kein Zustand.
+function planEvents(run: Run, rooms: Room[]) {
+  run.ev = null; run.warn = [];
+  const rate = FEATURES.eventRate, rng = run.rng;
+  let n = rate >= 2 ? 2 : rate === 1 ? 1 + (rng.chance(EVENT.second) ? 1 : 0) : 0;
+  const q: EvPlan[] = [];
+  run.evQ = q; run.evCalm = 0;
+  run.evRooms = rooms;
+  // Räume für Raumereignisse: nicht Start, nicht Treppe, nicht die Rätselkammer
+  const free = rooms.map((r, i) => i).filter(i => i > 0 && i < rooms.length - 1 && !(run.puzzle && rooms[i].x < run.puzzle.x + VS && run.puzzle.x < rooms[i].x + rooms[i].w && rooms[i].y < run.puzzle.y + VS && run.puzzle.y < rooms[i].y + rooms[i].h));
+  const used = (run.evUsed ??= []);
+  for (; n > 0; n--) {
+    let cands: EvDef[];
+    if (FEATURES.eventForce) cands = EVENTS.filter(d => d.id === FEATURES.eventForce);
+    else {
+      const ok = (d: EvDef, deck: boolean) => (!deck || !used.includes(d.id)) && !(run.evDanger && d.cat === 'danger') && (d.trigger === 'calm' || free.length > 0) && !q.some(pl => pl.id === d.id);
+      cands = EVENTS.filter(d => ok(d, true));
+      if (!cands.length) cands = EVENTS.filter(d => ok(d, false)); // Deck aufgebraucht: von vorn
+    }
+    if (!cands.length) break;
+    const d = rng.pick(cands);
+    if (d.trigger === 'room' && !free.length) continue;
+    const plan: EvPlan = { id: d.id };
+    if (d.trigger === 'room') plan.room = free.splice(rng.int(0, free.length - 1), 1)[0];
+    q.push(plan);
+    used.push(d.id);
+    run.evDanger = d.cat === 'danger';
+  }
+}
+
+const inRoomRect = (r: Room, x: number, y: number) => x >= r.x && x < r.x + r.w && y >= r.y && y < r.y + r.h;
+
+function evApi(run: Run): EvApi {
+  const p = run.p, rng = run.rng, goldMul = () => 1 + (p.aff.gold ?? 0) / 100;
+  const api: EvApi = {
+    floor: run.floor, turn: run.turn, p,
+    chance: x => rng.chance(x), int: (a, b) => rng.int(a, b),
+    say: s => say(run, s),
+    table: () => spawnTable(run.floor),
+    // Ereignisgegner geben weniger Erfahrung (und damit Gold und Seelen) – sonst wird der Held durch Ereignisse zu schnell stark
+    spawn(e, kind, x, y) { const m = spawnMob(run, kind, x, y); m.awake = true; m.ev = true; m.xp = Math.max(1, Math.round(m.xp * EVENT.mobXp)); e.mobs.push(m.id); e.total++; return m; },
+    alive: e => run.mobs.filter(m => e.mobs.includes(m.id) && m.hp > 0),
+    vanish(e) {
+      for (const m of api.alive(e)) run.fx.push({ k: 'num', x: m.x, y: m.y, s: 'puff', col: '#94b0c2' });
+      run.mobs = run.mobs.filter(m => !e.mobs.includes(m.id));
+    },
+    near(min, max) {
+      const d = distMap(run.tiles, p.x, p.y), c: number[] = [];
+      for (let i = 0; i < W * H; i++) {
+        const x = i % W, y = (i / W) | 0;
+        if (d[i] >= min && d[i] <= max && run.tiles[i] === T.FLOOR && isFree(run, x, y) && !inVault(run, x, y) && !run.hazards.some(h => h.x === x && h.y === y)) c.push(i);
+      }
+      if (!c.length) return null;
+      const i = c[rng.int(0, c.length - 1)];
+      return [i % W, (i / W) | 0, d[i]];
+    },
+    inRoom: r => freeInRoom(run, r),
+    edge(r) {
+      const out: [number, number][] = [];
+      for (let y = r.y; y < r.y + r.h; y++) for (let x = r.x; x < r.x + r.w; x++) {
+        if ((x === r.x || y === r.y || x === r.x + r.w - 1 || y === r.y + r.h - 1) && run.tiles[y * W + x] === T.FLOOR && isFree(run, x, y) && cheb(p, { x, y }) >= 2) out.push([x, y]);
+      }
+      return out;
+    },
+    roomTiles(r) {
+      const out: number[] = [];
+      for (let y = r.y; y < r.y + r.h; y++) for (let x = r.x; x < r.x + r.w; x++) if (walkable(run.tiles[y * W + x])) out.push(y * W + x);
+      return out;
+    },
+    seal(e) {
+      const r = e.room!;
+      e.seal = [];
+      for (let y = r.y - 1; y <= r.y + r.h; y++) for (let x = r.x - 1; x <= r.x + r.w; x++) {
+        if (inRoomRect(r, x, y) || x < 0 || y < 0 || x >= W || y >= H) continue;
+        const i = y * W + x, t = run.tiles[i];
+        if (!walkable(t) || mobAt(run, x, y) || (p.x === x && p.y === y)) continue;
+        e.seal.push([i, t]);
+        run.tiles[i] = T.GATE;
+      }
+    },
+    warn(tiles) { run.warn = tiles; },
+    strike(dmg, kind) {
+      const hit = run.warn ?? [];
+      run.warn = [];
+      if (!hit.length) return;
+      run.fx.push({ k: 'shake', n: kind === 'rock' ? 3 : 2 });
+      for (const i of hit) {
+        const x = i % W, y = (i / W) | 0;
+        if (kind === 'rock') run.fx.push({ k: 'debris', x, y });
+        const a = p.x === x && p.y === y ? p : mobAt(run, x, y);
+        if (a && a.hp > 0) damage(run, a, dmg, '#b13e53');
+      }
+      tele(run, 'evStrike');
+    },
+    wake(e, max, range) {
+      const d = distMap(run.tiles, p.x, p.y);
+      const sleepers = run.mobs.filter(m => !m.awake && !m.boss && d[m.y * W + m.x] >= 0 && d[m.y * W + m.x] <= range).sort((a, b) => d[a.y * W + a.x] - d[b.y * W + b.x]).slice(0, max);
+      for (const m of sleepers) { m.awake = true; e.mobs.push(m.id); e.total++; }
+      return sleepers.length;
+    },
+    root(turns) { p.st.netz = turns; },
+    gold(n) { const g = Math.round(n * goldMul()); p.gold += g; tele(run, 'evGold', g); return g; },
+    takeGold(n) { const g = Math.min(p.gold, n); p.gold -= g; return g; },
+    souls(n) { const s = Math.round(n * p.soulMul); run.souls += s; tele(run, 'evSouls', s); return s; },
+    atPlayer: i => p.y * W + p.x === i,
+    shadow(e, x, y) {
+      const kind = `schatten_${p.cls[0]}`, m = api.spawn(e, kind, x, y);
+      m.maxHp = m.hp = Math.max(6, Math.round(p.maxHp * EVENT.twinHp));
+      m.atk = Math.max(2, Math.round(playerAtk(p) * EVENT.twinAtk * (CLASSES[p.cls].range ? 0.8 : 1)));
+      m.def = Math.floor(p.def / 2);
+      m.xp = Math.round((10 + 2 * run.floor) * EVENT.mobXp);
+      return m;
+    },
+  };
+  return api;
+}
+
+// Lohn nach einem geschafften Ereignis. Stufe 3 kann (selten, gedeckelt) eine Reliquienwahl sein.
+function evReward(run: Run, tier: number): string {
+  const p = run.p, rng = run.rng, a = evApi(run), R = EVENT;
+  if (tier === 1) {
+    const g = a.gold(R.gold1 + run.floor);
+    if (rng.chance(R.potion1)) { p.potions++; return `${g} Gold, ein Heiltrank`; }
+    return `${g} Gold`;
+  }
+  if (tier === 2) {
+    const s = a.souls(R.souls2);
+    if (rng.chance(R.item2)) { const it = genItem(run); takeItem(run, it, 'Lohn'); tele(run, 'evItems'); return `${it.name}, ${s} Seelen`; }
+    if (!rng.chance(R.cons2)) return `${s} Seelen`;
+    if (rng.chance(0.5)) { p.potions++; return `ein Heiltrank, ${s} Seelen`; }
+    p.bombs++; return `eine Bombe, ${s} Seelen`;
+  }
+  const pool = rng.shuffle(Object.keys(RELICS).filter(id => !has(p, id)));
+  if ((run.relicOps ?? 0) < R.relicCap && pool.length >= 2 && rng.chance(R.relicChance)) {
+    run.relicOps = (run.relicOps ?? 0) + 1;
+    tele(run, 'evRelic');
+    run.perkChoices = pool.slice(0, 2);
+    run.mode = 'perk';
+    return 'Wahl einer Reliquie';
+  }
+  if (!rng.chance(R.item3)) return `${a.gold(2 * (R.gold3 + run.floor))} Gold, ${a.souls(R.souls3)} Seelen`;
+  const it = genItem(run, false, 1);
+  takeItem(run, it, 'Lohn'); tele(run, 'evItems');
+  return `${it.name}, ${a.gold(R.gold3 + run.floor)} Gold, ${a.souls(R.souls3)} Seelen`;
+}
+
+function evStart(run: Run, plan: EvPlan): boolean {
+  const d = EVENT_BY_ID[plan.id];
+  const e: EvState = { id: d.id, turns: 0, limit: d.limit, mobs: [], total: 0, data: {} };
+  if (plan.room !== undefined && run.evRooms) e.room = run.evRooms[plan.room];
+  const ok = d.start(evApi(run), e);
+  run.evQ = (run.evQ ?? []).filter(q => q !== plan);
+  if (!ok) { tele(run, 'evSkip'); return false; }
+  run.ev = e;
+  const intro = d.intro[run.rng.int(0, d.intro.length - 1)];
+  say(run, `Ereignis: ${d.title} – ${intro}`);
+  run.fx.push({ k: 'banner', title: `EREIGNIS: ${d.title}`, sub: intro, col: d.cat === 'danger' ? '#ef7d57' : d.cat === 'challenge' ? '#ffcd75' : '#73eff7' }, { k: 'shake', n: d.cat === 'danger' ? 4 : 1 });
+  tele(run, `evStart_${d.id}`);
+  return true;
+}
+
+function evEnd(run: Run, won: boolean) {
+  const e = run.ev!, d = EVENT_BY_ID[e.id], a = evApi(run);
+  for (const [i, t] of e.seal ?? []) if (run.tiles[i] === T.GATE) run.tiles[i] = t;
+  run.warn = [];
+  for (const m of run.mobs) if (e.mobs.includes(m.id)) m.ev = false;
+  if (d.vanish && a.alive(e).length) a.vanish(e);
+  run.ev = null;
+  tele(run, `ev${won ? 'Won' : 'Lost'}_${d.id}`);
+  if (won) {
+    const what = d.won ? d.won(a, e) : evReward(run, d.tier);
+    say(run, `Geschafft! Lohn: ${what}.`);
+    run.fx.push({ k: 'banner', title: 'GESCHAFFT!', sub: `Lohn: ${what}`, col: '#a7f070' });
+  } else {
+    const why = d.lost ? d.lost(a, e) : 'Das Ereignis ist vorbei.';
+    say(run, why);
+    run.fx.push({ k: 'banner', title: 'VORBEI', sub: why, col: '#94b0c2' });
+  }
+}
+
+// Am Ende jedes Zugs: laufendes Ereignis fortschreiben oder ein geplantes auslösen
+function evTick(run: Run) {
+  if (run.mode !== 'play' || run.p.hp <= 0) return;
+  const p = run.p;
+  if (run.ev) {
+    const e = run.ev, d = EVENT_BY_ID[e.id];
+    e.turns++;
+    let r = d.tick(evApi(run), e);
+    if (r === 'run' && e.turns >= e.limit) r = d.survive ? 'won' : 'lost';
+    if (r !== 'run' && p.hp > 0) evEnd(run, r === 'won');
+    return;
+  }
+  const q = run.evQ;
+  if (!q?.length || inVault(run, p.x, p.y)) return;
+  const roomPlan = q.find(pl => pl.room !== undefined && run.evRooms && inRoomRect(run.evRooms[pl.room], p.x, p.y));
+  if (roomPlan) { evStart(run, roomPlan); return; }
+  const calm = !run.mobs.some(m => m.awake && run.vis[m.y * W + m.x]);
+  run.evCalm = calm ? (run.evCalm ?? 0) + 1 : 0;
+  // Fundstück: einmal je Ebene an einer ruhigen Stelle
+  if (run.evCalm === 12 && run.evNote !== run.floor && run.rng.chance(EVENT.noteChance)) {
+    run.evNote = run.floor;
+    say(run, `Ein Zettel an der Wand: "${NOTES[run.rng.int(0, NOTES.length - 1)]}"`);
+  }
+  const calmPlan = q.find(pl => pl.room === undefined);
+  if (calmPlan && run.evCalm >= EVENT.calmMin && (run.evCalm >= EVENT.calmMax || run.rng.chance(EVENT.calmChance))) { run.evCalm = 0; evStart(run, calmPlan); }
+}
+
+// Für die Anzeige: Ziel des laufenden Ereignisses, Zielfeld und Ereignisgegner
+export function eventGoal(run: Run): { title: string; goal: string; col: string } | null {
+  const e = run.ev;
+  if (!e) return null;
+  const d = EVENT_BY_ID[e.id];
+  return { title: d.title, goal: d.goal(evApi(run), e), col: d.cat === 'danger' ? '#ef7d57' : d.cat === 'challenge' ? '#ffcd75' : '#73eff7' };
+}
 
 function ignite(run: Run, x: number, y: number, turns = 3) {
   if (x < 0 || y < 0 || x >= W || y >= H) return;
@@ -1549,7 +1784,7 @@ function castSpell(run: Run, id: string): boolean {
       if (!m) continue;
       const stunned = !!m.st.stun;
       damage(run, m, (atk * 0.9 + p.lvl * 0.4) * p.pow * (stunned ? 2 : 1) - m.def, '#73eff7');
-      if (stunned && m.hp > 0) { delete m.st.stun; m.st.immun = 3; } // „Zerschmettern“
+      if (stunned && m.hp > 0) { delete m.st.stun; m.st.immun = 3; } // "Zerschmettern"
     }
     return true;
   }
@@ -1725,6 +1960,7 @@ export function act(run: Run, a: Action): void {
       if (nx < 0 || ny < 0 || nx >= W || ny >= H) break;
       p.dir = [a.dx, a.dy];
       const i = ny * W + nx, t = run.tiles[i], m = mobAt(run, nx, ny);
+      if (p.st.netz && !m) { say(run, 'Du zerrst am Netz ...'); used = true; break; }
       if (m) {
         run.fx.push({ k: 'lunge', id: 0, dx: a.dx, dy: a.dy });
         const base = playerAtk(p) * (CLASSES[p.cls].range ? 0.6 : 1);
@@ -1742,7 +1978,8 @@ export function act(run: Run, a: Action): void {
         run.fx.push({ k: 'num', x: p.x, y: p.y, s: `+${n}`, col: '#a7f070' });
         say(run, 'Du trinkst aus dem Brunnen. Er versiegt.');
         used = true;
-      } else if (t === T.GATE) {
+      } else if (t === T.GATE && run.ev?.seal?.some(([g]) => g === i)) say(run, 'Das Gitter rührt sich nicht – erst muss das Ereignis vorbei sein.');
+      else if (t === T.GATE) {
         if (p.keys > 0) { p.keys--; run.tiles[i] = T.FLOOR; say(run, 'Der Schlüssel passt. Das Gitter öffnet sich.'); used = true; }
         else say(run, 'Ein verschlossenes Gitter. Ein Elitegegner auf dieser Ebene trägt den Schlüssel.');
       }
@@ -1920,6 +2157,7 @@ function mobAct(run: Run, m: Actor, dist: Int16Array) {
   const p = run.p, d = MOBS[m.kind];
   if (!m.awake) { if (run.vis[m.y * W + m.x]) m.awake = true; return; }
   if (m.kind === 'mimik' && m.cd) { m.cd = 0; return; }
+  if (d.ai === 'flee' || d.ai === 'wisp') { fleeAct(run, m, dist, d.ai === 'wisp'); return; }
   const man = Math.abs(p.x - m.x) + Math.abs(p.y - m.y);
   if (d.ai === 'boss' && ++m.cd >= 5) {
     m.cd = 0;
@@ -1970,6 +2208,27 @@ function mobAct(run: Run, m: Actor, dist: Int16Array) {
       if (run.tiles[i] === T.CRACKED && Math.abs(p.x - m.x - ox) + Math.abs(p.y - m.y - oy) < man) { breakWall(run, i); break; }
     }
   }
+}
+
+// Diebe und Goblins laufen weg (nicht immer – man soll sie stellen können), Seelenlichter treiben umher.
+function fleeAct(run: Run, m: Actor, dist: Int16Array, wisp: boolean) {
+  if (m.st.netz) return;
+  const p = run.p, dirs = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+  if (wisp) {
+    if (!run.rng.chance(0.5)) return;
+    const [ox, oy] = run.rng.pick(dirs);
+    if (isFree(run, m.x + ox, m.y + oy)) moveMob(run, m, m.x + ox, m.y + oy);
+    return;
+  }
+  if (cheb(m, p) > 5 || !run.rng.chance(0.7)) return;
+  let best: number[] | null = null, bd = dist[m.y * W + m.x];
+  for (const [ox, oy] of dirs) {
+    const x = m.x + ox, y = m.y + oy;
+    if (!isFree(run, x, y) || inVault(run, x, y)) continue;
+    const v = dist[y * W + x];
+    if (v > bd) { bd = v; best = [x, y]; }
+  }
+  if (best) moveMob(run, m, best[0], best[1]);
 }
 
 function tickDots(run: Run, a: Actor) {
@@ -2035,6 +2294,8 @@ function endTurn(run: Run) {
     }
     else if (--z.timer <= 0) { z.dead = true; say(run, 'Die Zeit ist um – die Prüfung ist gescheitert.'); }
   }
+  if (p.st.netz) p.st.netz--;
+  if (run.ev || run.evQ?.length) evTick(run);
   fatal(run);
 }
 
