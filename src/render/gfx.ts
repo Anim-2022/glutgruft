@@ -1,7 +1,7 @@
 // Palette, Sprite-Atlas und Pixeltext. Alles wird beim Start im Code erzeugt.
 export const VW = 640, VH = 360, TS = 16;
 
-import { PAL, SPR, ACTORS, NO_OUTLINE, VIEWS, FLOATERS, WEAPON_ART, WeaponArt, DECALS } from './sprites';
+import { PAL, SPR, ACTORS, NO_OUTLINE, VIEWS, FLOATERS, WEAPON_ART, WeaponArt, DECALS, RECOLORS } from './sprites';
 import { tr } from '../core/i18n';
 import { poseFrames } from './poses';
 import { floorMacro, capBases, capEdges, capTiles, plinth, grassBed, scorchTiles, floorDecals, wallVariants, wallCracks, lavaVeins } from './tiles';
@@ -116,6 +116,7 @@ export function figure(ctx: CanvasRenderingContext2D, key: string, x: number, y:
 export function bake(): void {
   for (const [name, rows] of Object.entries(SPR)) sprites[name] = drawRows(rows, !NO_OUTLINE.has(name));
   for (const name of ACTORS) bakeActor(name, name);
+  for (const [kind, src, pal] of RECOLORS) bakeActor(src, kind, { ...PAL, ...pal });
   // Bodenspuren: je Spur zwei Spielarten (gespiegelt) und eine gedämpfte Fassung ohne Blutrot
   const DARK: Record<string, string> = { ...PAL, r: '#333c57', R: '#1a1c2c', e: '#1a1c2c' };
   for (const [name, rows] of Object.entries(DECALS)) {

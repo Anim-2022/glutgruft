@@ -1069,7 +1069,21 @@ if (SCHUETZE_NEU) ATTACK.schuetze = { f: [
 // Schwebende Wesen laufen nicht – sie wippen nur
 export const FLOATERS = new Set(['fledermaus', 'glutgeist', 'ratte']);
 // Wesen, die selbst leuchten: Radius in Feldern und Farbe
-export const GLOW: Record<string, [number, string]> = { glutgeist: [3.4, '#ef7d57'], fuerst: [5, '#ef7d57'] };
+export const GLOW: Record<string, [number, string]> = { glutgeist: [3.4, '#ef7d57'], fuerst: [5, '#ef7d57'], irrlicht: [2.6, '#73eff7'] };
+
+// Ereigniswesen als umgefärbte Fassungen vorhandener Figuren: [Art, Vorlage, Farbtausch]
+const SHADOW: Record<string, string> = {};
+for (const [k, hex] of Object.entries(PAL)) {
+  const n = parseInt(hex.slice(1), 16), l = 0.3 * (n >> 16) + 0.59 * ((n >> 8) & 255) + 0.11 * (n & 255);
+  SHADOW[k] = l > 170 ? '#9a4fc0' : l > 90 ? '#5d275d' : '#1a1c2c';
+}
+SHADOW.k = '#f4f4f4'; // leuchtende Augen
+export const RECOLORS: [string, string, Record<string, string>][] = [
+  ['dieb', 'ratte', { d: '#5d275d', g: '#ffcd75', h: '#c48a6a' }],
+  ['goblin', 'skelett', { w: '#38b764', g: '#ffcd75' }],
+  ['irrlicht', 'glutgeist', { o: '#41a6f6', y: '#73eff7', w: '#f4f4f4' }],
+  ['schatten_k', 'krieger', SHADOW], ['schatten_m', 'magier', SHADOW], ['schatten_w', 'waldlaeufer', SHADOW],
+];
 
 SPR.fountain = [E, E, '.......ss.......', '......scws......', '.....s.ss.s.....', '....s..cc..s....', '...gggggggggg...', '..gccscccscccg..', '..gcccccccccsg..', '..gggggggggggg..',
   '...gddddddddg...', '....gddddddg....', '....gddddddg....', '...gggggggggg...', '..DDDDDDDDDDDD..', E];

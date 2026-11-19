@@ -15,6 +15,7 @@ function stepTo(run: Run, goal: (x: number, y: number, i: number) => boolean, av
 function search(run: Run, goal: (x: number, y: number, i: number) => boolean, avoidFire: boolean, brittle: boolean, knownTraps: Set<number> | null): [number, number] | null {
   const p = run.p, start = p.y * W + p.x;
   const from = new Int32Array(W * H).fill(-1);
+  const warned = run.warn?.length ? new Set(run.warn) : null;
   const q = [start];
   from[start] = start;
   for (let h = 0; h < q.length; h++) {
@@ -28,7 +29,7 @@ function search(run: Run, goal: (x: number, y: number, i: number) => boolean, av
       const nx = cx + ox, ny = cy + oy, n = ny * W + nx;
       if (nx < 0 || ny < 0 || nx >= W || ny >= H || from[n] !== -1) continue;
       const t = run.tiles[n];
-      const passable = walkable(t) && (brittle || t !== T.FRAGILE2) && !(avoidFire && run.fire.has(n)) && !(knownTraps && knownTraps.has(n));
+      const passable = walkable(t) && (brittle || t !== T.FRAGILE2) && !(avoidFire && (run.fire.has(n) || warned?.has(n))) && !(knownTraps && knownTraps.has(n));
       // Ziele dürfen auch nicht begehbar sein (Gegner, Truhen)
       if (!passable || run.mobs.some(m => m.x === nx && m.y === ny && run.vis[n])) { if (goal(nx, ny, n) && from[n] === -1) { from[n] = c; q.push(n); } continue; }
       from[n] = c;
@@ -99,6 +100,13 @@ function decide(run: Run): Action {
     return i >= 0 ? { t: 'buy', i } : { t: 'leave' };
   }
   if (p.hp < p.maxHp * 0.4 && p.potions > 0) return { t: 'potion' };
+  // Ereignis: rot gewarnte Felder sofort verlassen
+  if (run.warn?.includes(p.y * W + p.x)) {
+    for (const [dx, dy] of DIRS) {
+      const x = p.x + dx, y = p.y + dy, i = y * W + x;
+      if (walkable(run.tiles[i]) && !run.warn.includes(i) && !run.mobs.some(m => m.x === x && m.y === y)) return { t: 'move', dx, dy };
+    }
+  }
   const dist = (m: { x: number; y: number }) => Math.max(Math.abs(m.x - p.x), Math.abs(m.y - p.y));
   // weit entfernte Gegner ignoriert der Bot zunächst und erkundet weiter
   const vis = run.mobs.filter(m => run.vis[m.y * W + m.x] && dist(m) <= 7);
@@ -213,6 +221,10 @@ function decide(run: Run): Action {
     return { t: 'wait' };
   }
   if (run.tiles[p.y * W + p.x] === T.STAIRS) return { t: 'descend' };
+  // Ereignisziel (Geist, leuchtende Truhe) steht auf der Karte – hinlaufen
+  const mark = run.ev?.mark;
+  const toMark = mark !== undefined ? stepTo(run, (_x, _y, i) => i === mark) : null;
+  if (toMark) return { t: 'move', dx: toMark[0], dy: toMark[1] };
   // Truhen mitnehmen, dann Treppe, sonst erkunden
   const s =
     stepTo(run, (_x, _y, i) => run.seen[i] === 1 && (run.tiles[i] === T.CHEST || run.tiles[i] === T.MIMIC || (run.tiles[i] === T.TRADER && p.gold >= 25 && !shopped.has(run.floor)))) ??
