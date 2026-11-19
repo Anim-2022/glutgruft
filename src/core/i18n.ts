@@ -45,7 +45,7 @@ const EN: Record<string, string> = {
   'Dornen': 'Thorns', 'Nahkämpfer erleiden 2 Schaden': 'Melee attackers take 2 damage',
   'Seelenfänger': 'Soul Catcher', '+50 % Seelensplitter': '+50 % soul shards',
   // Verbesserungen
-  'Vitalität': 'Vitality', '+2 Leben pro Stufe': '+2 health per rank', 'Schleifstein': 'Whetstone', '+1 Angriff pro Stufe (nicht für den Magier)': '+1 attack per rank (not for the Mage)',
+  'Vitalität': 'Vitality', '+2 Leben pro Stufe': '+2 health per rank', 'Schleifstein': 'Whetstone', '+1 Angriff pro Stufe (Magier: +15 % Fähigkeiten)': '+1 attack per rank (Mage: +15 % abilities)',
   'Proviant': 'Provisions', '+1 Heiltrank zum Start': '+1 starting potion',
   // Reliquien
   'Glutherz': 'Ember Heart', 'Brand heilt dich, statt zu schaden': 'Burning heals you instead of hurting',

@@ -34,7 +34,7 @@ export const CLASSES: Record<ClassId, ClassDef> = {
   },
   waldlaeufer: {
     id: 'waldlaeufer', name: 'Waldläufer', desc: 'Schütze mit Fallen. Fokus wächst beim Warten im Kampf und mit jedem besiegten Gegner.',
-    hp: 22, atk: 4, def: 1, resName: 'Fokus', resMax: 8, resStart: 2, resCol: '#a7f070', range: 5, fokusOnHit: 1, shot: 'Schuss',
+    hp: 26, atk: 4, def: 1, resName: 'Fokus', resMax: 8, resStart: 2, resCol: '#a7f070', range: 5, fokusOnHit: 1, shot: 'Schuss',
     skills: [
       { name: 'Zielschuss', cost: 4, desc: 'Schwerer Schuss auf große Distanz' },
       { name: 'Falle', cost: 2, desc: 'Legt eine Falle: Schaden + Betäubung' },
@@ -260,7 +260,7 @@ export interface UpgDef { id: string; name: string; desc: string; max: number; c
 
 export const UPGRADES: UpgDef[] = [
   { id: 'vit', name: 'Vitalität', desc: '+2 Leben pro Stufe', max: 5, cost: 40 },
-  { id: 'atk', name: 'Schleifstein', desc: '+1 Angriff pro Stufe (nicht für den Magier)', max: 2, cost: 120 },
+  { id: 'atk', name: 'Schleifstein', desc: '+1 Angriff pro Stufe (Magier: +15 % Fähigkeiten)', max: 2, cost: 120 },
   { id: 'trank', name: 'Proviant', desc: '+1 Heiltrank zum Start', max: 3, cost: 50 },
   { id: 'fokus', name: 'Fokus', desc: '+1 max. Klassenressource', max: 3, cost: 40 },
   { id: 'gold', name: 'Startkapital', desc: '+15 Gold zum Start', max: 3, cost: 30 },
@@ -270,6 +270,8 @@ export const UPGRADES: UpgDef[] = [
   { id: 'erbe', name: 'Erbstück', desc: 'Start mit einer zufälligen Reliquie', max: 1, cost: 240 },
 ];
 export const RANGER_COST = 120;
+// Schleifstein beim Magier: Anteil mehr Fähigkeitsschaden je Stufe
+export const MAGE_WHET = 0.15;
 export const upgCost = (u: UpgDef, lvl: number) => u.cost * (lvl + 1);
 
 export const RELICS: Record<string, PerkDef> = {

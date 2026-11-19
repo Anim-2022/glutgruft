@@ -2,7 +2,7 @@ import { RNG } from '../core/rng';
 import type { Meta } from '../core/save';
 import { W, H, T, Room, genDungeon, center, walkable, opaque, los, computeFov, distMap } from './dungeon';
 import { VS, CRATE_TEMPLATES, mirror, genIce, slide } from './puzzles';
-import { CLASSES, ClassId, MOBS, PERKS, RELICS, Item, Offer, AFFIX, CONSUMABLES, UNIQUES, ULT, ULT_LEVEL, SKILL_UP, SYNERGIES, NEW_SKILLS, TUNE, treeNodes, treeNode, treePool, nodeText, BOSS_BY_BIOME, BIOME_NAMES, FLOORS_PER_BIOME, LAST_FLOOR, biomeOf, spawnTable } from './content';
+import { CLASSES, ClassId, MOBS, PERKS, RELICS, Item, Offer, AFFIX, CONSUMABLES, UNIQUES, ULT, ULT_LEVEL, SKILL_UP, SYNERGIES, NEW_SKILLS, TUNE, treeNodes, treeNode, treePool, nodeText, MAGE_WHET, BOSS_BY_BIOME, BIOME_NAMES, FLOORS_PER_BIOME, LAST_FLOOR, biomeOf, spawnTable } from './content';
 
 export interface Actor {
   id: number; kind: string; name: string;
@@ -101,11 +101,11 @@ export function newRun(seed: number, cls: ClassId, meta: Meta): Run {
   const u = (id: string) => meta.upg[id] ?? 0;
   const hp = c.hp + 2 * u('vit');
   const p: Player = {
-    id: 0, kind: cls, name: c.name, // Schleifstein wirkt nicht beim Magier: sein kleiner Grundangriff würde sonst um zwei Drittel wachsen
+    id: 0, kind: cls, name: c.name, // Schleifstein gibt dem Magier Zauberkraft statt Angriff: sein kleiner Grundangriff würde sonst um zwei Drittel wachsen
     x: 0, y: 0, hp, maxHp: hp, atk: c.atk + (cls === 'magier' ? 0 : u('atk')), def: c.def,
     st: {}, xp: 0, cd: 0, awake: true,
     cls, lvl: 1, exp: 0, res: c.resStart, resMax: c.resMax + u('fokus'), potions: 1 + u('trank'), bombs: 1 + u('bombe'),
-    crit: 0.05, pow: 1, vamp: 0, thorns: 0, soulMul: 1, dir: [1, 0], perks: [], relics: [], hits: 0, gold: 15 * u('gold'), gear: [null, null, null, null], bag: [], keys: 0,
+    crit: 0.05, pow: 1 + (cls === 'magier' ? MAGE_WHET * u('atk') : 0), vamp: 0, thorns: 0, soulMul: 1, dir: [1, 0], perks: [], relics: [], hits: 0, gold: 15 * u('gold'), gear: [null, null, null, null], bag: [], keys: 0,
     aff: { fund: 3 * u('fund') }, skillLvl: [0, 0, 0], ultCd: 0, picks: 3 + u('wahl'), skillMod: [0, 0, 0], syn: [], sort: 0, tree: [], pts: 0, rest: 0, ptsGot: 0,
   };
   const run: Run = {
