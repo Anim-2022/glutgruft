@@ -988,7 +988,7 @@ function planEvents(run: Run, rooms: Room[]) {
   const used = (run.evUsed ??= []);
   for (; n > 0; n--) {
     let cands: EvDef[];
-    if (FEATURES.eventForce) cands = EVENTS.filter(d => d.id === FEATURES.eventForce);
+    if (FEATURES.eventForce) cands = EVENTS.filter(d => d.id === FEATURES.eventForce && (!FEATURES.eventForceBiome || d.biome === undefined || d.biome === biome));
     else {
       const ok = (d: EvDef, deck: boolean) => (d.biome === undefined || d.biome === biome) && (!deck || !used.includes(d.id)) && !(run.evDanger && d.cat === 'danger') && (d.trigger === 'calm' || free.length > 0) && !q.some(pl => pl.id === d.id);
       cands = EVENTS.filter(d => ok(d, true));

@@ -29,6 +29,7 @@ FEATURES.mimics = ENV.MIMICS !== 'off';
 FEATURES.events = ENV.EVENTS !== 'off';
 FEATURES.eventRate = +(ENV.EVENT_RATE ?? FEATURES.eventRate);
 FEATURES.eventForce = ENV.EVENT_FORCE ?? '';
+FEATURES.eventForceBiome = true; // Gebietsereignisse auch erzwungen nur in ihrem Gebiet
 const EXTRA = FEATURES.hazards || FEATURES.mimics || FEATURES.events || ENV.ECON === '1';
 
 function runCell({ variant: full, set, mname, cls }: Cell): Result {

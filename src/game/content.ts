@@ -178,7 +178,7 @@ export const NEW_SKILLS: Record<string, SkillDef & { branch: number }> = {
 export const TUNE = { treePtsMax: 6, kryoMana: 2, kryoRegen: 0.75, kCost: 0 };
 // Schalter für neue Systeme (Messungen: tests/balance.ts mit HAZARDS=off, MIMICS=off). Aus heißt:
 // keine Zufallszahl und keine Änderung am Lauf – das Ergebnis gleicht dann Bit für Bit dem Stand davor.
-export const FEATURES = { hazards: true, mimics: true, events: true, eventRate: 1, eventForce: '' };
+export const FEATURES = { hazards: true, mimics: true, events: true, eventRate: 1, eventForce: '', eventForceBiome: false };
 // Ereignisse: Ruhe-Auslöser, Zweitereignis bei Rate 1, Obergrenze zusätzlicher Reliquienwahlen je Lauf,
 // Schattenzwilling als Anteil der Heldenwerte (nur Grundangriff)
 export const EVENT = { biomeShare: 0.6, calmMin: 25, calmMax: 40, calmChance: 0.15, second: 0.45, relicCap: 2, relicChance: 0.35, twinHp: 0.55, twinAtk: 0.65, noteChance: 0.3 };
