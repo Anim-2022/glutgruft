@@ -2,7 +2,7 @@ import { RNG } from '../core/rng';
 import type { Meta } from '../core/save';
 import { W, H, T, Room, genDungeon, center, walkable, opaque, los, computeFov, distMap } from './dungeon';
 import { VS, CRATE_TEMPLATES, mirror, genIce, slide } from './puzzles';
-import { CLASSES, ClassId, MOBS, PERKS, RELICS, Item, Offer, AFFIX, CONSUMABLES, UNIQUES, ULT, ULT_LEVEL, SKILL_UP, SYNERGIES, NEW_SKILLS, TUNE, treeNodes, treeNode, treePool, nodeText, BOSS_BY_BIOME, BIOME_NAMES, FLOORS_PER_BIOME, LAST_FLOOR, biomeOf, spawnTable } from './content';
+import { CLASSES, ClassId, MOBS, PERKS, RELICS, Item, Offer, AFFIX, CONSUMABLES, UNIQUES, ULT, ULT_LEVEL, SKILL_UP, SYNERGIES, NEW_SKILLS, TUNE, treeNodes, treeNode, treePool, nodeText, MAGE_WHET, BOSS_BY_BIOME, BIOME_NAMES, FLOORS_PER_BIOME, LAST_FLOOR, biomeOf, spawnTable } from './content';
 
 export interface Actor {
   id: number; kind: string; name: string;
@@ -101,12 +101,12 @@ export function newRun(seed: number, cls: ClassId, meta: Meta): Run {
   const u = (id: string) => meta.upg[id] ?? 0;
   const hp = c.hp + 2 * u('vit');
   const p: Player = {
-    id: 0, kind: cls, name: c.name, // Schleifstein wirkt nicht beim Magier: sein kleiner Grundangriff würde sonst um zwei Drittel wachsen
+    id: 0, kind: cls, name: c.name, // Schleifstein gibt dem Magier Zauberkraft statt Angriff: sein kleiner Grundangriff würde sonst um zwei Drittel wachsen
     x: 0, y: 0, hp, maxHp: hp, atk: c.atk + (cls === 'magier' ? 0 : u('atk')), def: c.def,
     st: {}, xp: 0, cd: 0, awake: true,
     cls, lvl: 1, exp: 0, res: c.resStart, resMax: c.resMax + u('fokus'), potions: 1 + u('trank'), bombs: 1 + u('bombe'),
-    crit: 0.05, pow: 1, vamp: 0, thorns: 0, soulMul: 1, dir: [1, 0], perks: [], relics: [], hits: 0, gold: 15 * u('gold'), gear: [null, null, null, null], bag: [], keys: 0,
-    aff: { fund: 5 * u('fund') }, skillLvl: [0, 0, 0], ultCd: 0, picks: 3 + u('wahl'), skillMod: [0, 0, 0], syn: [], sort: 0, tree: [], pts: 0, rest: 0, ptsGot: 0,
+    crit: 0.05, pow: 1 + (cls === 'magier' ? MAGE_WHET * u('atk') : 0), vamp: 0, thorns: 0, soulMul: 1, dir: [1, 0], perks: [], relics: [], hits: 0, gold: 15 * u('gold'), gear: [null, null, null, null], bag: [], keys: 0,
+    aff: { fund: 3 * u('fund') }, skillLvl: [0, 0, 0], ultCd: 0, picks: 3 + u('wahl'), skillMod: [0, 0, 0], syn: [], sort: 0, tree: [], pts: 0, rest: 0, ptsGot: 0,
   };
   const run: Run = {
     seed, rng: new RNG(seed), floor: 0,
@@ -162,11 +162,12 @@ const ROLL_AFF: [string, (r: number) => number][] = [
 
 export function genItem(run: Run, cursed = false): Item {
   const rng = run.rng, cls = run.p.cls, slot = [0, 0, 0, 1, 1, 1, 2, 2, 3, 3][rng.int(0, 9)];
-  const r = rng.next() + run.floor * 0.012 + (run.p.aff.fund ?? 0) / 100;
-  let rar = r < 0.55 ? 0 : r < 0.85 ? 1 : r < 0.97 ? 2 : 3;
+  // Bonus aus Ebene und Schatzsucher hebt vor allem Selten und Episch; Legendär bleibt rar
+  const r = rng.next(), b = run.floor * 0.006 + (run.p.aff.fund ?? 0) / 100;
+  let rar = r < 0.55 - b ? 0 : r < 0.85 - 0.6 * b ? 1 : r < 0.985 - 0.2 * b ? 2 : 3;
   if (cursed) rar = Math.min(3, rar + 1);
   const kind = rng.int(0, 2);
-  if (rar === 3 && rng.chance(0.35)) {
+  if (rar === 3 && rng.chance(0.5)) {
     const u = rng.pick(UNIQUES.filter(q => q.slot === slot && (!q.cls || q.cls === cls)));
     return { slot, name: u.name, rar: 3, atk: u.atk ?? 0, def: u.def ?? 0, hp: (u.hp ?? 0) - (cursed ? 6 : 0), crit: u.crit ?? 0, cursed, wk: u.wk, aff: u.aff.map(a => [a[0], a[1]] as [string, number]), uniq: true };
   }
@@ -346,11 +347,9 @@ function manage(run: Run, a: Action): boolean {
   return false;
 }
 
-function stock(run: Run): Offer[] {
-  const f = run.floor, offers: Offer[] = [
-    { kind: 'potion', name: 'Heiltrank', desc: 'Heilt einen großen Teil deines Lebens', price: 20 + 4 * f, sold: false, left: 3 },
-    { kind: 'bomb', name: 'Bombe', desc: 'Sprengt Gegner, Wände und Säulen', price: 10 + f, sold: false, left: 2 },
-  ];
+// Ware des Händlers: zwei Stücke Ausrüstung und ein Verbrauchsgegenstand
+function wares(run: Run): Offer[] {
+  const f = run.floor, offers: Offer[] = [];
   for (let k = 0; k < 2; k++) {
     const it = genItem(run);
     offers.push({ kind: 'item', name: it.name, desc: itemText(it), price: Math.round((18 + it.rar * 22 + f * 2) * (it.rar ? 1.2 : 1)), sold: false, item: it });
@@ -358,6 +357,25 @@ function stock(run: Run): Offer[] {
   const c = genConsumable(run);
   offers.push({ kind: 'item', name: c.name, desc: itemText(c), price: 14 + f, sold: false, item: c });
   return offers;
+}
+
+function stock(run: Run): Offer[] {
+  const f = run.floor;
+  return [
+    { kind: 'potion', name: 'Heiltrank', desc: 'Heilt einen großen Teil deines Lebens', price: 20 + 4 * f, sold: false, left: 3 },
+    { kind: 'bomb', name: 'Bombe', desc: 'Sprengt Gegner, Wände und Säulen', price: 10 + f, sold: false, left: 2 },
+    ...wares(run),
+    { kind: 'forge', name: 'Schmied', desc: `Waffe +1 Angriff, sonst Rüstung +1 Vert. (bis +${FORGE_MAX} je Stück)`, price: 30 + 4 * f, sold: false, left: 2 },
+    { kind: 'reroll', name: 'Neue Ware', desc: 'Der Händler tauscht seine Ausrüstung aus', price: 12 + 2 * f, sold: false, left: 2 },
+  ];
+}
+
+// Schmied: angelegte Waffe, sonst Rüstung; jedes Stück höchstens FORGE_MAX-mal
+export const FORGE_MAX = 2;
+const SHOP_ORDER: Offer['kind'][] = ['potion', 'bomb', 'item', 'forge', 'reroll'];
+export function forgeTarget(p: Player): Item | null {
+  for (const it of [p.gear[0], p.gear[1]]) if (it && (it.plus ?? 0) < FORGE_MAX) return it;
+  return null;
 }
 
 // ---------- Rätselkammern ----------
@@ -888,7 +906,7 @@ function kill(run: Run, m: Actor) {
   run.fx.push({ k: 'die', x: m.x, y: m.y, kind: m.kind });
   run.kills++;
   p.exp += m.xp;
-  run.souls += Math.max(1, Math.round((m.xp / 3) * p.soulMul));
+  run.souls += Math.max(1, Math.round((m.xp / 10) * p.soulMul));
   p.gold += Math.ceil((m.xp / 6) * (1 + (p.aff.gold ?? 0) / 100));
   if (p.aff.ausdauer) gain(p, p.aff.ausdauer);
   if (p.aff.asche && !m.boss) {
@@ -921,7 +939,7 @@ function kill(run: Run, m: Actor) {
     p.keys++;
     p.potions++;
     say(run, `${m.name} lässt einen Schlüssel und einen Heiltrank fallen.`);
-  } else if (run.rng.chance(0.04)) {
+  } else if (run.rng.chance(0.025)) {
     p.potions++;
     say(run, `${m.name} lässt einen Heiltrank fallen.`);
   }
@@ -1022,7 +1040,7 @@ function applyPerk(run: Run, id: string) {
     case 'sprengsatz': p.bombs += 2; break;
     case 'berserker': p.atk += 2; p.def -= 1; break;
     case 'atem': addAff(p, 'regen', 1); break;
-    case 'pilz': addAff(p, 'fund', 15); break;
+    case 'pilz': addAff(p, 'fund', 8); break;
     case 'ausdauer': addAff(p, 'ausdauer', 1); break;
     case 'henker': addAff(p, 'henker', 25); break;
     case 'spalter': addAff(p, 'spalt', 40); break;
@@ -1401,8 +1419,24 @@ export function act(run: Run, a: Action): void {
       const o = run.shop[a.i];
       if (!o || o.sold) return;
       if (p.gold < o.price) { say(run, 'Dafür reicht dein Gold nicht.'); return; }
+      const it = o.kind === 'forge' ? forgeTarget(p) : null;
+      if (o.kind === 'forge' && !it) { say(run, 'Der Schmied findet nichts mehr zu verbessern.'); return; }
       p.gold -= o.price;
-      if (o.kind === 'potion' || o.kind === 'bomb') {
+      if (o.kind === 'forge' || o.kind === 'reroll') {
+        if (it) {
+          if (it.slot === 0) { it.atk++; p.atk++; } else { it.def++; p.def++; }
+          it.plus = (it.plus ?? 0) + 1;
+          it.name = `${it.name.replace(/ \+\d$/, '')} +${it.plus}`;
+          say(run, `Schmied: ${it.name}.`);
+        } else {
+          run.shop = [...run.shop.filter(q => q.kind !== 'item'), ...wares(run)];
+          run.shop.sort((a, b) => SHOP_ORDER.indexOf(a.kind) - SHOP_ORDER.indexOf(b.kind));
+          say(run, 'Der Händler bringt neue Ware.');
+        }
+        o.left = (o.left ?? 1) - 1;
+        o.price = Math.ceil(o.price * 1.5);
+        if (o.left <= 0) o.sold = true;
+      } else if (o.kind === 'potion' || o.kind === 'bomb') {
         if (o.kind === 'potion') p.potions++; else p.bombs++;
         // begrenzter Vorrat, jedes weitere Stück wird teurer
         o.left = (o.left ?? (o.kind === 'potion' ? 3 : 2)) - 1;

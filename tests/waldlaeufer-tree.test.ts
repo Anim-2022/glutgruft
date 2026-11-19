@@ -25,10 +25,10 @@ const learn = (r: Run, ...ids: string[]) => { for (const id of ids) { if (treeNo
 const allPaid = () => ({ ...defaultMeta(), tree: { magier: [], krieger: [], waldlaeufer: treeNodes('waldlaeufer').filter(n => n.cost).map(n => n.id) } });
 
 describe('Waldläufer-Baum', () => {
-  it('Aufbau: 3 Zweige × 7 Knoten, Lager 720 Splitter', () => {
+  it('Aufbau: 3 Zweige × 7 Knoten, Lager 1440 Splitter', () => {
     const t = treeNodes('waldlaeufer');
     expect(t.length).toBe(21);
-    expect(t.reduce((s, n) => s + n.cost, 0)).toBe(720);
+    expect(t.reduce((s, n) => s + n.cost, 0)).toBe(1440);
     expect(treePool('waldlaeufer', defaultMeta()).length).toBe(12);
     expect(t.filter(n => n.spell).map(n => n.spell)).toEqual(['markieren', 'fangnetz', 'rauchbombe']);
   });

@@ -45,7 +45,7 @@ const EN: Record<string, string> = {
   'Dornen': 'Thorns', 'Nahkämpfer erleiden 2 Schaden': 'Melee attackers take 2 damage',
   'Seelenfänger': 'Soul Catcher', '+50 % Seelensplitter': '+50 % soul shards',
   // Verbesserungen
-  'Vitalität': 'Vitality', '+2 Leben pro Stufe': '+2 health per rank', 'Schleifstein': 'Whetstone', '+1 Angriff pro Stufe (nicht für den Magier)': '+1 attack per rank (not for the Mage)',
+  'Vitalität': 'Vitality', '+2 Leben pro Stufe': '+2 health per rank', 'Schleifstein': 'Whetstone', '+1 Angriff pro Stufe (Magier: +15 % Fähigkeiten)': '+1 attack per rank (Mage: +15 % abilities)',
   'Proviant': 'Provisions', '+1 Heiltrank zum Start': '+1 starting potion',
   // Reliquien
   'Glutherz': 'Ember Heart', 'Brand heilt dich, statt zu schaden': 'Burning heals you instead of hurting',
@@ -327,7 +327,10 @@ const EN: Record<string, string> = {
   'Höchstens 6 Punkte je Lauf, danach gibt es Gaben.': 'At most 6 points per run, boons after that.',
   'Neue Knoten schaltest du im Lager mit Seelensplittern frei.': 'Unlock new nodes in camp with soul shards.',
   'Gold gegen Heiltränke, Bomben und Ausrüstung.': 'Gold for healing potions, bombs and gear.',
-  'Jeder weitere Trank wird teurer.': 'Every further potion costs more.', '[1]–[9] kaufen, [LEERTASTE] geht weiter.': '[1]–[9] buy, [SPACE] moves on.',
+  'Jeder weitere Trank wird teurer.': 'Every further potion costs more.', 'Der Schmied verbessert Waffe oder Rüstung.': 'The smith improves your weapon or armour.',
+  'Schmied': 'Smith', 'Schmied: ': 'Smith: ', 'Waffe +1 Angriff, sonst Rüstung +1 Vert. (bis +2 je Stück)': 'Weapon +1 attack, else armour +1 def. (up to +2 each)',
+  'Neue Ware': 'New Stock', 'Der Händler tauscht seine Ausrüstung aus': 'The trader swaps out his gear',
+  'Der Händler bringt neue Ware.': 'The trader brings new stock.', 'Der Schmied findet nichts mehr zu verbessern.': 'The smith finds nothing left to improve.', '[1]–[9] kaufen, [LEERTASTE] geht weiter.': '[1]–[9] buy, [SPACE] moves on.',
   'Rätselkammer': 'Puzzle chamber', 'Kisten schieben, Runen in der richtigen Reihenfolge,': 'Push crates, touch runes in the right order,',
   'über Eis rutschen oder eine Prüfung überstehen.': 'slide across ice or survive a trial.', 'Der Lohn ist eine Reliquie.': 'The reward is a relic.',
   'Das Lager': 'The Camp', 'Gefallen': 'Fallen', 'Der Lauf ist vorbei, aber nicht umsonst:': 'The run is over, but not in vain:',

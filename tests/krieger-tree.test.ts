@@ -25,10 +25,10 @@ const learn = (r: Run, ...ids: string[]) => { for (const id of ids) { if (treeNo
 const allPaid = () => ({ ...defaultMeta(), tree: { magier: [], waldlaeufer: [], krieger: treeNodes('krieger').filter(n => n.cost).map(n => n.id) } });
 
 describe('Krieger-Baum', () => {
-  it('Aufbau: 3 Zweige × 7 Knoten, frei T1/T2a/T4a/T4b, Lager 720 Splitter', () => {
+  it('Aufbau: 3 Zweige × 7 Knoten, frei T1/T2a/T4a/T4b, Lager 1440 Splitter', () => {
     const t = treeNodes('krieger');
     expect(t.length).toBe(21);
-    expect(t.reduce((s, n) => s + n.cost, 0)).toBe(720);
+    expect(t.reduce((s, n) => s + n.cost, 0)).toBe(1440);
     expect(treePool('krieger', defaultMeta()).length).toBe(12);
     expect(treePool('krieger', allPaid()).length).toBe(21);
     expect(t.filter(n => n.spell).map(n => n.spell)).toEqual(['schildwurf', 'sturmangriff', 'herausforderung']);

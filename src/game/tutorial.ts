@@ -65,7 +65,7 @@ export const CARDS: Record<string, TutCard> = {
   gabe: { id: 'gabe', title: 'Gaben', lines: ['Bei jedem Stufenaufstieg wählst du eine Gabe.', 'Manche Gaben ergeben zusammen eine Synergie.', 'Jede dritte Stufe gibt stattdessen einen Fertigkeitspunkt.'] },
   reliquie: { id: 'reliquie', title: 'Reliquien', lines: ['Ein gelöstes Rätsel belohnt dich mit einer Reliquie.', 'Reliquien sind stärker als Gaben und bleiben den ganzen Lauf.'] },
   baum: { id: 'baum', title: 'Fertigkeitsbaum', lines: ['Jede Fähigkeit hat einen Zweig. Ein Punkt lernt einen Knoten.', 'Höchstens 6 Punkte je Lauf, danach gibt es Gaben.', 'Neue Knoten schaltest du im Lager mit Seelensplittern frei.'] },
-  haendler: { id: 'haendler', title: 'Händler', lines: ['Gold gegen Heiltränke, Bomben und Ausrüstung.', 'Jeder weitere Trank wird teurer.', '[1]–[9] kaufen, [LEERTASTE] geht weiter.'] },
+  haendler: { id: 'haendler', title: 'Händler', lines: ['Gold gegen Heiltränke, Bomben und Ausrüstung.', 'Der Schmied verbessert Waffe oder Rüstung.', '[1]–[9] kaufen, [LEERTASTE] geht weiter.'] },
   raetsel: { id: 'raetsel', title: 'Rätselkammer', lines: ['Kisten schieben, Runen in der richtigen Reihenfolge,', 'über Eis rutschen oder eine Prüfung überstehen.', 'Der Lohn ist eine Reliquie.'] },
   tod: { id: 'tod', title: 'Gefallen', lines: ['Der Lauf ist vorbei, aber nicht umsonst:', 'Deine Seelensplitter nimmst du ins Lager mit.', 'Dort machen Verbesserungen den nächsten Abstieg leichter.'] },
   lager: { id: 'lager', title: 'Das Lager', lines: ['Seelensplitter kaufen dauerhafte Verbesserungen (rechts).', 'Im Fertigkeitsbaum schaltest du neue Knoten frei.', 'Wähle die Klasse mit den Pfeilen, [LEERTASTE] startet den Abstieg.'] },

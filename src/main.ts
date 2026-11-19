@@ -354,7 +354,7 @@ function drawLager(time: number, dt: number) {
   ctx.globalAlpha = 1;
   text(ctx, `< ${c.name} >`, 146, 74, '#ffcd75', 16);
   text(ctx, `Leben ${c.hp + 2 * (meta.upg.vit ?? 0)}`, 146, 100, '#b13e53', 8);
-  text(ctx, `Angriff ${c.atk + (meta.upg.atk ?? 0)}   Verteidigung ${c.def}`, 146, 112, '#94b0c2', 8);
+  text(ctx, `Angriff ${c.atk + (c.id === 'magier' ? 0 : meta.upg.atk ?? 0)}   Verteidigung ${c.def}`, 146, 112, '#94b0c2', 8);
   text(ctx, `${c.resName} ${c.resMax + (meta.upg.fokus ?? 0)}`, 146, 124, c.resCol, 8);
   if (c.range) text(ctx, `Fernkampf ${c.range} Felder`, 146, 136, '#94b0c2', 8);
   wrap(c.desc, 44).forEach((l, i) => text(ctx, l, 36, 174 + i * 11, '#f4f4f4', 8));
