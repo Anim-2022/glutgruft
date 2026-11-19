@@ -153,6 +153,9 @@ export const NEW_SKILLS: Record<string, SkillDef & { branch: number }> = {
   arkanschild: { name: 'Arkanschild', cost: 4, desc: 'Schild fängt 8 + Stufe Schaden ab, 5 Züge', branch: 2 },
   schildwurf: { name: 'Schildwurf', cost: 7, desc: 'Wurf auf einen Gegner bis 4 Felder', branch: 0 },
   sturmangriff: { name: 'Sturmangriff', cost: 7, desc: 'Sturm bis 4 Felder zum Gegner, schwerer Schlag', branch: 1 },
+  markieren: { name: 'Markieren', cost: 2, desc: 'Markiert einen Gegner 6 Züge: +30 % Schaden gegen ihn, sein Tod gibt 2 Fokus', branch: 0 },
+  fangnetz: { name: 'Fangnetz', cost: 3, desc: 'Netz bis 4 Felder: das Ziel kann sich 3 Züge nicht bewegen', branch: 1 },
+  rauchbombe: { name: 'Rauchbombe', cost: 3, desc: 'Rauch im Umkreis 2, 4 Züge: Schützen sehen dich nicht, Nahkämpfer verfehlen oft', branch: 2 },
   herausforderung: { name: 'Herausforderung', cost: 6, desc: 'Gegner im Umkreis 4 kommen zu dir, Schützen schießen 1 Zug nicht', branch: 2 },
 };
 // Stellschrauben des Baums (balance.ts darf sie für Messungen überschreiben):
@@ -160,7 +163,7 @@ export const NEW_SKILLS: Record<string, SkillDef & { branch: number }> = {
 // gegen Betäubte und Bosse; kryoRegen – Anteil der normalen Mana-Erholung mit Kryomant
 // kCost – Aufschlag auf die neuen Fähigkeiten des Kriegers (für Messungen)
 export const TUNE = { treePtsMax: 6, kryoMana: 2, kryoRegen: 0.75, kCost: 0 };
-// Texte der Knoten T2a, T2b, T3, T5 (2b: Magier, 2c: Krieger)
+// Texte der Knoten T2a, T2b, T3, T5
 export const NODE_TEXT: Partial<Record<ClassId, Record<string, [string, string]>>> = {
   magier: {
     n0_2a: ['Zunder', 'Funke entzündet mit 30 %'],
@@ -190,6 +193,20 @@ export const NODE_TEXT: Partial<Record<ClassId, Record<string, [string, string]>
     n2_3: ['Herausforderung', 'Neue Fähigkeit, 6 Wut: Gegner im Umkreis 4 kommen zu dir, Schützen schießen 1 Zug nicht'],
     n2_5: ['Blutzorn', 'Fehlende Wut zahlst du mit Leben (2 je Wut); unter 50 % Leben +30 % Schaden'],
   },
+  waldlaeufer: {
+    n0_2a: ['Ruhige Hand', 'Warten ohne Gegner daneben gibt doppelten Fokus'],
+    n0_2b: ['Schwachstelle', '15 %: Zielschuss trifft kritisch und betäubt 1 Zug'],
+    n0_3: ['Markieren', 'Neue Fähigkeit, 2 Fokus: Markierung 6 Züge, +30 % Schaden gegen das Ziel, sein Tod gibt 2 Fokus'],
+    n0_5: ['Anlegen', 'Jeder Zug ohne Schritt: nächster Schuss +25 % (bis +100 %); Reichweite +2'],
+    n1_2a: ['Stacheldraht', 'Fallen vergiften'],
+    n1_2b: ['Werkzeuggürtel', 'Bis zu 5 Fallen statt 3'],
+    n1_3: ['Fangnetz', 'Neue Fähigkeit, 3 Fokus: Netz bis 4 Felder, das Ziel kann sich 3 Züge nicht bewegen'],
+    n1_5: ['Minenfeld', 'Fallen kosten nichts, die Ausweichrolle hinterlässt eine Falle; Grundschuss –30 %'],
+    n2_2a: ['Schattenschritt', 'Nach der Ausweichrolle trifft der nächste Schuss mit +50 %'],
+    n2_2b: ['Leichtfuß', 'Rolle weg von einem Gegner daneben gibt 1 Fokus zurück'],
+    n2_3: ['Rauchbombe', 'Neue Fähigkeit, 3 Fokus: Rauch im Umkreis 2, 4 Züge – Schützen sehen dich nicht, Nahkämpfer verfehlen oft'],
+    n2_5: ['Rückzugsgefecht', 'Schritt weg von einem Gegner daneben: freier Schuss; Warten gibt keinen Fokus mehr'],
+  },
 };
 const baseNodes = (b: number, minPts4: number): TreeNode[] => [
   { id: `n${b}_1`, branch: b, tier: '1', minPts: 0, cost: 0 },
@@ -212,8 +229,7 @@ const fullTree = (spells: string[]) => [0, 1, 2].flatMap(b => {
 });
 const TREES: Record<ClassId, TreeNode[]> = {
   krieger: fullTree(['schildwurf', 'sturmangriff', 'herausforderung']),
-  // Waldläufer: bis 2d nur die Ränge (Rang III braucht Rang II)
-  waldlaeufer: [0, 1, 2].flatMap(b => baseNodes(b, 1)),
+  waldlaeufer: fullTree(['markieren', 'fangnetz', 'rauchbombe']),
   magier: fullTree(['flammenwand', 'eislanze', 'arkanschild']),
 };
 export const treeNodes = (cls: ClassId) => TREES[cls];

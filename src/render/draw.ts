@@ -941,7 +941,7 @@ function charSheet(ctx: CanvasRenderingContext2D, run: Run) {
 const HELP: [string, string][] = [
   ['Pfeile / WASD', 'bewegen, in Gegner laufen greift an'], ['Leertaste', 'einen Zug warten'], ['1 bis 6', 'Fähigkeiten (4–6: neue aus dem Baum)'], ['U', 'Ultimative Fähigkeit ab Stufe 5'], ['7 8 9 0', 'Rollen und Tränke benutzen'], ['R', 'letzten Fund anlegen'], ['K', 'Fertigkeitsbaum: Punkt vergeben'], ['T', 'Lehrgang: Schritt überspringen'], ['F', 'Fernangriff (Magier, Waldläufer)'],
   ['Q', 'Heiltrank trinken'], ['B', 'Bombe werfen'], ['E', 'Treppe hinabsteigen'], ['Klick / Tab', 'Ziel wählen'], ['Maus', 'über etwas halten zeigt Details'],
-  ['I', 'Rucksack: anlegen, benutzen, verkaufen'], ['C', 'Charakter, Reliquien, Gaben'], ['N', 'Karte: klein, groß, aus'], ['M', 'Ton ein/aus'], ['V', 'Vollbild'], ['J', 'Journal: alle Meldungen nachlesen'], ['H', 'diese Hilfe'],
+  ['I', 'Rucksack: anlegen, benutzen, verkaufen'], ['C', 'Charakter, Reliquien, Gaben'], ['N', 'Karte: klein, groß, aus'], ['M', 'Ton ein/aus'], ['V · L', 'Vollbild · Sprache (DE/EN)'], ['J', 'Journal: alle Meldungen nachlesen'], ['H', 'diese Hilfe'],
 ];
 
 // Journal: die letzten Meldungen in voller Länge

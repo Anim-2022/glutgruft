@@ -32,9 +32,9 @@ describe('Magier-Baum', () => {
     expect(t.reduce((s, n) => s + n.cost, 0)).toBe(720);
     expect(treePool('magier', defaultMeta()).length).toBe(12);
     expect(treePool('magier', allPaid()).length).toBe(21);
-    // Krieger voll (2c), Waldläufer unverändert
+    // Krieger (2c) und Waldläufer (2d) ebenfalls voll
     expect(treeNodes('krieger').length).toBe(21);
-    expect(treeNodes('waldlaeufer').length).toBe(9);
+    expect(treeNodes('waldlaeufer').length).toBe(21);
   });
 
   it('T1 bringt T2a mit; Rang III braucht 2 Knoten im Zweig, der Schlüsselknoten Rang III und 4', () => {

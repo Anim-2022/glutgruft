@@ -1,6 +1,6 @@
 // Einfacher Autospieler für Balance- und Stabilitätsläufe.
 import { W, H, T, walkable } from '../src/game/dungeon';
-import { Run, Action, act, playerAtk, itemScore, availableNodes, MAX_TRAPS, skillReady, skillCost, lineFrom } from '../src/game/run';
+import { Run, Action, act, playerAtk, itemScore, availableNodes, maxTraps, skillReady, skillCost, lineFrom } from '../src/game/run';
 import { CLASSES, MOBS } from '../src/game/content';
 
 const DIRS = [[1, 0], [-1, 0], [0, 1], [0, -1]];
@@ -33,9 +33,9 @@ function stepTo(run: Run, goal: (x: number, y: number, i: number) => boolean, av
 }
 
 // Wahl im Fertigkeitsbaum: BUILD=heur (Zweig nach Seed, erst in die Tiefe) oder BUILD=random
-// BUILD=feuer|eis|arkan (Magier), schild|klinge|schlachtruf (Krieger): fester Zweig für alle Seeds
-export type Build = 'heur' | 'random' | 'feuer' | 'eis' | 'arkan' | 'schild' | 'klinge' | 'schlachtruf';
-const FORCED: Record<string, [string, number]> = { feuer: ['magier', 0], eis: ['magier', 1], arkan: ['magier', 2], schild: ['krieger', 0], klinge: ['krieger', 1], schlachtruf: ['krieger', 2] };
+// BUILD=feuer|eis|arkan (Magier), schild|klinge|schlachtruf (Krieger), scharf|fallen|pirscher (Waldläufer): fester Zweig
+export type Build = 'heur' | 'random' | 'feuer' | 'eis' | 'arkan' | 'schild' | 'klinge' | 'schlachtruf' | 'scharf' | 'fallen' | 'pirscher';
+const FORCED: Record<string, [string, number]> = { feuer: ['magier', 0], eis: ['magier', 1], arkan: ['magier', 2], schild: ['krieger', 0], klinge: ['krieger', 1], schlachtruf: ['krieger', 2], scharf: ['waldlaeufer', 0], fallen: ['waldlaeufer', 1], pirscher: ['waldlaeufer', 2] };
 const envBuild = (globalThis as { process?: { env: Record<string, string | undefined> } }).process?.env.BUILD ?? 'heur';
 let build: Build = (envBuild in FORCED || envBuild === 'random' ? envBuild : 'heur') as Build;
 export const setBuild = (b: Build) => { build = b; };
@@ -168,6 +168,22 @@ function decide(run: Run): Action {
       if (la >= 0 && d <= 6) return { t: 'skill', i: la };
       if (d <= c.range) return { t: 'shoot' };
     } else {
+      const node = (id: string) => p.tree.includes(id);
+      const spell = (id: string) => { const k = (p.spells ?? []).indexOf(id); return k >= 0 && skillReady(p, 3 + k) && !(failTurn === run.turn && failSkill === 3 + k) ? 3 + k : -1; };
+      const adjN = vis.filter(m => dist(m) <= 1).length, ranged = vis.filter(m => m.awake && MOBS[m.kind].range && dist(m) <= 6);
+      // Rauchbombe: zwei Schützen oder bedrängt mit wenig Leben, noch kein Rauch
+      const rb = spell('rauchbombe');
+      if (rb >= 0 && !p.st.rauch && (ranged.length >= 2 || (adjN >= 1 && p.hp < p.maxHp * 0.5))) return { t: 'skill', i: rb };
+      // Neue Fähigkeiten nur, wenn danach noch ein Zielschuss bezahlbar bleibt
+      const spare = (i: number) => p.res - skillCost(p, i) >= skillCost(p, 0);
+      // Fangnetz: zäher Nahkämpfer kommt auf 2–4 Felder heran
+      const fn = spell('fangnetz');
+      if (fn >= 0 && spare(fn)) { const t = vis.find(m => m.awake && !MOBS[m.kind].range && !m.st.netz && !m.st.stun && dist(m) >= 2 && dist(m) <= 4 && m.hp >= 2 * playerAtk(p)); if (t) { if (run.target !== t.id) return { t: 'target', x: t.x, y: t.y }; return { t: 'skill', i: fn }; } }
+      // Markieren: Boss, Elite oder sehr zäher Gegner ohne Markierung
+      const mk = spell('markieren');
+      if (mk >= 0 && spare(mk) && !vis.some(m => m.st.mark)) { const t = vis.find(m => m.boss || m.elite || m.hp >= 5 * playerAtk(p)); if (t && dist(t) <= 7) { if (run.target !== t.id) return { t: 'target', x: t.x, y: t.y }; return { t: 'skill', i: mk }; } }
+      // Anlegen: niemand daneben, Gegner noch fern – zielen statt schießen
+      if (node('n0_5') && adjN === 0 && d >= 3 && (p.st.aim ?? 0) < 2) return { t: 'wait' };
       const onTrap = run.traps.some(t => t.x === p.x && t.y === p.y);
       // Ausweichrolle: Gegner direkt daneben, wenig Leben oder genug Fokus für Rolle und Zielschuss
       if (d <= 1 && can(2) && (p.hp < p.maxHp * 0.6 || p.res >= c.skills[2].cost + c.skills[0].cost)) {
@@ -177,10 +193,12 @@ function decide(run: Run): Action {
         if (st) return { t: 'move', dx: st[0], dy: st[1] }; // Blickrichtung weg vom Gegner, dann rollen
       }
       // Falle: ein wacher Gegner kommt in gerader Linie auf 2–4 Felder heran
-      if (!onTrap && near.awake && d >= 2 && d <= 4 && (near.x === p.x || near.y === p.y) && run.traps.length < MAX_TRAPS && can(1)) return { t: 'skill', i: 1 };
+      if (!onTrap && near.awake && d >= 2 && d <= 4 && (near.x === p.x || near.y === p.y) && run.traps.length < maxTraps(p) && skillReady(p, 1)) return { t: 'skill', i: 1 };
       // auf der eigenen Falle: einen Schritt zurück, damit der Gegner hineinläuft
       if (onTrap && near.awake && d >= 2 && d <= 3) { const st = away(); if (st) return { t: 'move', dx: st[0], dy: st[1] }; }
       if (d <= 8 && can(0)) return { t: 'skill', i: 0 };
+      // Rückzugsgefecht: statt Schuss aus nächster Nähe wegtreten – der freie Schuss folgt
+      if (node('n2_5') && adjN === 1 && d <= 1) { const st = away(); if (st) return { t: 'move', dx: st[0], dy: st[1] }; }
       if (d <= c.range) return { t: 'shoot' };
     }
     if (p.bombs > 0 && d >= 2 && d <= 5 && (near.boss || vis.length >= 3)) return { t: 'bomb' };
