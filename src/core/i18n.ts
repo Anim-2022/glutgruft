@@ -245,7 +245,7 @@ const EN: Record<string, string> = {
   'Synergie: ': 'Synergy: ', 'Synergien: ': 'Synergies: ', ' weggeworfen.': ' thrown away.', ' · [ENTF] wegwerfen': ' · [DEL] discard',
   'Platz': 'Slot', 'Seltenheit': 'Rarity', 'Verbesserung': 'Upgrade', 'Rollen und Tränke benutzen': 'use scrolls and potions',
   'Journal: alle Meldungen nachlesen': 'Journal: read all messages', 'Noch nichts geschehen.': 'Nothing has happened yet.', '[J] oder [ESC] schließen': '[J] or [ESC] close',
-  'SPIEL STARTEN': 'START GAME', 'SPRACHE: DEUTSCH': 'LANGUAGE: ENGLISH', 'TON: AN': 'SOUND: ON', 'TON: AUS': 'SOUND: OFF', 'VOLLBILD': 'FULLSCREEN',
+  'SPIEL STARTEN': 'START GAME', 'SPRACHE: DEUTSCH': 'LANGUAGE: ENGLISH', 'TON: AN': 'SOUND: ON', 'TON: AUS': 'SOUND: OFF', 'VOLLBILD': 'FULLSCREEN', 'GRAFIK: HOCH': 'GRAPHICS: HIGH', 'GRAFIK: NIEDRIG': 'GRAPHICS: LOW',
   'Pfeile wählen · ENTER bestätigen': 'Arrows select · ENTER confirm',
   'Bewegen: Pfeile/WASD · Fähigkeiten: 1-3 · Rucksack: I · Hilfe: H': 'Move: arrows/WASD · Skills: 1-3 · Backpack: I · Help: H',
   // Fertigkeitsbaum

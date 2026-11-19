@@ -3,6 +3,7 @@ import { VW, VH, bake, sprites, tilesets, text, panel, wrap, figure } from './re
 import { getLang, setLang } from './core/i18n';
 import { drawRun, drawCard, setTutStep, drawTree, treeMove, treeFocus, treeCursor, resetView, setMouse, toggleMap, setTutorial, tileAt, getOverlay, setOverlay, invMove, invAction, invDrop, lootIndex, lootDone } from './render/draw';
 import { sfx, soundOn, toggleSound, wakeAudio } from './core/audio';
+import { reducedFx, setReducedFx } from './render/deaths';
 import { loadMeta, saveMeta } from './core/save';
 import { W } from './game/dungeon';
 import { newRun, act, serialize, deserialize, availableNodes, Run, Action } from './game/run';
@@ -247,7 +248,7 @@ function backdrop(time: number, dt: number) {
 }
 
 // ---------- Titelbild ----------
-const TITLE_ITEMS = 6;
+const TITLE_ITEMS = 7;
 let tRow = 0;
 let stageDark: HTMLCanvasElement | null = null;
 
@@ -257,6 +258,7 @@ function titleAction() {
   else if (tRow === 2) toggleSound();
   else if (tRow === 3) { meta.tutOff = !meta.tutOff; saveMeta(meta); }
   else if (tRow === 4) { meta.tut = []; meta.tutOff = false; saveMeta(meta); flash('Lehrgang beginnt von vorn.'); }
+  else if (tRow === 5) setReducedFx(!reducedFx()); // niedrig: kein Nachglühen, keine Teilchen, kein Nebel, keine Schlagschatten, kein Wackeln
   else if (document.fullscreenElement) void document.exitFullscreen();
   else document.documentElement.requestFullscreen().catch(() => { /* nicht erlaubt */ });
 }
@@ -329,9 +331,9 @@ function drawTitle(time: number, dt: number) {
   ctx.fillStyle = '#ffcd75'; ctx.fillRect(VW / 2 - 3, 102, 6, 5);
 
   // Menü
-  const items = ['SPIEL STARTEN', 'SPRACHE: DEUTSCH', soundOn() ? 'TON: AN' : 'TON: AUS', meta.tutOff ? 'LEHRGANG: AUS' : 'LEHRGANG: AN', 'LEHRGANG NEU BEGINNEN', 'VOLLBILD'];
+  const items = ['SPIEL STARTEN', 'SPRACHE: DEUTSCH', soundOn() ? 'TON: AN' : 'TON: AUS', meta.tutOff ? 'LEHRGANG: AUS' : 'LEHRGANG: AN', 'LEHRGANG NEU BEGINNEN', reducedFx() ? 'GRAFIK: NIEDRIG' : 'GRAFIK: HOCH', 'VOLLBILD'];
   items.forEach((label, i) => {
-    const y = 258 + i * 13, sel = i === tRow;
+    const y = 250 + i * 12, sel = i === tRow;
     if (sel) { panel(ctx, VW / 2 - 100, y - 3, 200, 14, '#ffcd75', 'rgba(177,62,83,0.45)'); text(ctx, '>', VW / 2 - 92, y, '#ffcd75'); text(ctx, '<', VW / 2 + 88, y, '#ffcd75'); }
     text(ctx, label, VW / 2, y, sel ? '#ffcd75' : '#94b0c2', 10, 'center');
   });

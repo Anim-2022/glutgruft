@@ -8,7 +8,7 @@ import { Light, applyLight, AMBIENTS } from './light';
 import { dropShadow, drawAO, castFrom, castShadow, beginShadows, flushShadows } from './shade';
 import { floorTint, softEdged } from './tiles';
 import { propAt, drawProp, recolor } from './props';
-import { stepAmbient, drawAmbient, drawFog, resetAmbient } from './ambient';
+import { stepAmbient, drawAmbient, drawFog, resetAmbient, postFx } from './ambient';
 
 // Arena des Bosses: Fackeln brennen in seiner Farbe [außen, Kern], dazu eine Aura um ihn
 const BOSS_FLAME: [string, string][] = [['#9a4fc0', '#c9d4dc'], ['#38b764', '#a7f070'], ['#ef7d57', '#f4f4f4']];
@@ -553,9 +553,10 @@ export function drawRun(ctx: CanvasRenderingContext2D, run: Run, dt: number, tim
   for (const b of booms) lights.push({ x: b.x, y: b.y, r: 6 * (1 - b.t / 0.32) + 1, col: '#ffcd75' });
   for (const b of bolts) lights.push({ x: b.x1, y: b.y1, r: 2, col: b.col === '#1a1c2c' ? undefined : b.col, a: 0.7 });
   const amb = AMBIENTS[bio];
-  applyLight(ctx, run, lights, ox, oy, boss ? { ...amb, dark: Math.min(0.9, amb.dark + 0.05) } : amb, VW, VH);
+  applyLight(ctx, run, lights, ox, oy, boss ? { ...amb, dark: Math.min(0.9, amb.dark + 0.05) } : amb, VW, VH, fx);
   flushShadows(ctx, run.tiles, run.vis, ox, oy, x0, y0, x1, y1);
   if (fx) drawAmbient(ctx, ox, oy, true); // Glutfunken leuchten selbst
+  postFx(ctx, bio, VW, VH);
   // Schadenszahlen über der Dunkelheit, damit sie lesbar bleiben
   for (let i = nums.length - 1; i >= 0; i--) {
     const n = nums[i];

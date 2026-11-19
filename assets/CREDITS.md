@@ -22,3 +22,12 @@ KI-Referenzen werden hier je Sprite eingetragen (Format siehe `docs/asset-pipeli
 - Palettenergänzung R, i, m, u (`PAL`)
 
 Keine dieser Grafiken beruht auf einer KI-Referenz.
+
+## Visual Pass 2 (Licht, Schatten, Texturen, Orte)
+
+- Bodenmuster, Mauerkronen, Wandsockel, Übergänge (`src/render/tiles.ts`)
+- Dekor je Biom: Ketten, Spinnweben, Banner, Wurzeln, Tropfsteine, Haken, Glutgitter, Kerzen, Knochen,
+  Kristalle, Leuchtpilze, Barren, Kohle, Grabplatte, Pfütze, Glutrost (`src/render/props.ts`)
+- Schatten, Licht, Teilchen, Nebel, Vignette (`src/render/shade.ts`, `light.ts`, `ambient.ts`)
+
+Alles im Code gezeichnet, nur Farben aus `PAL`, ohne KI-Referenz. Vergleichsbilder: `docs/visual-pass-2/`.

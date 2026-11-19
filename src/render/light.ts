@@ -141,7 +141,7 @@ function addLight(L: Light, sm: { v: Float32Array; op: Uint8Array }, R: number, 
   }
 }
 
-export function applyLight(ctx: CanvasRenderingContext2D, view: LightView, lights: Light[], ox: number, oy: number, amb: Ambient, vw: number, vh: number) {
+export function applyLight(ctx: CanvasRenderingContext2D, view: LightView, lights: Light[], ox: number, oy: number, amb: Ambient, vw: number, vh: number, bloom = true) {
   ensure(vw, vh);
   syncTiles(view.tiles);
   lum.fill(0); glow.fill(0);
@@ -178,7 +178,8 @@ export function applyLight(ctx: CanvasRenderingContext2D, view: LightView, light
   ctx.drawImage(dark!, 0, 0, lw * CELL, lh * CELL);
   ctx.globalCompositeOperation = 'lighter';
   ctx.drawImage(glowCv!, 0, 0, lw * CELL, lh * CELL);
-  // Bloom: Glühen verkleinert und weich vergrößert, damit helle Quellen strahlen
+  // Bloom: Glühen verkleinert und weich vergrößert, damit helle Quellen strahlen (bei niedriger Grafik aus)
+  if (!bloom) { ctx.globalCompositeOperation = 'source-over'; ctx.imageSmoothingEnabled = smooth; return; }
   const bg = bloomCv!.getContext('2d')!;
   bg.imageSmoothingEnabled = true;
   bg.clearRect(0, 0, bloomCv!.width, bloomCv!.height);

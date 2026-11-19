@@ -98,3 +98,23 @@ export function drawFog(ctx: CanvasRenderingContext2D, bi: number, tiles: Uint8A
   ctx.globalAlpha = 1;
   ctx.restore();
 }
+
+// ---- Nachbearbeitung: Farbstimmung je Biom und Vignette ----
+// helle Tönung, multipliziert: färbt Licht und Mitteltöne, Schwarz bleibt Schwarz
+const GRADE = ['#e4ebff', '#e0fff4', '#fff0e2'];
+let vig: HTMLCanvasElement | null = null;
+function vignette(vw: number, vh: number): HTMLCanvasElement {
+  if (vig && vig.width === vw && vig.height === vh) return vig;
+  vig = document.createElement('canvas'); vig.width = vw; vig.height = vh;
+  const g = vig.getContext('2d')!, gr = g.createRadialGradient(vw / 2, vh / 2, vh * 0.35, vw / 2, vh / 2, vw * 0.62);
+  gr.addColorStop(0, 'rgba(5,6,12,0)'); gr.addColorStop(0.7, 'rgba(5,6,12,0.22)'); gr.addColorStop(1, 'rgba(5,6,12,0.55)');
+  g.fillStyle = gr; g.fillRect(0, 0, vw, vh);
+  return vig;
+}
+// Über der Szene, unter Oberfläche und Schadenszahlen
+export function postFx(ctx: CanvasRenderingContext2D, bi: number, vw: number, vh: number) {
+  ctx.globalCompositeOperation = 'multiply';
+  ctx.fillStyle = GRADE[bi]; ctx.fillRect(0, 0, vw, vh);
+  ctx.globalCompositeOperation = 'source-over';
+  ctx.drawImage(vignette(vw, vh), 0, 0);
+}
