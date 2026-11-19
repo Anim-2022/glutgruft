@@ -173,6 +173,22 @@ describe('Ereignisse: Ablauf', () => {
     expect(tw.atk).toBeLessThan(run.p.atk + 1);
   });
 
+  it('300 Seeds: nach der Fallenkammer ist nichts mehr versiegelt und die Treppe erreichbar', () => {
+    let n = 0;
+    for (let seed = 1; n < 300 && seed < 2000; seed++) {
+      let run: Run;
+      try { run = started('fallenkammer', seed); } catch { continue; }
+      if (run.seed !== seed) { seed = run.seed; }
+      n++;
+      const sealed = run.ev!.seal!.map(([i]) => i);
+      for (let k = 0; k < 20 && run.ev; k++) { act(run, { t: 'wait' }); run.p.hp = 300; }
+      expect(run.ev, `Seed ${run.seed}`).toBeNull();
+      for (const i of sealed) expect(run.tiles[i], `Seed ${run.seed}`).not.toBe(T.GATE);
+      expect(distMap(run.tiles, run.p.x, run.p.y)[run.tiles.indexOf(T.STAIRS)], `Seed ${run.seed}`).toBeGreaterThan(0);
+    }
+    expect(n).toBe(300);
+  });
+
   it('Speichern und Laden mitten im Ereignis', () => {
     const run = started('fallenkammer');
     const back = deserialize(serialize(run))!;

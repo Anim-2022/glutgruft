@@ -1170,7 +1170,7 @@ function evTick(run: Run) {
   // Fundstück: einmal je Ebene an einer ruhigen Stelle
   if (run.evCalm === 12 && run.evNote !== run.floor && run.rng.chance(EVENT.noteChance)) {
     run.evNote = run.floor;
-    say(run, `Ein Zettel an der Wand: „${NOTES[run.rng.int(0, NOTES.length - 1)]}“`);
+    say(run, `Ein Zettel an der Wand: "${NOTES[run.rng.int(0, NOTES.length - 1)]}"`);
   }
   const calmPlan = q.find(pl => pl.room === undefined);
   if (calmPlan && run.evCalm >= EVENT.calmMin && (run.evCalm >= EVENT.calmMax || run.rng.chance(EVENT.calmChance))) { run.evCalm = 0; evStart(run, calmPlan); }
@@ -1780,7 +1780,7 @@ function castSpell(run: Run, id: string): boolean {
       if (!m) continue;
       const stunned = !!m.st.stun;
       damage(run, m, (atk * 0.9 + p.lvl * 0.4) * p.pow * (stunned ? 2 : 1) - m.def, '#73eff7');
-      if (stunned && m.hp > 0) { delete m.st.stun; m.st.immun = 3; } // „Zerschmettern“
+      if (stunned && m.hp > 0) { delete m.st.stun; m.st.immun = 3; } // "Zerschmettern"
     }
     return true;
   }

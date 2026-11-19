@@ -156,7 +156,7 @@ export const EVENTS: EvDef[] = [
   },
   {
     id: 'geist', cat: 'flavour', trigger: 'calm', title: 'Verirrter Geist', tier: 2, limit: 30,
-    intro: ['Ein blasser Geist winkt dir zu und schwebt davon.', '„Folge mir ...“, flüstert ein Licht.'],
+    intro: ['Ein blasser Geist winkt dir zu und schwebt davon.', '"Folge mir ...", flüstert ein Licht.'],
     start(a, e) {
       const s = a.near(8, 14);
       if (!s) return false;
@@ -170,7 +170,7 @@ export const EVENTS: EvDef[] = [
   },
   {
     id: 'kopfgeld', cat: 'danger', trigger: 'calm', title: 'Kopfgeld', tier: 3, limit: 150,
-    intro: ['An der Wand hängt ein Steckbrief: „Gesucht – tot.“', 'Ein Zettel: „Belohnung für diesen Kerl.“ Er ist hier unten.'],
+    intro: ['An der Wand hängt ein Steckbrief: "Gesucht – tot."', 'Ein Zettel: "Belohnung für diesen Kerl." Er ist hier unten.'],
     start(a, e) {
       const s = a.near(10, 40);
       if (!s) return false;
@@ -272,7 +272,7 @@ export const NOTES = [
   'Mein Schwert für ein Brot.',
   'Notiz an mich: Die Treppe führt nach UNTEN.',
   'Skelette zählen nicht als Gesellschaft.',
-  'Ausgang → (durchgestrichen)',
+  'Ausgang -> (durchgestrichen)',
   'Liebe Mama, mir geht es gut. Das Gold ist echt.',
   'Hier ruht Gerd. Er hat den roten Boden betreten.',
   'Die Glocke NICHT anfassen.',
