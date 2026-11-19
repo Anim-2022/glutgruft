@@ -4,6 +4,7 @@ import { W, H, T, wallLike, walkable } from '../game/dungeon';
 import { threatOf, statusMarks } from './warn';
 import { onDeath, drawDecals, drawDying, resetDeaths, reducedFx } from './deaths';
 import { drawItemIcon, drawIcon, PERK_ICON } from './icons';
+import { Light, applyLight, AMBIENTS } from './light';
 import { sfx } from '../core/audio';
 import { tr } from '../core/i18n';
 import { Run, Actor, xpNeed, skillCost, skillReady, spellAt, itemText, itemValue, itemScore, perkInfo, skillModName, shotRange, RANKS, SORT_NAMES, BAG_MAX, RUNE_NAMES, availableNodes } from '../game/run';
@@ -76,64 +77,6 @@ function buildLight(run: Run) {
     const i = y * W + x;
     if (run.tiles[i] === T.WALL && walkable(run.tiles[i + W]) && hash(x, y, run.seed + run.floor) % 7 === 0) torches.add(i);
   }
-}
-
-// ---- Licht ----
-// Die Dunkelheit ist eine eigene Ebene in halber Auflösung. Jede Lichtquelle stanzt ein
-// weiches Loch hinein; danach wird farbiges Glühen additiv über die Szene gelegt.
-interface Light { x: number; y: number; r: number; col?: string; a?: number; }
-const LW = VW >> 1, LH = VH >> 1;
-let lcv: HTMLCanvasElement | null = null, lg: CanvasRenderingContext2D;
-const AMBIENT = 0.84, MEMORY = 0.62;
-
-function applyLight(ctx: CanvasRenderingContext2D, run: Run, lights: Light[], ox: number, oy: number, x0: number, y0: number, x1: number, y1: number) {
-  if (!lcv) { lcv = document.createElement('canvas'); lcv.width = LW; lcv.height = LH; lg = lcv.getContext('2d')!; }
-  const g = lg;
-  g.globalCompositeOperation = 'source-over';
-  g.clearRect(0, 0, LW, LH);
-  g.fillStyle = `rgba(5,6,12,${AMBIENT})`;
-  g.fillRect(0, 0, LW, LH);
-  g.globalCompositeOperation = 'destination-out';
-  for (const L of lights) {
-    const x = (L.x * TS + 8 + ox) / 2, y = (L.y * TS + 8 + oy) / 2, r = (L.r * TS) / 2;
-    if (x + r < 0 || y + r < 0 || x - r > LW || y - r > LH) continue;
-    const gr = g.createRadialGradient(x, y, r * 0.2, x, y, r);
-    gr.addColorStop(0, `rgba(0,0,0,${L.a ?? 1})`);
-    gr.addColorStop(0.6, `rgba(0,0,0,${(L.a ?? 1) * 0.55})`);
-    gr.addColorStop(1, 'rgba(0,0,0,0)');
-    g.fillStyle = gr;
-    g.fillRect(x - r, y - r, r * 2, r * 2);
-  }
-  // Wände im Sichtfeld bleiben auch fern vom Licht erkennbar
-  g.fillStyle = 'rgba(0,0,0,0.42)';
-  for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
-    const i = y * W + x;
-    if (run.vis[i] && wallLike(run.tiles[i])) g.fillRect((x * TS + ox) / 2, (y * TS + oy) / 2, TS / 2, TS / 2);
-  }
-  // Bekannte, aber gerade nicht einsehbare Felder: gleichmäßig gedimmt, unabhängig vom Licht
-  g.globalCompositeOperation = 'source-over';
-  g.fillStyle = `rgba(5,6,12,${MEMORY})`;
-  for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
-    const i = y * W + x;
-    if (!run.seen[i] || run.vis[i]) continue;
-    const px = (x * TS + ox) / 2, py = (y * TS + oy) / 2;
-    g.clearRect(px, py, TS / 2, TS / 2);
-    g.fillRect(px, py, TS / 2, TS / 2);
-  }
-  ctx.drawImage(lcv, 0, 0, VW, VH);
-  // farbiges Glühen
-  ctx.globalCompositeOperation = 'lighter';
-  for (const L of lights) {
-    if (!L.col) continue;
-    const x = L.x * TS + 8 + ox, y = L.y * TS + 8 + oy, r = L.r * TS * 0.8;
-    if (x + r < 0 || y + r < 0 || x - r > VW || y - r > VH) continue;
-    const gr = ctx.createRadialGradient(x, y, 0, x, y, r);
-    gr.addColorStop(0, L.col + '2a');
-    gr.addColorStop(1, L.col + '00');
-    ctx.fillStyle = gr;
-    ctx.fillRect(x - r, y - r, r * 2, r * 2);
-  }
-  ctx.globalCompositeOperation = 'source-over';
 }
 
 export function resetView() {
@@ -563,7 +506,7 @@ export function drawRun(ctx: CanvasRenderingContext2D, run: Run, dt: number, tim
   }
   for (const b of booms) lights.push({ x: b.x, y: b.y, r: 6 * (1 - b.t / 0.32) + 1, col: '#ffcd75' });
   for (const b of bolts) lights.push({ x: b.x1, y: b.y1, r: 2, col: b.col === '#1a1c2c' ? undefined : b.col, a: 0.7 });
-  applyLight(ctx, run, lights, ox, oy, x0, y0, x1, y1);
+  applyLight(ctx, run, lights, ox, oy, AMBIENTS[biomeOf(run.floor)], VW, VH);
   // Schadenszahlen über der Dunkelheit, damit sie lesbar bleiben
   for (let i = nums.length - 1; i >= 0; i--) {
     const n = nums[i];

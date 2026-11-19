@@ -441,4 +441,10 @@ requestAnimationFrame(frame);
 // Für automatisierte Tests
 (window as unknown as { __g: unknown }).__g = { get run() { return run; }, get scene() { return scene; }, meta, sprites,
   start(seed: number, cls: 'krieger' | 'magier' | 'waldlaeufer') { resetView(); run = newRun(seed, cls, meta); scene = 'run'; return run; },
+  // Abstieg bis Ebene n (für Bildschirmfotos): Treppe unter den Helden legen und hinabsteigen
+  goto(n: number) {
+    if (!run) return;
+    while (run.floor < n) { run.mode = 'play'; run.tiles[run.p.y * W + run.p.x] = 2; act(run, { t: 'descend' }); }
+    run.mode = 'play'; resetView();
+  },
 };
