@@ -1091,19 +1091,20 @@ function evApi(run: Run): EvApi {
 
 // Lohn nach einem geschafften Ereignis. Stufe 3 kann (selten, gedeckelt) eine Reliquienwahl sein.
 function evReward(run: Run, tier: number): string {
-  const p = run.p, rng = run.rng, a = evApi(run);
+  const p = run.p, rng = run.rng, a = evApi(run), R = EVENT;
   if (tier === 1) {
-    const g = a.gold(6 + 2 * run.floor);
-    if (rng.chance(0.5)) { p.potions++; return `${g} Gold, ein Heiltrank`; }
-    p.bombs++; return `${g} Gold, eine Bombe`;
+    const g = a.gold(R.gold1 + run.floor);
+    if (rng.chance(R.potion1)) { p.potions++; return `${g} Gold, ein Heiltrank`; }
+    return `${g} Gold`;
   }
   if (tier === 2) {
-    const s = a.souls(8);
-    if (rng.chance(0.5)) { const it = genItem(run); takeItem(run, it, 'Lohn'); tele(run, 'evItems'); return `${it.name}, ${s} Seelen`; }
-    p.potions++; p.bombs++; return `Heiltrank und Bombe, ${s} Seelen`;
+    const s = a.souls(R.souls2);
+    if (rng.chance(R.item2)) { const it = genItem(run); takeItem(run, it, 'Lohn'); tele(run, 'evItems'); return `${it.name}, ${s} Seelen`; }
+    if (rng.chance(0.5)) { p.potions++; return `ein Heiltrank, ${s} Seelen`; }
+    p.bombs++; return `eine Bombe, ${s} Seelen`;
   }
   const pool = rng.shuffle(Object.keys(RELICS).filter(id => !has(p, id)));
-  if ((run.relicOps ?? 0) < EVENT.relicCap && pool.length >= 2 && rng.chance(EVENT.relicChance)) {
+  if ((run.relicOps ?? 0) < R.relicCap && pool.length >= 2 && rng.chance(R.relicChance)) {
     run.relicOps = (run.relicOps ?? 0) + 1;
     tele(run, 'evRelic');
     run.perkChoices = pool.slice(0, 2);
@@ -1112,7 +1113,7 @@ function evReward(run: Run, tier: number): string {
   }
   const it = genItem(run, false, 1);
   takeItem(run, it, 'Lohn'); tele(run, 'evItems');
-  return `${it.name}, ${a.gold(8 + 2 * run.floor)} Gold, ${a.souls(12)} Seelen`;
+  return `${it.name}, ${a.gold(R.gold3 + run.floor)} Gold, ${a.souls(R.souls3)} Seelen`;
 }
 
 function evStart(run: Run, plan: EvPlan): boolean {

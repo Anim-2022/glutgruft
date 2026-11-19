@@ -143,7 +143,7 @@ export const EVENTS: EvDef[] = [
     },
     tick: killAll,
     goal: (a, e) => `Fang die Diebesratte · noch ${left(e)} Züge`,
-    won: (a, e) => `${a.gold(Math.max(2 * e.data.stolen, 5 + a.floor))} Gold zurück`,
+    won: (a, e) => `${a.gold(Math.max(Math.round(1.5 * e.data.stolen), 5 + a.floor))} Gold zurück`,
     lost: (a, e) => (e.data.stolen ? `Die Ratte ist mit ${e.data.stolen} Gold verschwunden.` : 'Die Ratte ist verschwunden.'),
   },
   {
@@ -199,7 +199,7 @@ export const EVENTS: EvDef[] = [
     },
     tick: (a, e) => (a.alive(e).length ? 'run' : 'won'),
     goal: (a, e) => `Fange die Seelenlichter ${beaten(a, e)} · noch ${left(e)} Züge`,
-    won: (a, e) => { const n = e.total - a.alive(e).length; return n ? `${a.souls(4 * n)} Seelen` : 'kein einziges Licht – nächstes Mal'; },
+    won: (a, e) => { const n = e.total - a.alive(e).length; return n ? `${a.souls(2 * n)} Seelen` : 'kein einziges Licht – nächstes Mal'; },
   },
   {
     id: 'nebel', cat: 'challenge', trigger: 'calm', title: 'Fluchnebel', tier: 1, limit: 15, survive: true,
