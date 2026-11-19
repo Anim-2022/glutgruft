@@ -95,6 +95,7 @@ describe('Ereignisse: Planung', () => {
     const cats = new Set(EVENTS.map(e => e.cat));
     expect([...cats].sort()).toEqual(['challenge', 'danger', 'flavour']);
     expect(EVENTS.filter(e => e.biome === undefined).length).toBe(14);
+    for (const b of [0, 1, 2]) expect(EVENTS.filter(e => e.biome === b).length).toBe(8);
     for (const e of EVENTS) { expect(e.intro.length).toBeGreaterThan(0); expect(e.limit).toBeGreaterThan(0); expect(e.limit).toBeLessThanOrEqual(150); }
   });
 });

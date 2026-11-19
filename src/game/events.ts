@@ -119,6 +119,40 @@ function take(a: EvApi, e: EvState, got: () => void) {
   if (i >= 0) { e.marks!.splice(i, 1); got(); }
 }
 
+// Lavariss: die Glut frisst sich je Zug zwei Felder weiter die Linie entlang
+function lava(a: EvApi, e: EvState) {
+  const d = e.data, from = d.at, line: number[] = [];
+  for (let k = 0; k < d.len; k++) line.push((d.y0 + (d.dx ? 0 : k)) * W + d.x0 + (d.dx ? k : 0));
+  d.at = Math.min(line.length, from + 2);
+  a.warn(line.slice(Math.max(0, from - 1), d.at).filter(i => a.isFloor(i)));
+}
+// Esse: eine ganze Zeile oder Spalte des Raums
+function esse(a: EvApi, e: EvState) {
+  const r = e.room!, out: number[] = [];
+  if (a.chance(0.5)) { const y = r.y + a.int(0, r.h - 1); for (let x = r.x; x < r.x + r.w; x++) out.push(y * W + x); }
+  else { const x = r.x + a.int(0, r.w - 1); for (let y = r.y; y < r.y + r.h; y++) out.push(y * W + x); }
+  a.warn(out.filter(i => a.isFloor(i)));
+}
+// Funken: vier Felder nahe dem Helden, oft auch seines
+function sparks(a: EvApi) {
+  const c = a.near2(a.p.x, a.p.y, 0, 4).filter(i => a.isFloor(i)), out = shuffled(a, c).slice(0, 4), pi = a.p.y * W + a.p.x;
+  if (a.chance(0.3) && !out.includes(pi)) out.push(pi);
+  a.warn(out);
+}
+// Amboss: jedes zweite Feld im Wechsel – wer jeden Zug einen Schritt macht, bleibt heil
+function anvil(a: EvApi, e: EvState) {
+  const par = (e.turns + 1) % 2;
+  a.warn(a.roomTiles(e.room!).filter(i => ((i % W) + ((i / W) | 0)) % 2 === par));
+}
+// Schmelzofen: zwei Fässer mit kurzer Lunte, nicht direkt neben dem Helden
+function kegs(a: EvApi, e: EvState) {
+  let n = 0;
+  for (const i of shuffled(a, a.roomTiles(e.room!))) {
+    if (n >= 2) break;
+    if (Math.max(Math.abs((i % W) - a.p.x), Math.abs(((i / W) | 0) - a.p.y)) >= 3 && a.barrel(i % W, (i / W) | 0, 3)) n++;
+  }
+}
+
 export const EVENTS: EvDef[] = [
   {
     id: 'hinterhalt', cat: 'danger', trigger: 'room', title: 'Hinterhalt!', tier: 2, limit: 40,
@@ -516,6 +550,84 @@ export const EVENTS: EvDef[] = [
     },
     goal: (a, e) => (e.data.hatched ? `Besiege die Brut ${beaten(a, e)}` : `Zerstöre die Eier · schlüpfen in ${Math.max(0, e.data.hatch - e.turns)} Zügen`),
     won: (a, e) => (e.data.hatched ? a.reward(1) : a.reward(2)),
+  },
+  // ===================== Glutschmiede (Gebiet 2) =====================
+  {
+    id: 'lavariss', cat: 'danger', trigger: 'room', biome: 2, title: 'Lavariss', tier: 2, limit: 9, survive: true,
+    intro: ['Der Boden reißt auf. Glut kriecht quer durch den Raum!', 'Ein Riss. Darin: flüssiges Feuer. Es wird länger.'],
+    start(a, e) {
+      const r = e.room!, hor = r.w >= r.h;
+      e.data.dx = hor ? 1 : 0; e.data.len = hor ? r.w : r.h;
+      e.data.x0 = hor ? r.x : r.x + a.int(0, r.w - 1); e.data.y0 = hor ? r.y + a.int(0, r.h - 1) : r.y;
+      e.data.at = 0;
+      lava(a, e);
+      return true;
+    },
+    tick(a, e) { a.strike(2, 'fire'); if (e.turns < e.limit) lava(a, e); return 'run'; },
+    goal: (a, e) => `Weg von der Glutspur · noch ${left(e)} Züge`,
+  },
+  {
+    id: 'esse', cat: 'danger', trigger: 'room', biome: 2, title: 'Esse-Ausbruch', tier: 2, limit: 8, survive: true,
+    intro: ['Die Essen fauchen. Feuerstrahlen schießen quer durch den Raum!', 'Zisch! Aus den Wänden schlagen Flammen.'],
+    start(a, e) { esse(a, e); return true; },
+    tick(a, e) { a.strike(3, 'fire'); if (e.turns < e.limit) esse(a, e); return 'run'; },
+    goal: (a, e) => `Meide die roten Reihen · noch ${left(e)} Züge`,
+  },
+  {
+    id: 'glutschwarm', cat: 'challenge', trigger: 'calm', biome: 2, title: 'Glutgeist-Schwarm', tier: 2, limit: 40,
+    intro: ['Funken tanzen – und bekommen Gesichter.', 'Die Glut erhebt sich. Mehrmals.'],
+    start(a, e) {
+      for (let k = 0; k < 3 + (a.floor >= 13 ? 1 : 0); k++) { const s = a.near(4, 7); if (s) a.spawn(e, 'glutgeist', s[0], s[1]); }
+      return e.mobs.length > 0;
+    },
+    tick: killAll,
+    goal: (a, e) => `Lösche die Glutgeister ${beaten(a, e)}`,
+  },
+  {
+    id: 'golem', cat: 'danger', trigger: 'room', biome: 2, title: 'Rüstungsgolem erwacht', tier: 3, limit: 60,
+    intro: ['Die Rüstung an der Wand bewegt sich. Sie ist nicht leer.', 'Klirr. Ein Golem aus Schmiedestahl richtet sich auf.'],
+    start(a, e) {
+      const t = far(a, e, 3);
+      if (t < 0) return false;
+      a.elite(a.spawn(e, 'golem', t % W, (t / W) | 0), 1.5, 'Rüstungsgolem');
+      return true;
+    },
+    tick: killAll,
+    goal: () => 'Besiege den Rüstungsgolem',
+  },
+  {
+    id: 'funken', cat: 'challenge', trigger: 'calm', biome: 2, title: 'Funkenregen', tier: 1, limit: 8, survive: true,
+    intro: ['Von der Decke regnet es Funken!', 'Ein Funkenregen. Nicht stehen bleiben!'],
+    start(a, e) { sparks(a); return true; },
+    tick(a, e) { a.strike(2, 'fire'); if (e.turns < e.limit) sparks(a); return 'run'; },
+    goal: (a, e) => `Weiche den Funken aus · noch ${left(e)} Züge`,
+  },
+  {
+    id: 'amboss', cat: 'challenge', trigger: 'room', biome: 2, title: 'Ambossrhythmus', tier: 2, limit: 8, survive: true,
+    intro: ['BAMM – bamm – BAMM. Die Hämmer schlagen im Takt. Bleib in Bewegung!', 'Unsichtbare Hämmer. Jeder zweite Stein. Im Takt.'],
+    start(a, e) { anvil(a, e); return true; },
+    tick(a, e) { a.strike(3, 'hammer'); if (e.turns < e.limit) anvil(a, e); return 'run'; },
+    goal: (a, e) => `Halte den Takt: jeden Zug ein Feld weiter · noch ${left(e)} Züge`,
+  },
+  {
+    id: 'glutader', cat: 'challenge', trigger: 'calm', biome: 2, title: 'Glutader', tier: 1, limit: 12, survive: true,
+    intro: ['Der Boden glüht. Nur die blauen Kühlplatten sind sicher.', 'Hitze steigt auf. Such dir eine Kühlplatte!'],
+    start(a, e) {
+      const ms: number[] = [];
+      for (let k = 0; k < 8 && ms.length < 4; k++) { const s = a.near(2, 6); if (s && !ms.includes(s[1] * W + s[0])) ms.push(s[1] * W + s[0]); }
+      if (!ms.length) return false;
+      e.marks = ms; e.data.look = 3;
+      return true;
+    },
+    tick(a, e) { if (e.turns % 2 === 0 && !e.marks!.some(m => a.atPlayer(m))) a.hurt(1, 'Die Glutader hat dich verbrannt.'); return 'run'; },
+    goal: (a, e) => `Steh auf einer Kühlplatte · noch ${left(e)} Züge`,
+  },
+  {
+    id: 'ofen', cat: 'danger', trigger: 'room', biome: 2, title: 'Schmelzofen', tier: 2, limit: 10, survive: true,
+    intro: ['Der Ofen spuckt Fässer aus – mit brennender Lunte!', 'Rumpel, rumpel – Fässer rollen herein. Sie zischen.'],
+    start(a, e) { kegs(a, e); return true; },
+    tick(a, e) { if (e.turns % 3 === 0 && e.turns < e.limit - 2) kegs(a, e); return 'run'; },
+    goal: (a, e) => `Halte Abstand zu den Fässern · noch ${left(e)} Züge`,
   },
 ];
 
