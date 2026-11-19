@@ -363,12 +363,14 @@ function stock(run: Run): Offer[] {
 // ---------- Rätselkammern ----------
 
 export const MAX_TRAPS = 3;
+// Werkzeuggürtel (Waldläufer): 5 Fallen
+export const maxTraps = (p: Player) => (p.cls === 'waldlaeufer' && hasNode(p, 'n1_2b') ? 5 : MAX_TRAPS);
 export const RUNE_NAMES = ['Sonne', 'Mond', 'Stern', 'Auge'];
 const has = (p: Player, id: string) => p.relics.includes(id);
 export const hasNode = (p: Player, id: string) => p.tree.includes(id);
 export const spellAt = (p: Player, i: number) => (i >= 3 ? p.spells?.[i - 3] : undefined);
 const baseCost = (p: Player, i: number) => (i < 3 ? CLASSES[p.cls].skills[i].cost : (NEW_SKILLS[spellAt(p, i)!]?.cost ?? 99) + (p.cls === 'krieger' ? TUNE.kCost : 0));
-export const skillCost = (p: Player, i: number) => Math.max(1, baseCost(p, i) - (has(p, 'echo') ? 1 : 0) - (p.cls === 'krieger' && i === 0 && p.skillMod[0] === 1 ? 1 : 0) - (p.aff.erz ? 1 : 0) - (p.st.nachhall && !(p.cls === 'magier' && i === 2) ? 2 : 0));
+export const skillCost = (p: Player, i: number) => (p.cls === 'waldlaeufer' && i === 1 && hasNode(p, 'n1_5')) ? 0 : Math.max(1, baseCost(p, i) - (has(p, 'echo') ? 1 : 0) - (p.cls === 'krieger' && i === 0 && p.skillMod[0] === 1 ? 1 : 0) - (p.aff.erz ? 1 : 0) - (p.st.nachhall && !(p.cls === 'magier' && i === 2) ? 2 : 0));
 // Fähigkeit jetzt einsetzbar (Ressource, Abklingzeit des Zeitrisses)
 export const skillReady = (p: Player, i: number) => (i < 3 || !!spellAt(p, i)) && canPay(p, skillCost(p, i)) && !(p.cls === 'magier' && i === 2 && p.st.riss);
 // Blutzorn (Krieger): fehlende Wut wird mit Leben bezahlt, 2 je Wut; man stirbt nicht daran
@@ -381,7 +383,30 @@ function payRes(run: Run, cost: number) {
   p.hp -= n; p.res = 0;
   run.fx.push({ k: 'num', x: p.x, y: p.y, s: `-${n}`, col: '#b13e53' });
 }
-export const shotRange = (p: Player) => CLASSES[p.cls].range + (p.aff.weite ?? 0);
+export const shotRange = (p: Player) => CLASSES[p.cls].range + (p.aff.weite ?? 0) + (p.cls === 'waldlaeufer' && hasNode(p, 'n0_5') ? 2 : 0);
+// Waldläufer: Bonus des nächsten Schusses aus Anlegen und Schattenschritt; danach verbraucht
+let shotUsed = false;
+function shotBonus(p: Player): number {
+  if (p.cls !== 'waldlaeufer') return 1;
+  shotUsed = true;
+  const b = (1 + 0.25 * (p.st.aim ?? 0)) * (p.st.schatten ? 1.5 : 1);
+  delete p.st.aim; delete p.st.schatten;
+  return b;
+}
+// Nach einer Aktion des Waldläufers: Anlegen zählt Züge ohne Schritt, Rückzugsgefecht schießt beim Lösen
+function afterWl(run: Run, a: Action, px: number, py: number, adj0: Actor[]) {
+  const p = run.p;
+  if (hasNode(p, 'n0_5')) {
+    if (p.x !== px || p.y !== py) delete p.st.aim;
+    else if (!shotUsed) p.st.aim = Math.min(4, (p.st.aim ?? 0) + 1);
+  }
+  if (a.t === 'move' && hasNode(p, 'n2_5') && run.mode === 'play' && (p.x !== px || p.y !== py) && adj0.some(m => m.hp > 0 && cheb(m, p) >= 2)) {
+    const t = nearestMob(run, shotRange(p));
+    if (t) { run.fx.push({ k: 'arrow', x0: p.x, y0: p.y, x1: t.x, y1: t.y, col: '#a7f070', heavy: false }); playerHit(run, t, playerAtk(p) * 0.7 * 0.6); }
+  }
+}
+// Rauchbombe: der Spieler steht im Rauch
+const inSmoke = (p: Player) => !!p.st.rauch && cheb(p, { x: p.st.rx, y: p.st.ry }) <= 2;
 export const RANKS = ['I', 'II', 'III'];
 // Name und Beschreibung einer Wahl beim Stufenaufstieg: Gabe, Reliquie oder Fähigkeitsrang
 export function perkInfo(p: Player, id: string): { name: string; desc: string; kind: 'perk' | 'relic' | 'skill'; syn?: string } {
@@ -770,6 +795,7 @@ function damage(run: Run, dst: Actor, amt: number, col = '#f4f4f4', crit = false
   const p = run.p;
   if (dst.st.sproede) amt *= 1.5;
   if (dst !== p && dst.st.stun && hasNode(p, 'n1_2a') && p.cls === 'magier') amt *= 1.25; // Raureif
+  if (dst !== p && dst.st.mark) amt *= 1.3; // Markieren
   amt = Math.max(1, Math.round(amt));
   if (dst === p && p.shield) {
     const ab = Math.min(p.shield, amt);
@@ -869,6 +895,7 @@ function kill(run: Run, m: Actor) {
     run.fx.push({ k: 'boom', x: m.x, y: m.y, r: 1 });
     for (const o of run.mobs.filter(o => cheb(o, m) <= 1)) damage(run, o, 4 + p.lvl, '#ef7d57');
   }
+  if (m.st.mark && p.cls === 'waldlaeufer') gain(p, 2); // Markieren
   // Klingenrausch: ein Sieg gibt einen freien Zug, höchstens alle 3 Züge
   if (p.cls === 'krieger' && playerActing && hasNode(p, 'n1_5') && !p.st.rausch) { p.st.rausch = 3; freeTurn = true; say(run, 'Klingenrausch!'); }
   if (p.cls === 'magier' && m.st.brand && hasNode(p, 'n0_5')) {
@@ -1156,7 +1183,9 @@ function useSkill(run: Run, i: number): boolean {
       const t = nearestMob(run, 8);
       if (!t) return noTarget();
       run.fx.push({ k: 'arrow', x0: p.x, y0: p.y, x1: t.x, y1: t.y, col: '#ffcd75', heavy: true });
-      playerHit(run, t, atk * 1.8 * sp, mod === 2 && t.hp >= t.maxHp);
+      const weak = hasNode(p, 'n0_2b') && run.rng.chance(0.15); // Schwachstelle
+      playerHit(run, t, atk * 1.8 * sp * shotBonus(p), (mod === 2 && t.hp >= t.maxHp) || weak);
+      if (weak && t.hp > 0) stun(run, t, 1);
       if (mod === 1) {
         const b = mobAt(run, t.x + Math.sign(t.x - p.x), t.y + Math.sign(t.y - p.y));
         if (b && b !== t) damage(run, b, atk * 1.1 * sp - b.def, '#ffcd75');
@@ -1171,10 +1200,11 @@ function useSkill(run: Run, i: number): boolean {
         if (!walkable(run.tiles[y * W + x])) break;
         if (!run.traps.some(t => t.x === x && t.y === y)) run.traps.push({ x, y });
       }
-      while (run.traps.length > MAX_TRAPS) run.traps.shift();
+      while (run.traps.length > maxTraps(p)) run.traps.shift();
       break;
     }
     case 'waldlaeufer2': {
+      const from = { x: p.x, y: p.y }, wasAdj = run.mobs.some(m => cheb(m, p) <= 1);
       let moved = 0;
       for (let k = 0; k < 2 + (L ? 1 : 0) + (mod === 1 ? 1 : 0); k++) {
         const nx = p.x + p.dir[0], ny = p.y + p.dir[1];
@@ -1183,9 +1213,13 @@ function useSkill(run: Run, i: number): boolean {
       }
       if (!moved) { say(run, 'Kein Platz zum Rollen.'); return false; }
       p.st.dodge = mod === 1 ? 2 : 1;
+      if (hasNode(p, 'n2_2a')) p.st.schatten = 1; // Schattenschritt
+      if (hasNode(p, 'n2_2b') && wasAdj) refund = 1; // Leichtfuß
+      // Minenfeld: Falle am Startfeld
+      if (hasNode(p, 'n1_5') && !run.traps.some(t => t.x === from.x && t.y === from.y)) { run.traps.push(from); while (run.traps.length > maxTraps(p)) run.traps.shift(); }
       if (mod === 2) {
         const t = nearestMob(run, shotRange(p));
-        if (t) { run.fx.push({ k: 'arrow', x0: p.x, y0: p.y, x1: t.x, y1: t.y, col: '#ffcd75', heavy: false }); playerHit(run, t, atk * 0.75); }
+        if (t) { run.fx.push({ k: 'arrow', x0: p.x, y0: p.y, x1: t.x, y1: t.y, col: '#ffcd75', heavy: false }); playerHit(run, t, atk * 0.75 * shotBonus(p)); }
       }
       break;
     }
@@ -1270,6 +1304,28 @@ function castSpell(run: Run, id: string): boolean {
     p.dir = [Math.sign(t.x - p.x), Math.sign(t.y - p.y)];
     run.fx.push({ k: 'lunge', id: 0, dx: p.dir[0], dy: p.dir[1] });
     playerHit(run, t, atk * 1.2 * p.pow);
+    return true;
+  }
+  if (id === 'markieren') {
+    const t = nearestMob(run, shotRange(p) + 3);
+    if (!t) { say(run, 'Kein Ziel in Reichweite.'); return false; }
+    for (const m of run.mobs) delete m.st.mark;
+    t.st.mark = 7; // 6 Züge des Gegners
+    run.fx.push({ k: 'num', x: t.x, y: t.y, s: 'markiert', col: '#ffcd75' });
+    return true;
+  }
+  if (id === 'fangnetz') {
+    const t = nearestMob(run, 4);
+    if (!t) { say(run, 'Kein Ziel in Reichweite.'); return false; }
+    t.st.netz = 4; // 3 Züge des Gegners
+    run.fx.push({ k: 'arrow', x0: p.x, y0: p.y, x1: t.x, y1: t.y, col: '#c9d4dc', heavy: false });
+    say(run, `${t.name} hängt im Netz.`);
+    return true;
+  }
+  if (id === 'rauchbombe') {
+    p.st.rauch = 4; p.st.rx = p.x; p.st.ry = p.y;
+    run.fx.push({ k: 'boom', x: p.x, y: p.y, r: 2 });
+    say(run, 'Rauchbombe!');
     return true;
   }
   if (id === 'herausforderung') {
@@ -1366,7 +1422,8 @@ export function act(run: Run, a: Action): void {
     return;
   }
   let used = false;
-  playerActing = true; freeTurn = false;
+  playerActing = true; freeTurn = false; shotUsed = false;
+  const px = p.x, py = p.y, adj0 = run.mobs.filter(m => cheb(m, p) <= 1);
   switch (a.t) {
     case 'move': {
       const nx = p.x + a.dx, ny = p.y + a.dy;
@@ -1453,7 +1510,9 @@ export function act(run: Run, a: Action): void {
       // Schildwall: Warten im Kampf schützt und gibt Wut
       if (a.t === 'wait' && p.cls === 'krieger' && hasNode(p, 'n0_2a') && run.mobs.some(m => m.awake && run.vis[m.y * W + m.x])) { p.st.sw = 1; gain(p, 1); }
       // Fokus sammelt sich nur, wenn ein wacher Gegner in Sicht ist
-      if (p.cls === 'waldlaeufer' && run.mobs.some(m => m.awake && run.vis[m.y * W + m.x])) gain(p, 1);
+      // Ruhige Hand: doppelt ohne Gegner daneben; Rückzugsgefecht: Warten gibt nichts
+      if (p.cls === 'waldlaeufer' && !(a.t === 'wait' && hasNode(p, 'n2_5')) && run.mobs.some(m => m.awake && run.vis[m.y * W + m.x]))
+        gain(p, a.t === 'wait' && hasNode(p, 'n0_2a') && !run.mobs.some(m => cheb(m, p) <= 1) ? 2 : 1);
       used = true;
       break;
     case 'shoot': {
@@ -1462,7 +1521,7 @@ export function act(run: Run, a: Action): void {
       const t = nearestMob(run, shotRange(p));
       if (!t) { say(run, 'Kein Ziel in Reichweite.'); break; }
       run.fx.push({ k: 'bolt', x0: p.x, y0: p.y, x1: t.x, y1: t.y, col: c.resCol });
-      const base = playerAtk(p) * (p.cls === 'waldlaeufer' ? 0.7 : 1);
+      const base = playerAtk(p) * (p.cls === 'waldlaeufer' ? (hasNode(p, 'n1_5') ? 0.49 : 0.7) * shotBonus(p) : 1); // Minenfeld –30 %
       playerHit(run, t, base);
       sideHits(run, t, base, c.resCol);
       if (p.cls === 'magier' && hasNode(p, 'n0_2a') && t.hp > 0 && run.rng.chance(0.3)) t.st.brand = Math.max(t.st.brand ?? 0, burnT(p, 2)); // Zunder
@@ -1514,6 +1573,7 @@ export function act(run: Run, a: Action): void {
       used = useUlt(run);
       break;
   }
+  if (used && p.cls === 'waldlaeufer') afterWl(run, a, px, py, adj0);
   playerActing = false;
   if (used && freeTurn) { freeTurn = false; computeFov(run.tiles, p.x, p.y, fovR(run), run.vis, run.seen); return; }
   if (used) endTurn(run);
@@ -1525,6 +1585,7 @@ function hitPlayer(run: Run, m: Actor, melee: boolean) {
   const p = run.p, d = MOBS[m.kind];
   m.f = Math.abs(p.x - m.x) >= Math.abs(p.y - m.y) ? [Math.sign(p.x - m.x), 0] : [0, Math.sign(p.y - m.y)];
   if (melee) run.fx.push({ k: 'lunge', id: m.id, dx: Math.sign(p.x - m.x), dy: Math.sign(p.y - m.y) }, { k: 'swipe', x: p.x, y: p.y, dx: Math.sign(p.x - m.x), dy: Math.sign(p.y - m.y), big: !!m.boss });
+  if (melee && inSmoke(p) && run.rng.chance(0.5)) { run.fx.push({ k: 'num', x: p.x, y: p.y, s: 'verfehlt', col: '#94b0c2' }); return; }
   if (p.st.dodge || (p.aff.flink && run.rng.chance(Math.min(40, p.aff.flink) / 100))) { run.fx.push({ k: 'num', x: p.x, y: p.y, s: 'verfehlt', col: '#94b0c2' }); if (p.aff.konter) p.st.konter = 1; return; }
   const atk = Math.max(1, (melee ? m.atk : Math.round(m.atk * 0.7)) - (m.st.schwach ? 1 : 0)); // Fernschüsse treffen schwächer
   damage(run, p, Math.max(Math.ceil(atk * 0.3), atk - p.def - (p.st.wall ? 3 : 0) - (p.st.eis ? 2 : 0) - (p.st.sw ? 2 : 0)) - (has(p, 'steinhaut') ? 1 : 0), '#b13e53');
@@ -1551,6 +1612,7 @@ function moveMob(run: Run, m: Actor, x: number, y: number) {
     stun(run, m, run.p.skillMod[1] === 1 ? 3 : 2);
     say(run, `${m.name} tritt in die Falle!`);
     damage(run, m, (8 * run.p.pow + run.p.lvl) * (1 + 0.3 * L), '#ffcd75');
+    if (hasNode(run.p, 'n1_2a') && m.hp > 0) m.st.gift = 3; // Stacheldraht
   }
 }
 
@@ -1570,7 +1632,7 @@ function mobAct(run: Run, m: Actor, dist: Int16Array) {
   }
   if (man === 1) {
     // Schützen weichen oft einen Schritt zurück, wenn Platz ist
-    if (d.range && !m.st.taunt && run.rng.chance(0.5)) {
+    if (d.range && !m.st.taunt && !m.st.netz && run.rng.chance(0.5)) {
       const back = [[1, 0], [-1, 0], [0, 1], [0, -1]].map(([ox, oy]) => [m.x + ox, m.y + oy]).find(([x, y]) => isFree(run, x, y) && Math.abs(p.x - x) + Math.abs(p.y - y) === 2);
       if (back) { moveMob(run, m, back[0], back[1]); return; }
     }
@@ -1579,11 +1641,12 @@ function mobAct(run: Run, m: Actor, dist: Int16Array) {
     hitPlayer(run, m, true);
     return;
   }
-  if (d.range && !m.st.taunt && cheb(m, p) <= d.range && los(run.tiles, m.x, m.y, p.x, p.y)) {
+  if (d.range && !m.st.taunt && !inSmoke(p) && cheb(m, p) <= d.range && los(run.tiles, m.x, m.y, p.x, p.y)) {
     run.fx.push({ k: 'arrow', x0: m.x, y0: m.y, x1: p.x, y1: p.y, col: '#c9d4dc', heavy: false });
     hitPlayer(run, m, false);
     return;
   }
+  if (m.st.netz) return; // Fangnetz: kann nicht laufen
   const dirs = [[1, 0], [-1, 0], [0, 1], [0, -1]];
   if (d.ai === 'erratic' && run.rng.chance(0.35)) {
     const [ox, oy] = run.rng.pick(dirs);
@@ -1636,6 +1699,8 @@ function endTurn(run: Run) {
     tickDots(run, m);
     if (m.hp <= 0) continue;
     if (m.st.schwach) m.st.schwach--;
+    if (m.st.mark && !--m.st.mark) delete m.st.mark;
+    if (m.st.netz) m.st.netz--;
     if (m.st.taunt) m.st.taunt--;
     if (m.st.stun) { if (--m.st.stun === 0) m.st.immun = 3; continue; }
     if (m.st.immun) m.st.immun--;
@@ -1651,6 +1716,7 @@ function endTurn(run: Run) {
   if (p.st.riss) p.st.riss--;
   if (p.st.sw) p.st.sw--;
   if (p.st.rausch) p.st.rausch--;
+  if (p.st.rauch && !--p.st.rauch) { delete p.st.rauch; delete p.st.rx; delete p.st.ry; }
   if (p.st.schild && !--p.st.schild) { delete p.st.schild; p.shield = 0; }
   if (p.ultCd) p.ultCd--;
   if (p.aff.regen && run.turn % 6 === 0 && p.hp > 0 && p.hp < p.maxHp) p.hp = Math.min(p.maxHp, p.hp + p.aff.regen);
@@ -1694,7 +1760,7 @@ export function deserialize(json: string): Run | null {
 export function nodesFromRanks(lvl: number[], mod: number[]): string[] {
   const out: string[] = [];
   lvl.forEach((l, i) => {
-    if (l >= 1) out.push(`n${i}_1`);
+    if (l >= 1) out.push(`n${i}_1`, `n${i}_2a`); // T2a kommt mit T1
     if (l >= 2 && mod[i]) out.push(`n${i}_4${mod[i] === 1 ? 'a' : 'b'}`);
   });
   return out;

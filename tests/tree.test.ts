@@ -1,4 +1,4 @@
-// Fertigkeitsbaum, Schritt 2a: Punkte, Gaben im Wechsel, Restpunkt, Spielstände (am Waldläufer: noch der Baum aus den Rängen)
+// Fertigkeitsbaum: Punkte, Gaben im Wechsel, Restpunkt, Spielstände (am Waldläufer)
 import { describe, it, expect } from 'vitest';
 import { defaultMeta, parseMeta } from '../src/core/save';
 import { newRun, act, checkLevel, availableNodes, serialize, deserialize, xpNeed, Run, TREE_EVERY } from '../src/game/run';
@@ -24,7 +24,7 @@ describe('Fertigkeitsbaum', () => {
     expect(run.p.pts).toBe(1);
     act(run, { t: 'learn', id: 'n0_1' });
     expect(run.p.skillLvl[0]).toBe(1);
-    expect(run.p.tree).toEqual(['n0_1']);
+    expect(run.p.tree).toEqual(['n0_1', 'n0_2a']);
     expect(run.mode).toBe('play');
     levelUp(run); // Stufe 4
     expect(run.mode).toBe('perk');
@@ -58,7 +58,7 @@ describe('Fertigkeitsbaum', () => {
   it('Rang III: A und B schließen sich aus, Voraussetzung ist Rang II', () => {
     const run = fresh();
     expect(availableNodes(run)).toEqual(['n0_1', 'n1_1', 'n2_1']);
-    run.p.tree = ['n1_1']; run.p.skillLvl = [0, 1, 0];
+    run.p.tree = ['n1_1', 'n1_2a']; run.p.skillLvl = [0, 1, 0];
     expect(availableNodes(run)).toContain('n1_4a');
     run.p.pts = 1; run.mode = 'tree';
     act(run, { t: 'learn', id: 'n1_4b' });
@@ -126,7 +126,7 @@ describe('Fertigkeitsbaum', () => {
     const o = JSON.parse(serialize(run));
     delete o.p.tree; delete o.p.pts; delete o.p.rest; delete o.pool; delete o.perkQ;
     const back = deserialize(JSON.stringify(o))!;
-    expect(back.p.tree).toEqual(['n0_1', 'n1_1', 'n1_4b']);
+    expect(back.p.tree).toEqual(['n0_1', 'n0_2a', 'n1_1', 'n1_2a', 'n1_4b']);
     expect(back.p.pts).toBe(0);
     expect(back.perkQ).toBe(0);
     const av = availableNodes(back);
@@ -139,7 +139,7 @@ describe('Fertigkeitsbaum', () => {
     const run = fresh();
     run.perkChoices = ['skill2']; run.mode = 'perk';
     act(run, { t: 'perk', i: 0 });
-    expect(run.p.tree).toEqual(['n2_1']);
+    expect(run.p.tree).toEqual(['n2_1', 'n2_2a']);
   });
 
   it('alter Lager-Stand ohne Baum bekommt leere Listen', () => {
