@@ -188,7 +188,8 @@ export const TUNE = { treePtsMax: 6, kryoMana: 2, kryoRegen: 0.75, kCost: 0 };
 // keine Zufallszahl und keine Änderung am Lauf – das Ergebnis gleicht dann Bit für Bit dem Stand davor.
 export const FEATURES = { hunters: true, hunterForce: '', hazards: true, mimics: true, events: true, eventRate: 1, eventForce: '', eventForceBiome: false };
 // Jäger: erster nach `first` Zügen auf einer Ebene, dann alle `interval` Züge, höchstens `cap` zugleich
-export const HUNTER = { first: 560, interval: 30, cap: 4, warn: 30, pool: [['echse', 50], ['krake', 20], ['drache', 15], ['medusa', 10], ['tod', 5]] as [string, number][], snakes: 4 };
+// pool: [Art, Gewicht, ab Ebene]; unter Ebene `weakBelow` sind Jäger schwächer (weak)
+export const HUNTER = { first: 560, interval: 30, cap: 4, warn: 30, pool: [['echse', 50, 1], ['krake', 20, 1], ['drache', 15, 6], ['medusa', 10, 4], ['tod', 5, 11]] as [string, number, number][], snakes: 4, weakBelow: 6, weak: 0.7, todCd: 6, krakeCd: 2 };
 // Ereignisse: Ruhe-Auslöser, Zweitereignis bei Rate 1, Obergrenze zusätzlicher Reliquienwahlen je Lauf,
 // Schattenzwilling als Anteil der Heldenwerte (nur Grundangriff)
 export const EVENT = { biomeShare: 0.6, calmMin: 25, calmMax: 40, calmChance: 0.15, second: 0.45, relicCap: 2, relicChance: 0.25,

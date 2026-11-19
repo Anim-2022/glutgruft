@@ -61,6 +61,25 @@ describe('Jäger', () => {
     expect(hunters(r).length).toBeLessThanOrEqual(HUNTER.cap);
   });
 
+  it('gefährliche Jäger erst in der Tiefe, darüber schwächer', () => {
+    for (const [kind, from] of [['drache', 6], ['tod', 11], ['medusa', 4]] as [string, number][]) {
+      FEATURES.hunterForce = kind;
+      const r = arena(from - 1);
+      r.floorTurns = HUNTER.first;
+      act(r, { t: 'wait' });
+      expect(hunters(r).length, kind).toBe(0);
+      const r2 = arena(from);
+      r2.floorTurns = HUNTER.first;
+      act(r2, { t: 'wait' });
+      expect(hunters(r2).length, kind).toBe(1);
+    }
+    FEATURES.hunterForce = 'echse';
+    const lo = arena(2); lo.floorTurns = HUNTER.first; act(lo, { t: 'wait' });
+    const hi = arena(6); hi.floorTurns = HUNTER.first; act(hi, { t: 'wait' });
+    const a = hunters(lo)[0], b = hunters(hi)[0];
+    expect(a.maxHp / (1 + 0.3 * 1)).toBeLessThan(b.maxHp / (1 + 0.3 * 5));
+  });
+
   it('keine Jäger auf Bossebenen', () => {
     FEATURES.events = false;
     const r = newRun(9, 'krieger', defaultMeta());

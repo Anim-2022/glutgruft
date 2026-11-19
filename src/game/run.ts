@@ -1247,10 +1247,13 @@ function hunterTick(run: Run) {
 
 function spawnHunter(run: Run): boolean {
   const p = run.p, rng = run.rng;
-  let kind = FEATURES.hunterForce;
-  if (!kind) {
-    let r = rng.int(1, HUNTER.pool.reduce((a, [, w]) => a + w, 0));
-    for (const [k, w] of HUNTER.pool) { if ((r -= w) <= 0) { kind = k; break; } }
+  // nur Jäger, die auf dieser Tiefe schon vorkommen (auch erzwungene – sonst wartet der Jäger)
+  const pool = HUNTER.pool.filter(([k, , f]) => run.floor >= f && (!FEATURES.hunterForce || k === FEATURES.hunterForce));
+  if (!pool.length) return false;
+  let kind = pool[0][0];
+  if (pool.length > 1) {
+    let r = rng.int(1, pool.reduce((a, [, w]) => a + w, 0));
+    for (const [k, w] of pool) { if ((r -= w) <= 0) { kind = k; break; } }
   }
   // nahe dem Eingang der Ebene, auf einem freien Feld, das den Helden erreicht, nicht direkt neben ihm
   const [ex, ey] = run.entry ?? [p.x, p.y];
@@ -1264,6 +1267,7 @@ function spawnHunter(run: Run): boolean {
   if (best < 0) return false;
   const m = spawnMob(run, kind, best % W, (best / W) | 0);
   m.awake = true; m.st.born = run.turn;
+  if (run.floor < HUNTER.weakBelow) { m.maxHp = m.hp = Math.round(m.hp * HUNTER.weak); m.atk = Math.max(1, Math.round(m.atk * HUNTER.weak)); }
   tele(run, `hunt_${kind}`);
   say(run, `DER JÄGER IST DA: ${m.name}!`);
   run.fx.push({ k: 'banner', title: 'DER JÄGER IST DA', sub: m.name, col: '#b13e53' }, { k: 'shake', n: 5 });
@@ -1307,6 +1311,11 @@ function scythe(run: Run, m: Actor): number[] {
   }
   return out;
 }
+// Der Tod holt nur aus, wenn der Held mit einem Schritt aus dem Bogen käme
+function canEscape(run: Run, m: Actor): boolean {
+  const p = run.p, zv = Math.abs(p.x - m.x) >= Math.abs(p.y - m.y);
+  return DIRS4.some(([dx, dy]) => (zv ? dx !== 0 : dy !== 0) && isFree(run, p.x + dx, p.y + dy));
+}
 function breathLine(run: Run, m: Actor): number[] {
   const out: number[] = [];
   let x = m.x, y = m.y;
@@ -1327,9 +1336,10 @@ function hunterAct(run: Run, m: Actor, dist: Int16Array) {
         const t = m.st.tt; delete m.st.tt;
         run.fx.push({ k: 'bolt', x0: m.x, y0: m.y, x1: t % W, y1: (t / W) | 0, col: '#9a4fc0' });
         if (p.y * W + p.x === t) hitPlayer(run, m, true); else run.fx.push({ k: 'num', x: t % W, y: (t / W) | 0, s: 'verfehlt', col: '#94b0c2' });
-        m.cd = 1;
+        m.cd = HUNTER.krakeCd;
         return;
       }
+      if (orth(run, m)) { hitPlayer(run, m, true); return; } // direkt daneben: zuschlagen statt ausholen
       if (near <= 3 && !m.cd) { m.st.tt = p.y * W + p.x; run.fx.push({ k: 'num', x: m.x, y: m.y, s: '!', col: '#9a4fc0' }); return; }
       walk(run, m, dist, 1);
       return;
@@ -1361,7 +1371,7 @@ function hunterAct(run: Run, m: Actor, dist: Int16Array) {
         delete m.st.zt;
         const inZone = scythe(run, m).includes(p.y * W + p.x);
         run.fx.push({ k: 'swipe', x: m.st.zx, y: m.st.zy, dx: 1, dy: 0, big: true });
-        m.cd = 4;
+        m.cd = HUNTER.todCd;
         if (inZone) {
           say(run, 'Die Sense trifft. Der Tod holt dich.');
           tele(run, 'todExec');
@@ -1371,7 +1381,7 @@ function hunterAct(run: Run, m: Actor, dist: Int16Array) {
         } else say(run, 'Die Sense trifft ins Leere.');
         return;
       }
-      if (m.st.born !== run.turn && !m.cd && near <= 2) {
+      if (m.st.born !== run.turn && !m.cd && near <= 2 && canEscape(run, m)) {
         m.st.zt = 1; m.st.zx = p.x; m.st.zy = p.y; m.st.zv = Math.abs(p.x - m.x) >= Math.abs(p.y - m.y) ? 1 : 0;
         say(run, 'DER TOD HOLT AUS! Raus aus dem Feld!');
         run.fx.push({ k: 'banner', title: 'DER TOD HOLT AUS', sub: 'Verlasse das rote Feld!', col: '#b13e53' });

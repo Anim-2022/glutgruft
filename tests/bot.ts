@@ -72,7 +72,12 @@ export function botAction(run: Run): Action {
   if (run.mode === 'shop') shopped.add(run.floor);
   if (run.turn === 0) shopped.clear();
   if (run.turn === 0 || visitFloor !== run.floor) { trail.length = 0; wander = 0; loops = 0; visitFloor = run.floor; }
-  if (wander > 0 && run.mode === 'play') { wander--; const d = DIRS[(wander * 7 + run.turn) % 4]; return { t: 'move', dx: d[0], dy: d[1] }; }
+  if (wander > 0 && run.mode === 'play') {
+    wander--; const d = DIRS[(wander * 7 + run.turn) % 4];
+    const danger = [...(run.warn ?? []), ...(run.hunt ? hunterWarn(run) : [])];
+    if (!danger.length) return { t: 'move', dx: d[0], dy: d[1] };
+    wander = 0; // bei roten Feldern nicht ziellos laufen
+  }
   if (lastSkill >= 0 && run.turn === lastTurn) { failTurn = run.turn; failSkill = lastSkill; }
   const a = decide(run);
   lastTurn = run.turn; lastSkill = a.t === 'skill' && a.i >= 3 ? a.i : -1;
@@ -101,15 +106,17 @@ function decide(run: Run): Action {
     const i = run.shop.findIndex(o => !o.sold && o.price <= p.gold && o.kind !== 'bomb' && (o.kind !== 'forge' || !!forgeTarget(p)));
     return i >= 0 ? { t: 'buy', i } : { t: 'leave' };
   }
-  if (p.hp < p.maxHp * 0.4 && p.potions > 0) return { t: 'potion' };
   // Ereignis: rot gewarnte Felder sofort verlassen
   const danger = [...(run.warn ?? []), ...(run.hunt ? hunterWarn(run) : [])];
   if (danger.includes(p.y * W + p.x)) {
-    for (const [dx, dy] of DIRS) {
+    const foe = run.mobs.filter(m => m.awake && run.vis[m.y * W + m.x]).sort((a, b) => Math.abs(a.x - p.x) + Math.abs(a.y - p.y) - Math.abs(b.x - p.x) - Math.abs(b.y - p.y))[0];
+    const near = (dx: number, dy: number) => (foe ? Math.abs(foe.x - p.x - dx) + Math.abs(foe.y - p.y - dy) : 0) * (CLASSES[p.cls].range ? -1 : 1);
+    for (const [dx, dy] of [...DIRS].sort((a, b) => near(a[0], a[1]) - near(b[0], b[1]))) {
       const x = p.x + dx, y = p.y + dy, i = y * W + x;
       if (walkable(run.tiles[i]) && !danger.includes(i) && !run.mobs.some(m => m.x === x && m.y === y)) return { t: 'move', dx, dy };
     }
   }
+  if (p.hp < p.maxHp * 0.4 && p.potions > 0) return { t: 'potion' };
   const dist = (m: { x: number; y: number }) => Math.max(Math.abs(m.x - p.x), Math.abs(m.y - p.y));
   // weit entfernte Gegner ignoriert der Bot zunächst und erkundet weiter
   const vis = run.mobs.filter(m => run.vis[m.y * W + m.x] && dist(m) <= 7);
