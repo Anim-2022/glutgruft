@@ -20,6 +20,9 @@ export const CRATE_TEMPLATES: string[][] = [
   ['.......', '.#p#...', '.......', '.c.#.c.', '.....#.', '....p..', 'L......'],
   ['...p...', '.#...#.', '...c...', '.p.c.p.', '...c...', '.#...#.', 'L......'],
   ['.......', '.pp....', '.##.c..', '....c..', '.#.....', '.......', 'L......'],
+  ['#.....#', '.p#p#p.', '.......', '..ccc..', '.......', '.#...#.', 'L......'],
+  ['.p...p.', '.......', '.#c.c#.', '.#...#.', '.#.c.#.', '...p...', 'L......'],
+  ['.......', '.p.#.p.', '.c.#.c.', '...#...', '.c...p.', '.......', 'L......'],
 ];
 
 export const mirror = (tpl: string[]) => tpl.map(r => [...r].reverse().join(''));
@@ -103,6 +106,23 @@ function iceDist(grid: string[], from: number): Map<number, number> {
   return d;
 }
 
+// Haltefelder auf Eis, die man erreichen kann, aber nicht auf dem kürzesten Weg zum Ziel liegen:
+// dort liegen Eiskristalle. Von jedem erreichbaren Feld führt ein Weg zurück (siehe iceMoves).
+export function iceStops(grid: string[]): number[] {
+  const door = DOOR[1] * 8 + DOOR[0];
+  let goal = -1;
+  for (let y = 0; y < VS; y++) for (let x = 0; x < VS; x++) if (grid[y][x] === 'g') goal = y * 8 + x;
+  const d = iceDist(grid, door), need = d.get(goal);
+  if (need === undefined) return [];
+  const out: number[] = [];
+  for (const [c, dc] of d) {
+    if (c === door || c === goal || grid[(c / 8) | 0][c % 8] !== 'i') continue;
+    const back = iceDist(grid, c).get(goal);
+    if (back === undefined || dc + back > need) out.push(c);
+  }
+  return out.sort((a, b) => a - b);
+}
+
 // Mindestzüge von der Tür zum Ziel; -1, wenn unlösbar oder wenn man sich festfahren kann.
 export function iceMoves(grid: string[]): number {
   const door = DOOR[1] * 8 + DOOR[0];
@@ -125,3 +145,46 @@ export function genIce(rng: RNG): string[] {
     if (iceMoves(grid) >= 4) return grid;
   }
 }
+
+// ---------- Glutschalen ----------
+// 3x3 Schalen auf den Feldern (1|3|5, 1|3|5). Bit k = Schale k brennt (k = Zeile * 3 + Spalte).
+// Betreten schaltet die Schale und ihre Nachbarn im 3x3-Raster um. Ziel: alle brennen.
+export const LIGHTS_ALL = 511;
+export const lightCell = (k: number): [number, number] => [1 + 2 * (k % 3), 1 + 2 * ((k / 3) | 0)];
+
+export function lightsPress(mask: number, k: number): number {
+  const cx = k % 3, cy = (k / 3) | 0;
+  for (const [dx, dy] of [[0, 0], ...DIRS]) {
+    const x = cx + dx, y = cy + dy;
+    if (x >= 0 && y >= 0 && x < 3 && y < 3) mask ^= 1 << (y * 3 + x);
+  }
+  return mask;
+}
+
+// Mindestzahl an Tritten bis alle brennen (Breitensuche über 512 Zustände)
+export function lightsMinMoves(mask: number): number {
+  const d = new Map([[mask, 0]]), q = [mask];
+  for (let h = 0; h < q.length; h++) {
+    const m = q[h];
+    if (m === LIGHTS_ALL) return d.get(m)!;
+    for (let k = 0; k < 9; k++) {
+      const n = lightsPress(m, k);
+      if (!d.has(n)) { d.set(n, d.get(m)! + 1); q.push(n); }
+    }
+  }
+  return -1;
+}
+
+// Rückwärts erzeugt: aus „alle brennen“ 3 bis 5 verschiedene Tritte – damit immer lösbar
+export function genLights(rng: RNG): number {
+  for (;;) {
+    let mask = LIGHTS_ALL;
+    for (const k of rng.shuffle([0, 1, 2, 3, 4, 5, 6, 7, 8]).slice(0, rng.int(3, 5))) mask = lightsPress(mask, k);
+    if (lightsMinMoves(mask) >= 3) return mask;
+  }
+}
+
+// ---------- Pfeilgang ----------
+// Drei Reihen (y = 1, 3, 5), in denen Statuen von einer Seite im festen Takt quer schießen.
+export interface DartLane { y: number; side: 0 | 1; period: number; off: number; }
+export const dartFires = (l: DartLane, turn: number) => (turn + l.off) % l.period === 0;

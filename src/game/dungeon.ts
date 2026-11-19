@@ -5,13 +5,13 @@ export const T = {
   WALL: 0, FLOOR: 1, STAIRS: 2, CHEST: 3, CHEST_OPEN: 4, ALTAR: 5, ALTAR_USED: 6,
   CRACKED: 7, BARREL: 8, PILLAR: 9, GRASS: 10, BURNT: 11, FRAGILE: 12, FRAGILE2: 13, RUBBLE: 14,
   CRATE: 15, CRATE_ON: 16, PLATE: 17, LEVER: 18, ICE: 19, RUNE: 20, TABLET: 21, GOAL: 22, CURSED: 23, TRADER: 24,
-  FOUNTAIN: 25, FOUNTAIN_DRY: 26, GATE: 27,
+  FOUNTAIN: 25, FOUNTAIN_DRY: 26, GATE: 27, BRAZIER: 28, BRAZIER_ON: 29, STATUE: 30,
 } as const;
 
 export interface Room { x: number; y: number; w: number; h: number; }
 
-export const walkable = (t: number) => t === T.FLOOR || t === T.STAIRS || (t >= T.GRASS && t <= T.RUBBLE) || t === T.PLATE || t === T.RUNE || t === T.GOAL;
-export const opaque = (t: number) => t === T.WALL || t === T.CRACKED || t === T.PILLAR || t === T.GATE;
+export const walkable = (t: number) => t === T.FLOOR || t === T.STAIRS || (t >= T.GRASS && t <= T.RUBBLE) || t === T.PLATE || t === T.RUNE || t === T.GOAL || t === T.BRAZIER || t === T.BRAZIER_ON;
+export const opaque = (t: number) => t === T.WALL || t === T.CRACKED || t === T.PILLAR || t === T.GATE || t === T.STATUE;
 export const wallLike = (t: number) => t === T.WALL || t === T.CRACKED;
 export const center = (r: Room): [number, number] => [r.x + (r.w >> 1), r.y + (r.h >> 1)];
 

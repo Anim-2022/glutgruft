@@ -350,6 +350,27 @@ const EN: Record<string, string> = {
   'Die andere Ausprägung ist schon gewählt.': 'The other variant is already chosen.', 'Erst Rang II lernen.': 'Learn rank II first.',
   'Steht in jedem Lauf zur Wahl.': 'Available in every run.', 'Freischalten: kommt in die Auswahl der Läufe.': 'Unlock: adds it to the choices of your runs.',
   'Schon freigeschaltet.': 'Already unlocked.', 'Immer verfügbar.': 'Always available.', 'Erst den vorigen Knoten freischalten.': 'Unlock the previous node first.',
+  // Rätselkammern (Phase 1)
+  'Kistenkammer': 'Crate chamber', 'Runenkammer': 'Rune chamber', 'Eishalle': 'Ice hall', 'Prüfungskammer': 'Trial chamber',
+  'Glutschalenkammer': 'Brazier chamber', 'Pfeilgang': 'Dart corridor', 'Lohn: Reliquie': 'reward: relic', ': gelöst': ': solved', ': verloren': ': lost',
+  ' – gelöst': ' – solved', ' – verloren': ' – lost',
+  'Kisten ': 'Crates ', ' auf Platten · Hebel setzt zurück': ' on plates · lever resets',
+  'Runen: die Reihenfolge steht auf einer Tafel · ': 'Runes: the order is written on a tablet · ', 'Runen: ': 'Runes: ', 'Versuche ': 'Tries ',
+  'Eis: rutsche zur leuchtenden Platte': 'Ice: slide to the glowing plate', ' · Kristalle ': ' · crystals ',
+  ' Züge · ': ' turns · ', ' Gegner': ' enemies', 'Prüfung: Betritt die Mitte, dann besiege alle in 22 Zügen': 'Trial: step into the middle, then defeat everyone within 22 turns',
+  'Glutschalen: ': 'Braziers: ', '/9 brennen · Tritt schaltet Nachbarn um': '/9 lit · a step toggles the neighbours',
+  'Pfeilgang: erreiche die Platte oben · rote Reihen schießen gleich': 'Dart corridor: reach the plate at the top · red rows fire next',
+  'Rätsel: Auf dem Eis rutschst du bis zum nächsten Hindernis. Erreiche die leuchtende Platte – Kristalle unterwegs bringen Gold.': 'Puzzle: on ice you slide until something stops you. Reach the glowing plate – crystals on the way give gold.',
+  'Rätsel: Entzünde alle neun Glutschalen. Jeder Tritt schaltet die Schale und ihre Nachbarn um.': 'Puzzle: light all nine braziers. Each step toggles the brazier and its neighbours.',
+  'Rätsel: Erreiche die Platte oben. Rot leuchtende Reihen schießen im nächsten Zug.': 'Puzzle: reach the plate at the top. Rows glowing red fire on the next turn.',
+  'Rätsel: Betritt die Runen in der Reihenfolge der Tafel – sie steht oben.': 'Puzzle: step on the runes in the tablet\'s order – it is shown at the top.',
+  'Rätsel: Betritt die Runen in der richtigen Reihenfolge. Eine Tafel in einem anderen Raum kennt sie.': 'Puzzle: step on the runes in the right order. A tablet in another room knows it.',
+  'Eiskristall! +': 'Ice crystal! +', 'Schnell bestanden: +': 'Passed quickly: +', ' – du merkst sie dir.': ' – you memorise it.',
+  'Falsch! Die Runen erlöschen – ': 'Wrong! The runes go dark – ', 'Runenwächter erscheinen': 'rune guardians appear', 'ein Runenwächter erscheint': 'a rune guardian appears',
+  ' an der Tür. Noch ': ' at the door. ', ' Versuche.': ' tries left.', ' Versuch.': ' try left.',
+  'Glutschale, erloschen – Tritt schaltet sie und die Nachbarn um': 'Brazier, unlit – a step toggles it and its neighbours',
+  'Glutschale, brennt – Tritt schaltet sie und die Nachbarn um': 'Brazier, lit – a step toggles it and its neighbours',
+  'Pfeilstatue – schießt quer durch ihre Reihe': 'Dart statue – shoots across its row', 'Eiskristall – darauf anhalten': 'Ice crystal – stop on it',
 };
 
 const exact = new Map(Object.entries(EN));

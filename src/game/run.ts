@@ -1,7 +1,7 @@
 import { RNG } from '../core/rng';
 import type { Meta } from '../core/save';
 import { W, H, T, Room, genDungeon, center, walkable, opaque, los, computeFov, distMap } from './dungeon';
-import { VS, CRATE_TEMPLATES, mirror, genIce, slide } from './puzzles';
+import { VS, CRATE_TEMPLATES, mirror, genIce, slide, iceStops, genLights, lightsPress, lightCell, LIGHTS_ALL, dartFires, DartLane } from './puzzles';
 import { CLASSES, ClassId, MOBS, PERKS, RELICS, Item, Offer, AFFIX, CONSUMABLES, UNIQUES, ULT, ULT_LEVEL, SKILL_UP, SYNERGIES, NEW_SKILLS, TUNE, treeNodes, treeNode, treePool, nodeText, MAGE_WHET, BOSS_BY_BIOME, BIOME_NAMES, FLOORS_PER_BIOME, LAST_FLOOR, biomeOf, spawnTable } from './content';
 
 export interface Actor {
@@ -33,14 +33,23 @@ export interface Player extends Actor {
   ptsGot?: number;             // bisher erhaltene Fertigkeitspunkte (Grenze TUNE.treePtsMax)
 }
 
+export type PuzzleKind = 'crates' | 'runes' | 'ice' | 'arena' | 'braziers' | 'darts';
 export interface Puzzle {
-  kind: 'crates' | 'runes' | 'ice' | 'arena';
+  kind: PuzzleKind;
   started: boolean; timer: number; // Arena
   x: number; y: number; // linke obere Ecke der 7x7 Innenfelder
   solved: boolean; dead: boolean; entered: boolean;
   layout: number[];               // Kisten: Ausgangszustand für den Hebel
   order: number[]; runes: Record<number, number>; pressed: number[]; fails: number;
+  read?: boolean;                 // Runen: Tafel gelesen – die Reihenfolge steht dann im HUD
+  gems?: number[]; gemsMax?: number; // Eis: Feldindizes der noch liegenden Kristalle
+  lights?: number;                // Glutschalen: Bitmaske der brennenden Schalen
+  lanes?: DartLane[];             // Pfeilgang: Schussreihen
 }
+
+export const VAULT_NAMES: Record<PuzzleKind, string> = {
+  crates: 'Kistenkammer', runes: 'Runenkammer', ice: 'Eishalle', arena: 'Prüfungskammer', braziers: 'Glutschalenkammer', darts: 'Pfeilgang',
+};
 
 export type Fx =
   | { k: 'num'; x: number; y: number; s: string; col: string }
@@ -487,7 +496,7 @@ function addVault(run: Run, rooms: Room[]): boolean {
     }
     t[dy * W + dx] = T.FLOOR;
     const ix = x0 + 1, iy = y0 + 1;
-    const pz: Puzzle = { kind: rng.pick(['crates', 'runes', 'ice', 'arena'] as const), started: false, timer: 0, x: ix, y: iy, solved: false, dead: false, entered: false, layout: [], order: [], runes: {}, pressed: [], fails: 0 };
+    const pz: Puzzle = { kind: rng.pick(['crates', 'runes', 'ice', 'arena', 'braziers', 'darts'] as const), started: false, timer: 0, x: ix, y: iy, solved: false, dead: false, entered: false, layout: [], order: [], runes: {}, pressed: [], fails: 0 };
     const put = (x: number, y: number, tile: number) => { t[(iy + y) * W + ix + x] = tile; };
     if (pz.kind === 'crates') {
       let tpl = rng.pick(CRATE_TEMPLATES);
@@ -497,9 +506,26 @@ function addVault(run: Run, rooms: Room[]): boolean {
     } else if (pz.kind === 'ice') {
       const grid = genIce(rng);
       for (let y = 0; y < VS; y++) for (let x = 0; x < VS; x++) put(x, y, grid[y][x] === '#' ? T.WALL : grid[y][x] === 'g' ? T.GOAL : T.ICE);
+      // Eiskristalle auf Haltefeldern abseits des kürzesten Wegs
+      const stops = iceStops(grid);
+      const n = Math.min(stops.length, rng.int(1, 2));
+      pz.gems = rng.shuffle(stops).slice(0, n).map(c => (iy + ((c / 8) | 0)) * W + ix + (c % 8));
+      pz.gemsMax = pz.gems.length;
     } else if (pz.kind === 'arena') {
       for (let y = 0; y < VS; y++) for (let x = 0; x < VS; x++) put(x, y, T.FLOOR);
       put(3, 3, T.GOAL);
+    } else if (pz.kind === 'braziers') {
+      for (let y = 0; y < VS; y++) for (let x = 0; x < VS; x++) put(x, y, T.FLOOR);
+      pz.lights = genLights(rng);
+      for (let k = 0; k < 9; k++) { const [lx, ly] = lightCell(k); put(lx, ly, pz.lights & (1 << k) ? T.BRAZIER_ON : T.BRAZIER); }
+    } else if (pz.kind === 'darts') {
+      for (let y = 0; y < VS; y++) for (let x = 0; x < VS; x++) put(x, y, T.FLOOR);
+      pz.lanes = [1, 3, 5].map(y => {
+        const side = rng.int(0, 1) as 0 | 1, period = rng.int(2, 3);
+        put(side ? VS - 1 : 0, y, T.STATUE);
+        return { y, side, period, off: rng.int(0, period - 1) };
+      });
+      put(3, 0, T.GOAL);
     } else {
       for (let y = 0; y < VS; y++) for (let x = 0; x < VS; x++) put(x, y, T.FLOOR);
       const kinds = rng.shuffle([0, 1, 2, 3]);
@@ -518,7 +544,7 @@ function addVault(run: Run, rooms: Room[]): boolean {
   return false;
 }
 
-function inVault(run: Run, x: number, y: number): boolean {
+export function inVault(run: Run, x: number, y: number): boolean {
   const z = run.puzzle;
   return !!z && x >= z.x && x < z.x + VS && y >= z.y && y < z.y + VS;
 }
@@ -543,9 +569,12 @@ function afterStep(run: Run) {
   if (!z.entered && inVault(run, p.x, p.y)) {
     z.entered = true;
     say(run, z.kind === 'crates' ? 'Rätsel: Schiebe jede Kiste auf eine Platte. Der Hebel setzt zurück.'
-      : z.kind === 'ice' ? 'Rätsel: Auf dem Eis rutschst du. Erreiche die leuchtende Platte.'
+      : z.kind === 'ice' ? 'Rätsel: Auf dem Eis rutschst du bis zum nächsten Hindernis. Erreiche die leuchtende Platte – Kristalle unterwegs bringen Gold.'
       : z.kind === 'arena' ? 'Prüfung: Betritt die Platte in der Mitte – und besiege alle in kurzer Zeit.'
-      : 'Rätsel: Betritt die Runen in der richtigen Reihenfolge. Eine Tafel kennt sie.');
+      : z.kind === 'braziers' ? 'Rätsel: Entzünde alle neun Glutschalen. Jeder Tritt schaltet die Schale und ihre Nachbarn um.'
+      : z.kind === 'darts' ? 'Rätsel: Erreiche die Platte oben. Rot leuchtende Reihen schießen im nächsten Zug.'
+      : z.read ? 'Rätsel: Betritt die Runen in der Reihenfolge der Tafel – sie steht oben.'
+      : 'Rätsel: Betritt die Runen in der richtigen Reihenfolge. Eine Tafel in einem anderen Raum kennt sie.');
   }
   if (z.solved || z.dead) return;
   if (t === T.GOAL && z.kind === 'arena') {
@@ -563,7 +592,18 @@ function afterStep(run: Run) {
     run.fx.push({ k: 'shake', n: 5 });
     say(run, 'Die Prüfung beginnt! Besiege alle in 22 Zügen.');
   } else if (t === T.GOAL) solve(run);
-  else if (t === T.RUNE) {
+  else if ((t === T.BRAZIER || t === T.BRAZIER_ON) && z.kind === 'braziers' && z.lights !== undefined) {
+    const k = ((p.y - z.y - 1) >> 1) * 3 + ((p.x - z.x - 1) >> 1);
+    z.lights = lightsPress(z.lights, k);
+    for (let q = 0; q < 9; q++) { const [lx, ly] = lightCell(q); run.tiles[(z.y + ly) * W + z.x + lx] = z.lights & (1 << q) ? T.BRAZIER_ON : T.BRAZIER; }
+    if (z.lights === LIGHTS_ALL) solve(run);
+  } else if (t === T.ICE && z.gems?.includes(i)) {
+    z.gems.splice(z.gems.indexOf(i), 1);
+    const g = Math.round((4 + run.floor) * (1 + (p.aff.gold ?? 0) / 100));
+    p.gold += g;
+    run.fx.push({ k: 'num', x: p.x, y: p.y, s: `+${g}`, col: '#73eff7' });
+    say(run, `Eiskristall! +${g} Gold.`);
+  } else if (t === T.RUNE) {
     const k = z.runes[i];
     if (z.pressed.includes(k)) return;
     if (k === z.order[z.pressed.length]) {
@@ -573,10 +613,20 @@ function afterStep(run: Run) {
     } else {
       z.pressed = [];
       z.fails++;
-      for (const m of run.mobs) m.awake = true;
       run.fx.push({ k: 'shake', n: 5 });
       if (z.fails >= 3) { z.dead = true; say(run, 'Falsch! Die Runen zerfallen zu Staub.'); }
-      else say(run, 'Falsch! Die Runen erlöschen – und die ganze Ebene erwacht.');
+      else {
+        // Runenwächter erscheinen an der Tür: einer beim ersten Fehler, zwei beim zweiten
+        const table = spawnTable(run.floor);
+        let n = 0;
+        for (const [sx, sy] of [[3, 6], [2, 6], [4, 6], [1, 6], [5, 6]]) {
+          if (n >= z.fails) break;
+          if (!isFree(run, z.x + sx, z.y + sy)) continue;
+          const m = spawnMob(run, run.rng.pick(table), z.x + sx, z.y + sy);
+          m.awake = true; n++;
+        }
+        say(run, `Falsch! Die Runen erlöschen – ${n > 1 ? 'Runenwächter erscheinen' : 'ein Runenwächter erscheint'} an der Tür. Noch ${3 - z.fails} Versuch${3 - z.fails > 1 ? 'e' : ''}.`);
+      }
     }
   }
 }
@@ -598,6 +648,49 @@ function resetCrates(run: Run) {
 }
 
 
+
+// Pfeilgang: die Statue schießt quer durch ihre Reihe; der Pfeil trifft das erste Wesen
+function fireLane(run: Run, z: Puzzle, l: DartLane) {
+  const y = z.y + l.y, dir = l.side ? -1 : 1, sx = z.x + (l.side ? VS - 1 : 0);
+  let x = sx + dir, hit: Actor | undefined;
+  for (; x >= z.x && x < z.x + VS; x += dir) {
+    hit = run.p.x === x && run.p.y === y ? run.p : mobAt(run, x, y);
+    if (hit || !walkable(run.tiles[y * W + x])) break;
+  }
+  const ex = hit ? x : x - dir;
+  if (inVault(run, run.p.x, run.p.y)) run.fx.push({ k: 'arrow', x0: sx, y0: y, x1: ex, y1: y, col: '#c9d4dc', heavy: false });
+  if (hit) damage(run, hit, 3 + Math.floor(run.floor / 3), hit === run.p ? '#b13e53' : '#c9d4dc');
+}
+
+// Pfeilgang: Reihen, die im nächsten Gegnerzug schießen (für die Warnung). Nur lesend.
+export function dartWarn(run: Run): number[] {
+  const z = run.puzzle;
+  if (!z || z.kind !== 'darts' || !z.lanes || z.solved || !z.entered) return [];
+  return z.lanes.filter(l => dartFires(l, run.turn + 1)).map(l => z.y + l.y);
+}
+
+// Ziel und Fortschritt der Kammer, in der der Held gerade steht (für die Anzeige). Nur lesend.
+export function puzzleGoal(run: Run): string | null {
+  const z = run.puzzle, p = run.p;
+  if (!z) return null;
+  const arenaOn = z.kind === 'arena' && z.started && !z.solved && !z.dead;
+  if (!inVault(run, p.x, p.y) && !arenaOn) return null;
+  if (z.solved) return `${VAULT_NAMES[z.kind]}: gelöst`;
+  if (z.dead) return `${VAULT_NAMES[z.kind]}: verloren`;
+  const count = (...ts: number[]) => { let n = 0; for (let y = 0; y < VS; y++) for (let x = 0; x < VS; x++) if (ts.includes(run.tiles[(z.y + y) * W + z.x + x])) n++; return n; };
+  switch (z.kind) {
+    case 'crates': return `Kisten ${count(T.CRATE_ON)}/${count(T.CRATE_ON, T.PLATE)} auf Platten · Hebel setzt zurück`;
+    case 'runes': {
+      const tries = `Versuche ${3 - z.fails}/3`;
+      if (!z.read) return `Runen: die Reihenfolge steht auf einer Tafel · ${tries}`;
+      return `Runen: ${z.order.map((k, n) => (n < z.pressed.length ? `+${RUNE_NAMES[k]}` : RUNE_NAMES[k])).join(' – ')} · ${tries}`;
+    }
+    case 'ice': return `Eis: rutsche zur leuchtenden Platte${z.gemsMax ? ` · Kristalle ${z.gemsMax - (z.gems?.length ?? 0)}/${z.gemsMax}` : ''}`;
+    case 'arena': return z.started ? `Prüfung: noch ${z.timer} Züge · ${run.mobs.filter(m => m.arena).length} Gegner` : 'Prüfung: Betritt die Mitte, dann besiege alle in 22 Zügen';
+    case 'braziers': { let n = 0; for (let k = 0; k < 9; k++) if ((z.lights ?? 0) & (1 << k)) n++; return `Glutschalen: ${n}/9 brennen · Tritt schaltet Nachbarn um`; }
+    case 'darts': return 'Pfeilgang: erreiche die Platte oben · rote Reihen schießen gleich';
+  }
+}
 
 // Setzt ein blockierendes Objekt nur, wenn danach noch alles erreichbar bleibt.
 function tryBlock(run: Run, x: number, y: number, tile: number): boolean {
@@ -1534,7 +1627,8 @@ export function act(run: Run, a: Action): void {
       } else if (t === T.LEVER) { resetCrates(run); used = true; }
       else if (t === T.TABLET) {
         const z = run.puzzle;
-        say(run, z ? `Die Tafel zeigt: ${z.order.map(k => RUNE_NAMES[k]).join(' – ')}` : 'Die Tafel ist verwittert.');
+        if (z && z.kind === 'runes') z.read = true;
+        say(run, z && z.kind === 'runes' ? `Die Tafel zeigt: ${z.order.map(k => RUNE_NAMES[k]).join(' – ')} – du merkst sie dir.` : 'Die Tafel ist verwittert.');
       } else if (t === T.ICE) {
         const kind = (x: number, y: number) => {
           const tt = run.tiles[y * W + x];
@@ -1789,8 +1883,16 @@ function endTurn(run: Run) {
   if (p.ultCd) p.ultCd--;
   if (p.aff.regen && run.turn % 6 === 0 && p.hp > 0 && p.hp < p.maxHp) p.hp = Math.min(p.maxHp, p.hp + p.aff.regen);
   const z = run.puzzle;
+  if (z && z.kind === 'darts' && z.entered && !z.solved && z.lanes && run.mode !== 'dead') {
+    for (const l of z.lanes) if (dartFires(l, run.turn)) fireLane(run, z, l);
+  }
   if (z && z.kind === 'arena' && z.started && !z.solved && !z.dead && run.mode !== 'dead') {
-    if (!run.mobs.some(m => m.arena)) { if (run.mode === 'play') solve(run); }
+    if (!run.mobs.some(m => m.arena)) {
+      if (run.mode === 'play') {
+        if (z.timer >= 8) { const g = 10 + 2 * run.floor; p.gold += g; say(run, `Schnell bestanden: +${g} Gold.`); }
+        solve(run);
+      }
+    }
     else if (--z.timer <= 0) { z.dead = true; say(run, 'Die Zeit ist um – die Prüfung ist gescheitert.'); }
   }
   fatal(run);
