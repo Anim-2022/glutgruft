@@ -1004,7 +1004,9 @@ function planEvents(run: Run, rooms: Room[]) {
     const bio = cands.filter(c => c.biome !== undefined), gen = cands.filter(c => c.biome === undefined);
     const from = bio.length && gen.length ? (rng.chance(EVENT.biomeShare) ? bio : gen) : cands;
     // gefährliche Ereignisse kommen öfter (DIFF.dangerWeight)
-    const d = rng.pick(from.flatMap(c => Array(c.cat === 'danger' ? DIFF.dangerWeight : 1).fill(c) as EvDef[]));
+    const w = (c: EvDef) => (c.cat === 'danger' ? DIFF.dangerWeight : 1);
+    let r = rng.next() * from.reduce((t, c) => t + w(c), 0), d = from[from.length - 1];
+    for (const c of from) { if ((r -= w(c)) < 0) { d = c; break; } }
     if (d.trigger === 'room' && !free.length) continue;
     const plan: EvPlan = { id: d.id };
     if (d.trigger === 'room') plan.room = free.splice(rng.int(0, free.length - 1), 1)[0];
