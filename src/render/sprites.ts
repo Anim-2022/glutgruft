@@ -1088,6 +1088,13 @@ for (const [k, hex] of Object.entries(PAL)) {
   SHADOW[k] = l > 170 ? '#9a4fc0' : l > 90 ? '#5d275d' : '#1a1c2c';
 }
 SHADOW.k = '#f4f4f4'; // leuchtende Augen
+// Der Tod: Kutte schwarz, Knochen und Sense bleich, Augen violett
+const TOD: Record<string, string> = {};
+for (const [k, hex] of Object.entries(PAL)) {
+  const n = parseInt(hex.slice(1), 16), l = 0.3 * (n >> 16) + 0.59 * ((n >> 8) & 255) + 0.11 * (n & 255);
+  TOD[k] = l > 190 ? '#e8e4d8' : l > 120 ? '#566c86' : l > 70 ? '#262b44' : '#0d0e17';
+}
+TOD.k = '#9a4fc0';
 // Rivalen: andere Farben für Umhang und Rüstung
 const RIVAL: Record<string, string> = { r: '#257179', e: '#1e6b3a', b: '#7d2b45', B: '#5d275d', c: '#ef7d57', G: '#c98a3a', F: '#7d2b45' };
 export const RECOLORS: [string, string, Record<string, string>][] = [
@@ -1103,7 +1110,7 @@ export const RECOLORS: [string, string, Record<string, string>][] = [
   ['drache', 'fuerst', { r: '#38b764', e: '#1e6b3a', R: '#257179', o: '#ffcd75' }],
   ['medusa', 'sporling', { G: '#38b764', F: '#1e6b3a', T: '#257179', l: '#ffcd75' }],
   ['schlange', 'ratte', { d: '#38b764', h: '#a7f070', g: '#ffcd75' }],
-  ['tod', 'koenig', { w: '#1a1c2c', g: '#333c57', y: '#9a4fc0', Y: '#5d275d', u: '#c9d4dc', r: '#5d275d' }],
+  ['tod', 'koenig', TOD],
 ];
 
 SPR.fountain = [E, E, '.......ss.......', '......scws......', '.....s.ss.s.....', '....s..cc..s....', '...gggggggggg...', '..gccscccscccg..', '..gcccccccccsg..', '..gggggggggggg..',
