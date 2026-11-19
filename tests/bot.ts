@@ -174,14 +174,14 @@ function decide(run: Run): Action {
       // Rauchbombe: zwei Schützen oder bedrängt mit wenig Leben, noch kein Rauch
       const rb = spell('rauchbombe');
       if (rb >= 0 && !p.st.rauch && (ranged.length >= 2 || (adjN >= 1 && p.hp < p.maxHp * 0.5))) return { t: 'skill', i: rb };
-      // Rückzugsgefecht: vom Nachbarn wegtreten gibt einen freien Schuss
-      if (node('n2_5') && adjN === 1 && d <= 1) { const st = away(); if (st) return { t: 'move', dx: st[0], dy: st[1] }; }
-      // Fangnetz: Nahkämpfer kommt auf 2–4 Felder heran
+      // Neue Fähigkeiten nur, wenn danach noch ein Zielschuss bezahlbar bleibt
+      const spare = (i: number) => p.res - skillCost(p, i) >= skillCost(p, 0);
+      // Fangnetz: zäher Nahkämpfer kommt auf 2–4 Felder heran
       const fn = spell('fangnetz');
-      if (fn >= 0) { const t = vis.find(m => m.awake && !MOBS[m.kind].range && !m.st.netz && !m.st.stun && dist(m) >= 2 && dist(m) <= 4); if (t) { if (run.target !== t.id) return { t: 'target', x: t.x, y: t.y }; return { t: 'skill', i: fn }; } }
-      // Markieren: Boss oder zäher Gegner ohne Markierung
+      if (fn >= 0 && spare(fn)) { const t = vis.find(m => m.awake && !MOBS[m.kind].range && !m.st.netz && !m.st.stun && dist(m) >= 2 && dist(m) <= 4 && m.hp >= 2 * playerAtk(p)); if (t) { if (run.target !== t.id) return { t: 'target', x: t.x, y: t.y }; return { t: 'skill', i: fn }; } }
+      // Markieren: Boss, Elite oder sehr zäher Gegner ohne Markierung
       const mk = spell('markieren');
-      if (mk >= 0 && !vis.some(m => m.st.mark)) { const t = vis.find(m => m.boss || m.hp >= 3 * playerAtk(p)); if (t && dist(t) <= 7) { if (run.target !== t.id) return { t: 'target', x: t.x, y: t.y }; return { t: 'skill', i: mk }; } }
+      if (mk >= 0 && spare(mk) && !vis.some(m => m.st.mark)) { const t = vis.find(m => m.boss || m.elite || m.hp >= 5 * playerAtk(p)); if (t && dist(t) <= 7) { if (run.target !== t.id) return { t: 'target', x: t.x, y: t.y }; return { t: 'skill', i: mk }; } }
       // Anlegen: niemand daneben, Gegner noch fern – zielen statt schießen
       if (node('n0_5') && adjN === 0 && d >= 3 && (p.st.aim ?? 0) < 2) return { t: 'wait' };
       const onTrap = run.traps.some(t => t.x === p.x && t.y === p.y);
@@ -197,6 +197,8 @@ function decide(run: Run): Action {
       // auf der eigenen Falle: einen Schritt zurück, damit der Gegner hineinläuft
       if (onTrap && near.awake && d >= 2 && d <= 3) { const st = away(); if (st) return { t: 'move', dx: st[0], dy: st[1] }; }
       if (d <= 8 && can(0)) return { t: 'skill', i: 0 };
+      // Rückzugsgefecht: statt Schuss aus nächster Nähe wegtreten – der freie Schuss folgt
+      if (node('n2_5') && adjN === 1 && d <= 1) { const st = away(); if (st) return { t: 'move', dx: st[0], dy: st[1] }; }
       if (d <= c.range) return { t: 'shoot' };
     }
     if (p.bombs > 0 && d >= 2 && d <= 5 && (near.boss || vis.length >= 3)) return { t: 'bomb' };

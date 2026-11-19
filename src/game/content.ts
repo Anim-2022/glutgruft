@@ -205,7 +205,7 @@ export const NODE_TEXT: Partial<Record<ClassId, Record<string, [string, string]>
     n2_2a: ['Schattenschritt', 'Nach der Ausweichrolle trifft der nächste Schuss mit +50 %'],
     n2_2b: ['Leichtfuß', 'Rolle weg von einem Gegner daneben gibt 1 Fokus zurück'],
     n2_3: ['Rauchbombe', 'Neue Fähigkeit, 3 Fokus: Rauch im Umkreis 2, 4 Züge – Schützen sehen dich nicht, Nahkämpfer verfehlen oft'],
-    n2_5: ['Rückzugsgefecht', 'Schritt weg von einem Gegner daneben: freier Schuss mit 60 %; Warten gibt keinen Fokus mehr'],
+    n2_5: ['Rückzugsgefecht', 'Schritt weg von einem Gegner daneben: freier Schuss; Warten gibt keinen Fokus mehr'],
   },
 };
 const baseNodes = (b: number, minPts4: number): TreeNode[] => [

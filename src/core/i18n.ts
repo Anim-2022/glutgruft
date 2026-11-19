@@ -304,7 +304,7 @@ const EN: Record<string, string> = {
   'Leichtfuß': 'Light Foot', 'Rolle weg von einem Gegner daneben gibt 1 Fokus zurück': 'Rolling away from an adjacent enemy refunds 1 focus',
   'Rauchbombe': 'Smoke Bomb', 'Neue Fähigkeit, 3 Fokus: Rauch im Umkreis 2, 4 Züge – Schützen sehen dich nicht, Nahkämpfer verfehlen oft': 'New skill, 3 focus: smoke within 2 for 4 turns – archers cannot see you, melee attackers often miss',
   'Rauch im Umkreis 2, 4 Züge: Schützen sehen dich nicht, Nahkämpfer verfehlen oft': 'Smoke within 2 for 4 turns: archers cannot see you, melee attackers often miss', 'Rauchbombe!': 'Smoke bomb!',
-  'Rückzugsgefecht': 'Skirmisher', 'Schritt weg von einem Gegner daneben: freier Schuss mit 60 %; Warten gibt keinen Fokus mehr': 'Stepping away from an adjacent enemy: free shot at 60 %; waiting no longer gives focus',
+  'Rückzugsgefecht': 'Skirmisher', 'Schritt weg von einem Gegner daneben: freier Schuss; Warten gibt keinen Fokus mehr': 'Stepping away from an adjacent enemy: free shot; waiting no longer gives focus',
   // Lehrgang
   'Lehrgang ': 'Tutorial ', '[T] überspringen': '[T] skip', 'LEHRGANG': 'TUTORIAL', '[ENTER] weiter': '[ENTER] continue',
   'LEHRGANG: AN': 'TUTORIAL: ON', 'LEHRGANG: AUS': 'TUTORIAL: OFF', 'LEHRGANG NEU BEGINNEN': 'RESTART TUTORIAL', 'Lehrgang beginnt von vorn.': 'Tutorial starts over.',

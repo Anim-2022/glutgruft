@@ -402,7 +402,7 @@ function afterWl(run: Run, a: Action, px: number, py: number, adj0: Actor[]) {
   }
   if (a.t === 'move' && hasNode(p, 'n2_5') && run.mode === 'play' && (p.x !== px || p.y !== py) && adj0.some(m => m.hp > 0 && cheb(m, p) >= 2)) {
     const t = nearestMob(run, shotRange(p));
-    if (t) { run.fx.push({ k: 'arrow', x0: p.x, y0: p.y, x1: t.x, y1: t.y, col: '#a7f070', heavy: false }); playerHit(run, t, playerAtk(p) * 0.7 * 0.6); }
+    if (t) { run.fx.push({ k: 'arrow', x0: p.x, y0: p.y, x1: t.x, y1: t.y, col: '#a7f070', heavy: false }); playerHit(run, t, playerAtk(p) * 0.7); }
   }
 }
 // Rauchbombe: der Spieler steht im Rauch
