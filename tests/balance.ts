@@ -5,7 +5,7 @@
 // HAZARDS=on|off, MIMICS=on|off (neue Systeme; alle aus = Bit für Bit wie vorher), ECON=1 (Wirtschaftszeile auch ohne sie)
 import { defaultMeta } from '../src/core/save';
 import { newRun, act, Run, playerAtk, spellAt } from '../src/game/run';
-import { CLASS_ORDER, MOBS, treeNodes, ClassId, TUNE, FEATURES } from '../src/game/content';
+import { CLASS_ORDER, MOBS, treeNodes, ClassId, TUNE, FEATURES, HUNTER } from '../src/game/content';
 import { botAction, setBuild, Build } from './bot';
 
 type Proc = { env: Record<string, string | undefined>; argv: string[]; execPath: string; stdout: { write(s: string): void }; getBuiltinModule(n: string): unknown };
@@ -29,6 +29,8 @@ FEATURES.mimics = ENV.MIMICS !== 'off';
 FEATURES.events = ENV.EVENTS !== 'off';
 FEATURES.hunters = ENV.HUNTERS !== 'off';
 FEATURES.hunterForce = ENV.HUNTER_FORCE ?? '';
+if (ENV.HUNTER_INTERVAL) HUNTER.interval = +ENV.HUNTER_INTERVAL;
+if (ENV.HUNTER_FIRST) HUNTER.first = +ENV.HUNTER_FIRST;
 FEATURES.eventRate = +(ENV.EVENT_RATE ?? FEATURES.eventRate);
 FEATURES.eventForce = ENV.EVENT_FORCE ?? '';
 FEATURES.eventForceBiome = true; // Gebietsereignisse auch erzwungen nur in ihrem Gebiet
