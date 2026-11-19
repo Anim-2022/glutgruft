@@ -59,6 +59,7 @@ export const MOBS: Record<string, MobDef> = {
   glutgeist: { name: 'Glutgeist', hp: 14, atk: 5, def: 0, xp: 10, ai: 'erratic', burn: true },
   koenig: { name: 'Gruftkönig', hp: 60, atk: 7, def: 2, xp: 40, ai: 'boss', boss: true, minion: 'skelett', smash: true },
   mutter: { name: 'Sporenmutter', hp: 110, atk: 9, def: 3, xp: 80, ai: 'boss', boss: true, minion: 'sporling', poison: true, smash: true },
+  mimik: { name: 'Mimik', hp: 16, atk: 4, def: 2, xp: 12, ai: 'chase' },
   fuerst: { name: 'Schmiedefürst', hp: 180, atk: 13, def: 5, xp: 150, ai: 'boss', boss: true, minion: 'glutgeist', burn: true, smash: true },
 };
 
@@ -163,6 +164,11 @@ export const NEW_SKILLS: Record<string, SkillDef & { branch: number }> = {
 // gegen Betäubte und Bosse; kryoRegen – Anteil der normalen Mana-Erholung mit Kryomant
 // kCost – Aufschlag auf die neuen Fähigkeiten des Kriegers (für Messungen)
 export const TUNE = { treePtsMax: 6, kryoMana: 2, kryoRegen: 0.75, kCost: 0 };
+// Schalter für neue Systeme (Messungen: tests/balance.ts mit HAZARDS=off, MIMICS=off). Aus heißt:
+// keine Zufallszahl und keine Änderung am Lauf – das Ergebnis gleicht dann Bit für Bit dem Stand davor.
+export const FEATURES = { hazards: true, mimics: true };
+// Versteckte Bodenfallen und Mimiks
+export const HAZARD = { minFloor: 2, spot: 0.35, spotSicht: 0.1, mimic: 0.12, mimicRarUp: 0.25 };
 // Texte der Knoten T2a, T2b, T3, T5
 export const NODE_TEXT: Partial<Record<ClassId, Record<string, [string, string]>>> = {
   magier: {

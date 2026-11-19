@@ -17,7 +17,7 @@ const bossTorch: HTMLCanvasElement[][] = [];
 const torchOf = (bi: number, f: number) => (bossTorch[bi] ??= [0, 1].map(k => recolor(sprites[`torch${k}`], { '#ef7d57': BOSS_FLAME[bi][0], '#ffcd75': BOSS_FLAME[bi][1] })))[f];
 import { sfx } from '../core/audio';
 import { tr } from '../core/i18n';
-import { Run, Actor, xpNeed, skillCost, skillReady, spellAt, itemText, itemValue, itemScore, perkInfo, skillModName, shotRange, RANKS, SORT_NAMES, BAG_MAX, RUNE_NAMES, availableNodes, puzzleGoal, dartWarn, inVault, VAULT_NAMES } from '../game/run';
+import { Run, Actor, xpNeed, skillCost, skillReady, spellAt, itemText, itemValue, itemScore, perkInfo, skillModName, shotRange, RANKS, SORT_NAMES, BAG_MAX, RUNE_NAMES, availableNodes, puzzleGoal, dartWarn, inVault, VAULT_NAMES, HAZARD_NAMES } from '../game/run';
 import { ClassId, treeNodes, NEW_SKILLS, TUNE, BRANCH_NAMES, SKILL_UP, treeNode, nodeText, CLASSES, MOBS, PERKS, RELICS, RARITY, RARITY_COL, BIOME_NAMES, biomeOf, Item, AFFIX, CONSUMABLES, SLOT_NAMES, ULT, ULT_LEVEL, USE_ORDER, SYNERGIES } from '../game/content';
 
 const pos = new Map<number, { x: number; y: number }>();
@@ -107,14 +107,14 @@ function smooth(a: Actor, dt: number) {
 const OBJ_SHADOW: Record<number, [number, number]> = {
   [T.PILLAR]: [15, 14], [T.BARREL]: [14, 13], [T.CHEST]: [13, 16], [T.CHEST_OPEN]: [13, 16], [T.ALTAR]: [15, 14], [T.ALTAR_USED]: [15, 14],
   [T.TRADER]: [15, 14], [T.CRATE]: [15, 16], [T.CRATE_ON]: [15, 16], [T.TABLET]: [15, 14], [T.LEVER]: [14, 10], [T.CURSED]: [14, 15],
-  [T.FOUNTAIN]: [15, 15], [T.FOUNTAIN_DRY]: [15, 15], [T.BRAZIER]: [15, 10], [T.BRAZIER_ON]: [15, 10], [T.STATUE]: [15, 14],
+  [T.FOUNTAIN]: [15, 15], [T.FOUNTAIN_DRY]: [15, 15], [T.BRAZIER]: [15, 10], [T.BRAZIER_ON]: [15, 10], [T.STATUE]: [15, 14], [T.MIMIC]: [13, 16],
 };
 const FLY = new Set(['fledermaus', 'glutgeist']);
 
 const TILE_SPR: Record<number, string> = {
   [T.STAIRS]: 'stairs', [T.CHEST]: 'chest', [T.CHEST_OPEN]: 'chest_open', [T.ALTAR]: 'altar', [T.ALTAR_USED]: 'altar_used',
   [T.CRATE]: 'crate', [T.CRATE_ON]: 'crate', [T.PLATE]: 'plate', [T.LEVER]: 'lever', [T.TABLET]: 'tablet', [T.GOAL]: 'goal',
-  [T.CURSED]: 'cursed', [T.TRADER]: 'trader', [T.FOUNTAIN]: 'fountain', [T.FOUNTAIN_DRY]: 'fountain_dry', [T.GATE]: 'gate', [T.BRAZIER]: 'brazier', [T.BRAZIER_ON]: 'brazier_on', [T.STATUE]: 'statue',
+  [T.CURSED]: 'cursed', [T.TRADER]: 'trader', [T.FOUNTAIN]: 'fountain', [T.FOUNTAIN_DRY]: 'fountain_dry', [T.GATE]: 'gate', [T.BRAZIER]: 'brazier', [T.BRAZIER_ON]: 'brazier_on', [T.STATUE]: 'statue', [T.MIMIC]: 'chest',
   [T.BARREL]: 'barrel', [T.PILLAR]: 'pillar', [T.RUBBLE]: 'rubble', [T.FRAGILE]: 'crack', [T.FRAGILE2]: 'crack2',
 };
 
@@ -291,7 +291,10 @@ export function drawRun(ctx: CanvasRenderingContext2D, run: Run, dt: number, tim
     // Lunte: Fass zittert im letzten Zug, Zähler der verbleibenden Züge darüber
     const fz = t === T.BARREL ? run.fuses.get(i) : undefined;
     const sname = t === T.TRADER && Math.floor(time * 1.6 + x) % 2 ? 'trader_b' : t === T.STATUE && run.puzzle && x === run.puzzle.x + 6 ? 'statue_l' : s;
-    if (s) ctx.drawImage(sprites[sname], dx + (fz === 1 ? Math.round(Math.sin(time * 60)) : 0), dy);
+    // Mimik: sieht aus wie eine Truhe, aber alle paar Sekunden zuckt der Deckel und ein Zahn blitzt
+    const twitch = t === T.MIMIC && (time * 0.22 + (i % 13) * 0.071) % 1 < 0.045;
+    if (s) ctx.drawImage(sprites[sname], dx + (fz === 1 ? Math.round(Math.sin(time * 60)) : 0), dy - (twitch ? 1 : 0));
+    if (twitch) { ctx.fillStyle = '#f4f4f4'; ctx.fillRect(dx + 4, dy + 6, 1, 2); ctx.fillRect(dx + 8, dy + 6, 1, 2); ctx.fillRect(dx + 11, dy + 6, 1, 1); }
     if (t === T.TRADER && run.shop.some(o => !o.sold)) drawIcon(ctx, ['coin'], dx + 4, dy - 11 + Math.round(Math.sin(time * 3) * 1.5), '#ffcd75');
     if (fz !== undefined && run.vis[i]) { fuseTags.push({ x: dx + 8 - ox, y: dy - 10 - oy, n: fz }); lights.push({ x, y: y - 0.4, r: 1.3, col: '#ffcd75', a: 0.7 }); }
     if (t === T.CRATE_ON) { ctx.fillStyle = 'rgba(255,205,117,0.3)'; ctx.fillRect(dx + 1, dy + 1, 14, 14); }
@@ -328,6 +331,8 @@ export function drawRun(ctx: CanvasRenderingContext2D, run: Run, dt: number, tim
     if (t === T.STAIRS) lights.push({ x, y, r: 1.9 + 0.2 * Math.sin(time * 2), col: '#94b0c2', a: 0.8 }); // Wegweiser nach unten
   }
   for (const t of run.traps) ctx.drawImage(sprites.trap, t.x * TS + ox, t.y * TS + oy);
+  // Entdeckte Bodenfallen (unentdeckte bleiben unsichtbar)
+  for (const h of run.hazards) if (h.seen && run.seen[h.y * W + h.x]) ctx.drawImage(sprites[`haz_${h.kind}`], h.x * TS + ox, h.y * TS + oy);
   // Pfeilgang: Reihen, die im nächsten Zug schießen, leuchten rot
   const lanes = dartWarn(run);
   if (lanes.length && run.puzzle) {
@@ -1050,8 +1055,11 @@ function helpSheet(ctx: CanvasRenderingContext2D) {
   text(ctx, '[H] oder [ESC] schließen', VW / 2, y + h - 13, '#566c86', 8, 'center');
 }
 
+const HAZARD_HELP: Record<string, string> = {
+  stachel: 'Stacheln beim Betreten', pfeil: 'Pfeil aus der Wand beim Betreten', gas: 'Giftgas ringsum beim Betreten (einmal)', glut: 'Feuer ringsum beim Betreten',
+};
 const TILE_NAMES: Record<number, string> = {
-  [T.STAIRS]: 'Treppe nach unten [E]', [T.CHEST]: 'Truhe', [T.CURSED]: 'Verfluchte Truhe – stark, aber kostet Leben', [T.TRADER]: 'Händler – hineinlaufen zum Handeln',
+  [T.STAIRS]: 'Treppe nach unten [E]', [T.CHEST]: 'Truhe', [T.MIMIC]: 'Truhe', [T.CURSED]: 'Verfluchte Truhe – stark, aber kostet Leben', [T.TRADER]: 'Händler – hineinlaufen zum Handeln',
   [T.FOUNTAIN]: 'Brunnen – heilt einmal', [T.FOUNTAIN_DRY]: 'Versiegter Brunnen', [T.GATE]: 'Gitter – der Schlüssel liegt bei einem Elitegegner', [T.ALTAR]: 'Altar: Leben gegen eine Gabe', [T.CRACKED]: 'Rissige Wand – 3 Schläge oder Bombe',
   [T.BARREL]: 'Fass – anstoßen zündet die Lunte', [T.PILLAR]: 'Säule – stürzt bei Explosion ein', [T.GRASS]: 'Bewuchs – brennbar',
   [T.FRAGILE]: 'Brüchiger Boden', [T.FRAGILE2]: 'Brüchiger Boden – bricht beim nächsten Tritt', [T.CRATE]: 'Kiste – schiebbar', [T.CRATE_ON]: 'Kiste auf Platte',
@@ -1078,6 +1086,8 @@ function tooltip(ctx: CanvasRenderingContext2D, run: Run, ox: number, oy: number
     if (t === T.RUNE && z) lines.push(`Rune: ${RUNE_NAMES[z.runes[i]]}`);
     else if (TILE_NAMES[t]) lines.push(TILE_NAMES[t]);
     if (t === T.ICE && z?.gems?.includes(i)) lines.push('Eiskristall – darauf anhalten');
+    const hz = run.hazards.find(h => h.seen && h.x === tx && h.y === ty);
+    if (hz) lines.push(HAZARD_NAMES[hz.kind], HAZARD_HELP[hz.kind], 'Auch Gegner lösen sie aus.');
     // Rätselkammer schon von der Tür aus erkennbar: Name und Lohn
     if (z && (inVault(run, tx, ty) || (tx === z.x + 3 && ty === z.y + 7))) lines.push(`${VAULT_NAMES[z.kind]} – ${z.solved ? 'gelöst' : z.dead ? 'verloren' : 'Lohn: Reliquie'}`);
     if (run.fire.has(i)) lines.push('Feuer');
@@ -1108,7 +1118,7 @@ function minimap(ctx: CanvasRenderingContext2D, run: Run, time: number) {
     if (t === T.WALL) {
       if (!big) continue;
       ctx.fillStyle = '#262b44';
-    } else ctx.fillStyle = t === T.STAIRS || t === T.GATE ? '#ffcd75' : t === T.CHEST || t === T.CURSED ? '#c98a3a' : t === T.FOUNTAIN ? '#73eff7' : t === T.TRADER ? '#38b764' : t === T.CRACKED ? '#b13e53'
+    } else ctx.fillStyle = t === T.STAIRS || t === T.GATE ? '#ffcd75' : t === T.CHEST || t === T.CURSED || t === T.MIMIC ? '#c98a3a' : t === T.FOUNTAIN ? '#73eff7' : t === T.TRADER ? '#38b764' : t === T.CRACKED ? '#b13e53'
       : ((t >= T.CRATE && t <= T.GOAL) || (t >= T.BRAZIER && t <= T.STATUE)) ? '#41a6f6' : run.fire.has(i) ? '#ef7d57' : run.vis[i] ? '#94b0c2' : '#566c86';
     ctx.fillRect(x0 + x * s, y0 + y * s, s, s);
   }

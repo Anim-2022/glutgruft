@@ -2,7 +2,7 @@ import { RNG } from '../core/rng';
 import type { Meta } from '../core/save';
 import { W, H, T, Room, genDungeon, center, walkable, opaque, los, computeFov, distMap } from './dungeon';
 import { VS, CRATE_TEMPLATES, mirror, genIce, slide, iceStops, genLights, lightsPress, lightCell, LIGHTS_ALL, dartFires, DartLane } from './puzzles';
-import { CLASSES, ClassId, MOBS, PERKS, RELICS, Item, Offer, AFFIX, CONSUMABLES, UNIQUES, ULT, ULT_LEVEL, SKILL_UP, SYNERGIES, NEW_SKILLS, TUNE, treeNodes, treeNode, treePool, nodeText, MAGE_WHET, BOSS_BY_BIOME, BIOME_NAMES, FLOORS_PER_BIOME, LAST_FLOOR, biomeOf, spawnTable } from './content';
+import { CLASSES, ClassId, MOBS, PERKS, RELICS, Item, Offer, AFFIX, CONSUMABLES, UNIQUES, ULT, ULT_LEVEL, SKILL_UP, SYNERGIES, NEW_SKILLS, TUNE, treeNodes, treeNode, treePool, nodeText, MAGE_WHET, BOSS_BY_BIOME, BIOME_NAMES, FLOORS_PER_BIOME, LAST_FLOOR, biomeOf, spawnTable, FEATURES, HAZARD } from './content';
 
 export interface Actor {
   id: number; kind: string; name: string;
@@ -69,10 +69,17 @@ export type Fx =
   | { k: 'swipe'; x: number; y: number; dx: number; dy: number; big: boolean }
   | { k: 'pdeath'; x: number; y: number };
 
+// Versteckte Bodenfalle. seen: der Held hat sie entdeckt (oder sie wurde ausgelöst) – dann ist sie sichtbar.
+export type HazardKind = 'stachel' | 'pfeil' | 'gas' | 'glut';
+export interface Hazard { x: number; y: number; kind: HazardKind; seen: boolean; }
+export const HAZARD_NAMES: Record<HazardKind, string> = { stachel: 'Stachelfalle', pfeil: 'Pfeilfalle', gas: 'Gasfalle', glut: 'Glutfalle' };
+
 export interface Run {
   seed: number; rng: RNG; floor: number;
   tiles: Uint8Array; seen: Uint8Array; vis: Uint8Array;
   p: Player; mobs: Actor[]; traps: { x: number; y: number }[];
+  hazards: Hazard[];           // versteckte Bodenfallen der Ebene (nicht die Fallen des Waldläufers)
+  tele?: Record<string, number>; // Zähler für die Balance-Messung (nur von neuen Systemen gesetzt)
   fire: Map<number, number>;   // Feld -> verbleibende Züge
   fuses: Map<number, number>;  // Fass -> Züge bis zur Explosion
   cracks: Map<number, number>; // rissige Wand -> erhaltene Schläge
@@ -122,7 +129,7 @@ export function newRun(seed: number, cls: ClassId, meta: Meta): Run {
   const run: Run = {
     seed, rng: new RNG(seed), floor: 0,
     tiles: new Uint8Array(W * H), seen: new Uint8Array(W * H), vis: new Uint8Array(W * H),
-    p, mobs: [], traps: [], fire: new Map(), fuses: new Map(), cracks: new Map(), puzzle: null, willUsed: false, shop: [], target: 0, daily: false, log: [], fx: [], mode: 'play', perkChoices: [], pool: treePool(cls, meta), perkQ: 0,
+    p, mobs: [], traps: [], hazards: [], fire: new Map(), fuses: new Map(), cracks: new Map(), puzzle: null, willUsed: false, shop: [], target: 0, daily: false, log: [], fx: [], mode: 'play', perkChoices: [], pool: treePool(cls, meta), perkQ: 0,
     souls: 0, kills: 0, turn: 0, nextId: 1,
   };
   if (u('erbe')) applyPerk(run, run.rng.pick(Object.keys(RELICS)));
@@ -171,12 +178,13 @@ const ROLL_AFF: [string, (r: number) => number][] = [
   ['sicht', () => 1], ['brand', r => 15 + 5 * r], ['gift', r => 15 + 5 * r], ['boss', r => 15 + 10 * r], ['flink', r => 4 + 2 * r],
 ];
 
-export function genItem(run: Run, cursed = false): Item {
+export function genItem(run: Run, cursed = false, bump = 0): Item {
   const rng = run.rng, cls = run.p.cls, slot = [0, 0, 0, 1, 1, 1, 2, 2, 3, 3][rng.int(0, 9)];
   // Bonus aus Ebene und Schatzsucher hebt vor allem Selten und Episch; Legendär bleibt rar
   const r = rng.next(), b = run.floor * 0.006 + (run.p.aff.fund ?? 0) / 100;
   let rar = r < 0.55 - b ? 0 : r < 0.85 - 0.6 * b ? 1 : r < 0.985 - 0.2 * b ? 2 : 3;
   if (cursed) rar = Math.min(3, rar + 1);
+  if (bump) rar = Math.min(3, rar + bump);
   const kind = rng.int(0, 2);
   if (rar === 3 && rng.chance(0.5)) {
     const u = rng.pick(UNIQUES.filter(q => q.slot === slot && (!q.cls || q.cls === cls)));
@@ -757,6 +765,7 @@ function nextFloor(run: Run) {
   run.seen = new Uint8Array(W * H);
   run.mobs = [];
   run.traps = [];
+  run.hazards = [];
   run.fire = new Map(); run.fuses = new Map(); run.cracks = new Map();
   run.puzzle = null; run.willUsed = false;
   if (run.runeUsed) run.runeUsed = false;
@@ -794,7 +803,10 @@ function nextFloor(run: Run) {
     }
     if (rng.chance(0.4)) {
       const roll = rng.next();
-      placeIn(run, r, roll < 0.22 ? T.ALTAR : roll < 0.34 ? T.CURSED : T.CHEST);
+      let tile: number = roll < 0.22 ? T.ALTAR : roll < 0.34 ? T.CURSED : T.CHEST;
+      // Mimik: sieht aus wie eine Truhe (nur wenn eingeschaltet – sonst keine Zufallszahl)
+      if (tile === T.CHEST && FEATURES.mimics && run.floor >= HAZARD.minFloor && rng.chance(HAZARD.mimic)) tile = T.MIMIC;
+      placeIn(run, r, tile);
     }
     // Säulen in großen Räumen, Fässer verstreut
     if (r.w >= 6 && r.h >= 5 && rng.chance(0.5)) {
@@ -827,9 +839,116 @@ function nextFloor(run: Run) {
     e.maxHp = e.hp = Math.round(e.hp * 1.8);
     e.atk += 2; e.xp *= 2;
   }
+  if (FEATURES.hazards && !bossFloor && run.floor >= HAZARD.minFloor) addHazards(run, rooms[0], biome);
   computeFov(run.tiles, run.p.x, run.p.y, fovR(run), run.vis, run.seen);
   say(run, `Ebene ${run.floor} – ${BIOME_NAMES[biome]}`);
   if (bossFloor) say(run, 'Etwas Mächtiges lauert hier ...');
+}
+
+// ---------- Versteckte Fallen und Mimiks ----------
+
+const tele = (run: Run, k: string, n = 1) => { (run.tele ??= {})[k] = (run.tele[k] ?? 0) + n; };
+const FLYERS = new Set(['fledermaus', 'glutgeist']);
+const HAZARD_KINDS: HazardKind[][] = [['stachel', 'stachel', 'pfeil'], ['stachel', 'gas', 'gas', 'pfeil'], ['stachel', 'glut', 'glut', 'pfeil']];
+const BLOCKERS: number[] = [T.CHEST, T.CURSED, T.MIMIC, T.TRADER, T.ALTAR, T.FOUNTAIN, T.TABLET, T.STAIRS, T.LEVER];
+
+// Fallen bevorzugt in Gängen und Durchgängen; nie im Startraum, in der Rätselkammer, vor Truhe oder Händler
+function addHazards(run: Run, start: Room, biome: number) {
+  const t = run.tiles, rng = run.rng, z = run.puzzle;
+  const okAt = (x: number, y: number) => {
+    const i = y * W + x;
+    if (t[i] !== T.FLOOR || mobAt(run, x, y)) return false;
+    if (x >= start.x - 1 && x <= start.x + start.w && y >= start.y - 1 && y <= start.y + start.h) return false;
+    if (z && x >= z.x - 1 && x <= z.x + VS && y >= z.y - 1 && y <= z.y + VS + 1) return false;
+    for (let oy = -1; oy <= 1; oy++) for (let ox = -1; ox <= 1; ox++) if (BLOCKERS.includes(t[i + oy * W + ox])) return false;
+    return !run.hazards.some(h => cheb(h, { x, y }) <= 2);
+  };
+  const corridor: number[] = [], open: number[] = [];
+  for (let y = 1; y < H - 1; y++) for (let x = 1; x < W - 1; x++) {
+    if (t[y * W + x] !== T.FLOOR) continue;
+    const n = DIRS4.filter(([ox, oy]) => walkable(t[(y + oy) * W + x + ox])).length;
+    (n <= 2 ? corridor : open).push(y * W + x);
+  }
+  const want = rng.int(2, 4) + Math.floor(run.floor / 5);
+  for (let k = 0, tries = 0; k < want && tries < 200; tries++) {
+    const pool = corridor.length && rng.chance(0.7) ? corridor : open;
+    if (!pool.length) break;
+    const i = rng.pick(pool), x = i % W, y = (i / W) | 0;
+    if (!okAt(x, y)) continue;
+    run.hazards.push({ x, y, kind: rng.pick(HAZARD_KINDS[biome]), seen: false });
+    k++;
+  }
+}
+
+// Ein Wesen betritt ein Feld: liegt dort eine Falle, löst sie aus. Fliegende Gegner schweben darüber.
+function stepHazard(run: Run, a: Actor) {
+  const h = run.hazards.find(q => q.x === a.x && q.y === a.y);
+  if (!h) return;
+  const p = run.p, isP = a === p;
+  if (!isP && FLYERS.has(a.kind)) return;
+  const shown = isP || !!run.vis[a.y * W + a.x];
+  h.seen = h.seen || shown;
+  const name = HAZARD_NAMES[h.kind];
+  if (isP) { tele(run, 'trapHit'); run.fx.push({ k: 'shake', n: 3 }); }
+  else tele(run, 'trapMob');
+  const hp0 = p.hp;
+  switch (h.kind) {
+    case 'stachel':
+      if (shown) say(run, isP ? `${name}! Stacheln schießen aus dem Boden.` : `${a.name} tritt in eine ${name}!`);
+      damage(run, a, 3 + Math.floor(run.floor / 2), isP ? '#b13e53' : '#c9d4dc');
+      break;
+    case 'pfeil': {
+      // Der Pfeil kommt aus der nächsten Wand in einer der vier Richtungen
+      let src: [number, number] | null = null;
+      for (let d = 1; d <= 8 && !src; d++) for (const [ox, oy] of DIRS4) {
+        const x = a.x + ox * d, y = a.y + oy * d;
+        if (opaque(run.tiles[y * W + x])) { src = [x, y]; break; }
+      }
+      if (src && shown) run.fx.push({ k: 'arrow', x0: src[0], y0: src[1], x1: a.x, y1: a.y, col: '#c9d4dc', heavy: false });
+      if (shown) say(run, isP ? `${name}! Ein Pfeil zischt aus der Wand.` : `${a.name} löst eine ${name} aus!`);
+      damage(run, a, 2 + Math.floor(run.floor / 2), isP ? '#b13e53' : '#c9d4dc');
+      break;
+    }
+    case 'gas':
+      // Giftwolke über 3x3, danach ist die Falle leer
+      if (shown) say(run, isP ? `${name}! Grünes Gas strömt aus dem Boden.` : `Unter ${a.name} zischt eine ${name}!`);
+      for (const q of [p, ...run.mobs]) if (cheb(q, a) <= 1) q.st.gift = Math.max(q.st.gift ?? 0, 4);
+      run.hazards = run.hazards.filter(q => q !== h);
+      break;
+    case 'glut':
+      if (shown) say(run, isP ? `${name}! Glut bricht aus dem Boden.` : `${a.name} tritt auf eine ${name}!`);
+      for (const [ox, oy] of [[0, 0], ...DIRS4]) ignite(run, a.x + ox, a.y + oy, 2);
+      a.st.brand = Math.max(a.st.brand ?? 0, 2);
+      break;
+  }
+  if (isP && p.hp < hp0) tele(run, 'trapDmg', hp0 - p.hp);
+}
+
+// Am Ende jedes Zugs: nahe, sichtbare Fallen kann der Held entdecken (keine Erfahrung dafür – das Wissen ist der Lohn)
+function spotHazards(run: Run) {
+  const p = run.p;
+  for (const h of run.hazards) {
+    if (h.seen || !run.vis[h.y * W + h.x] || cheb(h, p) > 2) continue;
+    const sure = p.cls === 'waldlaeufer' && cheb(h, p) <= 1;
+    if (!sure && !run.rng.chance(HAZARD.spot + HAZARD.spotSicht * (p.aff.sicht ?? 0))) continue;
+    h.seen = true;
+    tele(run, 'trapSpot');
+    run.fx.push({ k: 'num', x: h.x, y: h.y, s: '!', col: '#ffcd75' });
+    say(run, `Falle entdeckt! ${HAZARD_NAMES[h.kind]}.`);
+  }
+}
+
+// Ein Mimik zeigt sich: aus der „Truhe“ wird ein Gegner. bite: er schnappt sofort zu (wenn man ihn anstößt).
+function revealMimic(run: Run, i: number, bite: boolean) {
+  const x = i % W, y = (i / W) | 0;
+  run.tiles[i] = T.FLOOR;
+  const m = spawnMob(run, 'mimik', x, y);
+  m.awake = true;
+  m.cd = bite ? 1 : 0; // nach dem Biss beim Aufdecken setzt er in diesem Zug aus
+  tele(run, 'mimicMet');
+  run.fx.push({ k: 'shake', n: 4 });
+  say(run, 'Die Truhe hat Zähne! Ein Mimik!');
+  if (bite) hitPlayer(run, m, true);
 }
 
 // ---------- Zerstörung und Feuer ----------
@@ -860,9 +979,11 @@ export function explode(run: Run, x: number, y: number, r = 1, barrel = false) {
     blast.add(yy * W + xx);
   }
   const chain: number[] = [];
+  if (run.hazards.length) run.hazards = run.hazards.filter(h => !blast.has(h.y * W + h.x)); // die Druckwelle zerstört Fallen
   for (const i of blast) {
     const xx = i % W, yy = (i / W) | 0, t = run.tiles[i];
     if (t === T.CRACKED) breakWall(run, i);
+    else if (t === T.MIMIC) revealMimic(run, i, false);
     else if (t === T.PILLAR) collapse(run, xx, yy);
     else if (t === T.BARREL) chain.push(i);
     else if (t === T.GRASS) ignite(run, xx, yy);
@@ -1061,6 +1182,14 @@ function kill(run: Run, m: Actor) {
     if (run.floor >= LAST_FLOOR) { run.mode = 'win'; return; }
     run.tiles[m.y * W + m.x] = T.STAIRS;
     p.potions++;
+  } else if (m.kind === 'mimik') {
+    // Beute wie aus einer Truhe, etwas Gold dazu, manchmal ein besseres Stück
+    const up = run.rng.chance(HAZARD.mimicRarUp) ? 1 : 0;
+    tele(run, 'mimicKilled'); if (up) tele(run, 'mimicRarUp');
+    const g = Math.round((2 + run.floor / 2) * (1 + (p.aff.gold ?? 0) / 100));
+    p.gold += g;
+    say(run, `Der Mimik ist besiegt: ${g} Gold${up ? ', und er hütete etwas Besonderes' : ''}.`);
+    chestLoot(run, 'Mimik', up);
   } else if (m.elite) {
     p.keys++;
     p.potions++;
@@ -1212,14 +1341,20 @@ function openChest(run: Run, i: number) {
   const p = run.p, cursed = run.tiles[i] === T.CURSED;
   run.tiles[i] = T.CHEST_OPEN;
   if (cursed) { takeItem(run, genItem(run, true), 'Verfluchte Truhe'); return; }
+  chestLoot(run, 'Truhe');
+}
+
+// Inhalt einer Truhe (auch die Beute eines Mimiks). bump hebt die Seltenheit eines Gegenstands.
+function chestLoot(run: Run, from: string, bump = 0) {
+  const p = run.p;
   for (let k = has(p, 'muenze') ? 2 : 1; k > 0; k--) {
     const r = run.rng.next();
-    if (r < 0.22) { p.potions++; say(run, 'Truhe: ein Heiltrank.'); }
-    else if (r < 0.38) { p.bombs += 2; say(run, 'Truhe: zwei Bomben.'); }
-    else if (r < 0.70) takeItem(run, genItem(run), 'Truhe');
-    else if (r < 0.80) takeItem(run, genConsumable(run), 'Truhe');
-    else if (r < 0.92) { const g = Math.round((8 + run.floor * 2) * (1 + (p.aff.gold ?? 0) / 100)); p.gold += g; say(run, `Truhe: ${g} Gold.`); }
-    else { const n = Math.round(10 * p.soulMul); run.souls += n; say(run, `Truhe: ${n} Seelensplitter.`); }
+    if (r < 0.22) { p.potions++; say(run, `${from}: ein Heiltrank.`); }
+    else if (r < 0.38) { p.bombs += 2; say(run, `${from}: zwei Bomben.`); }
+    else if (r < 0.70) takeItem(run, genItem(run, false, bump), from);
+    else if (r < 0.80) takeItem(run, genConsumable(run), from);
+    else if (r < 0.92) { const g = Math.round((8 + run.floor * 2) * (1 + (p.aff.gold ?? 0) / 100)); p.gold += g; say(run, `${from}: ${g} Gold.`); }
+    else { const n = Math.round(10 * p.soulMul); run.souls += n; say(run, `${from}: ${n} Seelensplitter.`); }
   }
   if (p.aff.midas) p.gold += 10 + run.floor * 2;
 }
@@ -1597,7 +1732,8 @@ export function act(run: Run, a: Action): void {
         sideHits(run, m, base, '#f4f4f4');
         if (p.cls === 'krieger' && !hasNode(p, 'n0_5')) gain(p, 2); // Vergelter: keine Wut aus eigenen Schlägen
         used = true;
-      } else if (t === T.CHEST || t === T.CURSED) { openChest(run, i); used = true; }
+      } else if (t === T.MIMIC) { revealMimic(run, i, true); used = true; }
+      else if (t === T.CHEST || t === T.CURSED) { openChest(run, i); used = true; }
       else if (t === T.FOUNTAIN) {
         const n = Math.ceil(p.maxHp * 0.35);
         p.hp = Math.min(p.maxHp, p.hp + n);
@@ -1638,6 +1774,7 @@ export function act(run: Run, a: Action): void {
         [p.x, p.y] = slide(kind, p.x, p.y, a.dx, a.dy);
         used = true;
         afterStep(run);
+        stepHazard(run, p);
       } else if (t === T.BARREL) {
         // Lunte: 2 oder 3 Züge Zeit, um Abstand zu gewinnen (der Zähler sinkt schon am Ende dieses Zugs)
         if (!run.fuses.has(i)) { run.fuses.set(i, 3 + (spot(nx, ny, run.turn) % 2)); say(run, 'Die Lunte brennt – weg hier!'); }
@@ -1664,7 +1801,7 @@ export function act(run: Run, a: Action): void {
           run.fx.push({ k: 'shake', n: 8 });
           used = false;
           fatal(run);
-        } else afterStep(run);
+        } else { afterStep(run); stepHazard(run, p); }
       }
       break;
     }
@@ -1767,6 +1904,7 @@ function hitPlayer(run: Run, m: Actor, melee: boolean) {
 function moveMob(run: Run, m: Actor, x: number, y: number) {
   m.f = [Math.sign(x - m.x), Math.sign(y - m.y)];
   m.x = x; m.y = y;
+  if (run.hazards.length) { stepHazard(run, m); if (m.hp <= 0) return; }
   const ti = run.traps.findIndex(t => t.x === x && t.y === y);
   if (ti >= 0) {
     run.traps.splice(ti, 1);
@@ -1781,6 +1919,7 @@ function moveMob(run: Run, m: Actor, x: number, y: number) {
 function mobAct(run: Run, m: Actor, dist: Int16Array) {
   const p = run.p, d = MOBS[m.kind];
   if (!m.awake) { if (run.vis[m.y * W + m.x]) m.awake = true; return; }
+  if (m.kind === 'mimik' && m.cd) { m.cd = 0; return; }
   const man = Math.abs(p.x - m.x) + Math.abs(p.y - m.y);
   if (d.ai === 'boss' && ++m.cd >= 5) {
     m.cd = 0;
@@ -1856,6 +1995,7 @@ function endTurn(run: Run) {
   if (p.cls === 'krieger' && run.mobs.some(m => cheb(m, p) <= 1 && run.vis[m.y * W + m.x])) gain(p, 1);
   const dist = distMap(run.tiles, p.x, p.y);
   computeFov(run.tiles, p.x, p.y, fovR(run), run.vis, run.seen);
+  if (run.hazards.length) spotHazards(run);
   for (const m of [...run.mobs]) {
     if (m.hp <= 0) continue;
     tickDots(run, m);
@@ -1936,7 +2076,7 @@ export function nodesFromRanks(lvl: number[], mod: number[]): string[] {
   return out;
 }
 
-function migrateRun(o: { p: Player; pool?: string[]; perkQ?: number }) {
+function migrateRun(o: { p: Player; pool?: string[]; perkQ?: number; hazards?: Hazard[] }) {
   const p = o.p;
   if (!p.tree) p.tree = nodesFromRanks(p.skillLvl, p.skillMod);
   p.pts ??= 0;
@@ -1944,4 +2084,5 @@ function migrateRun(o: { p: Player; pool?: string[]; perkQ?: number }) {
   p.rest ??= 0;
   o.pool ??= treeNodes(p.cls).filter(n => n.cost === 0).map(n => n.id);
   o.perkQ ??= 0;
+  o.hazards ??= [];
 }

@@ -6,7 +6,13 @@ import { CLASSES, MOBS } from '../src/game/content';
 const DIRS = [[1, 0], [-1, 0], [0, 1], [0, -1]];
 
 // Breitensuche vom Spieler; liefert den ersten Schritt zum nächsten Feld, das `goal` erfüllt.
+// Entdeckte Fallen meidet der Bot, solange es einen anderen Weg gibt – sonst geht er darüber.
 function stepTo(run: Run, goal: (x: number, y: number, i: number) => boolean, avoidFire = true, brittle = false): [number, number] | null {
+  const known = run.hazards.some(h => h.seen) ? new Set(run.hazards.filter(h => h.seen).map(h => h.y * W + h.x)) : null;
+  return (known && search(run, goal, avoidFire, brittle, known)) || search(run, goal, avoidFire, brittle, null);
+}
+
+function search(run: Run, goal: (x: number, y: number, i: number) => boolean, avoidFire: boolean, brittle: boolean, knownTraps: Set<number> | null): [number, number] | null {
   const p = run.p, start = p.y * W + p.x;
   const from = new Int32Array(W * H).fill(-1);
   const q = [start];
@@ -22,7 +28,7 @@ function stepTo(run: Run, goal: (x: number, y: number, i: number) => boolean, av
       const nx = cx + ox, ny = cy + oy, n = ny * W + nx;
       if (nx < 0 || ny < 0 || nx >= W || ny >= H || from[n] !== -1) continue;
       const t = run.tiles[n];
-      const passable = walkable(t) && (brittle || t !== T.FRAGILE2) && !(avoidFire && run.fire.has(n));
+      const passable = walkable(t) && (brittle || t !== T.FRAGILE2) && !(avoidFire && run.fire.has(n)) && !(knownTraps && knownTraps.has(n));
       // Ziele dürfen auch nicht begehbar sein (Gegner, Truhen)
       if (!passable || run.mobs.some(m => m.x === nx && m.y === ny && run.vis[n])) { if (goal(nx, ny, n) && from[n] === -1) { from[n] = c; q.push(n); } continue; }
       from[n] = c;
@@ -209,7 +215,7 @@ function decide(run: Run): Action {
   if (run.tiles[p.y * W + p.x] === T.STAIRS) return { t: 'descend' };
   // Truhen mitnehmen, dann Treppe, sonst erkunden
   const s =
-    stepTo(run, (_x, _y, i) => run.seen[i] === 1 && (run.tiles[i] === T.CHEST || (run.tiles[i] === T.TRADER && p.gold >= 25 && !shopped.has(run.floor)))) ??
+    stepTo(run, (_x, _y, i) => run.seen[i] === 1 && (run.tiles[i] === T.CHEST || run.tiles[i] === T.MIMIC || (run.tiles[i] === T.TRADER && p.gold >= 25 && !shopped.has(run.floor)))) ??
     stepTo(run, (_x, _y, i) => run.seen[i] === 1 && run.tiles[i] === T.STAIRS) ??
     stepTo(run, (_x, _y, i) => walkable(run.tiles[i]) && !run.seen[i]) ??
     stepTo(run, (_x, _y, i) => run.mobs.some(m => m.y * W + m.x === i), false) ??
