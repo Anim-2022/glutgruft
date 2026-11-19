@@ -1,0 +1,174 @@
+
+=== max waldlaeufer: Median Ebene 15, Siege 18/40, Big hits(>=50%maxHP) 0, One-shots from full 0
+Gold verdient 1364/Lauf, ausgegeben 644, Tränke gekauft 7.5, gefunden 33.7, Bomben gekauft 0.0, Gold übrig bei Sieg 1211, Tode mit Boss in Sicht 3
+Eb  n  Tod  Züge  HPverl  Tränke Kills  Gold  Lvl  Atk  MaxHP  maxHit  medHit
+ 1  40   0   244      3   0.00  21.9    45  1.0  6.0    32      4      4
+ 2  40   0   286      5   0.03  25.0    48  3.6  6.8    42      5      4
+ 3  40   0   232     21   0.17  21.1    56  5.5  7.5    50      6      2
+ 4  40   1   256     39   0.65  22.4    78  7.1  8.2    56      8      2
+ 5  39   1   265     78   2.36  24.0   110  8.7  8.7    62     10      5
+ 6  38   1   246     41   0.55  24.6   167 10.5  9.2    68      8      4
+ 7  37   1   256     44   0.46  26.7   147 11.8  9.7    73      9      4
+ 8  36   0   234     45   0.86  24.4   144 13.3 10.3    79      9      4
+ 9  36   2   268     70   1.06  25.4   135 14.4 10.5    83     10      5
+10  34   2   273    154   3.32  27.2   162 15.5 10.6    87     16      6
+11  32   3   458    371   6.25  52.6   275 17.3 10.9    94     17      6
+12  29   2   482    391   5.66  55.9   370 20.0 11.7   103     18      6
+13  27   1   452    261   2.30  55.5   467 22.6 12.0   113     20      7
+14  26   4   404    479   6.65  46.7   661 24.8 12.5   122     20      8
+15  22   4   392    456   5.77  47.7   846 26.9 13.1   130     24      8
+Tod durch: [["golem+schuetze",4],["schuetze",4],["schuetze+sporling",3],["koenig+skelett",1],["mutter+skelett+sporling",1],["schuetze+skelett",1],["mutter+sporling+sporling*",1],["other",1]]
+
+=== Zusammenfassung (SEEDS=0, BUILD=heur) ===
+max waldlaeufer Siege 18/40  Median 15  Seelen/Lauf 1359  Gaben 17.0  Ränge 2.8  Stufe RangII 9.5 RangIII 9.0  Restpunkt 0 %  Fähigkeiten/Lauf 308.2 / 90.0 / 31.4  Ressource vor Tod 2.8
+
+Neue Zauber je Lauf:
+max waldlaeufer  markieren 27.4  rauchbombe 4.0  fangnetz 2.3
+
+Knoten (Anteil der Läufe):
+max waldlaeufer  n0_1 58%  n0_2a 58%  n0_2b 33%  n0_3 35%  n0_4a 18%  n0_4b 18%  n0_5 33%  n1_1 65%  n1_2a 65%  n1_2b 28%  n1_3 33%  n1_4a 15%  n1_4b 18%  n1_5 30%  n2_1 55%  n2_2a 55%  n2_2b 30%  n2_3 33%  n2_4a 15%  n2_4b 15%  n2_5 30%
+
+=== max waldlaeufer: Median Ebene 14, Siege 17/40, Big hits(>=50%maxHP) 0, One-shots from full 0
+Gold verdient 1243/Lauf, ausgegeben 633, Tränke gekauft 8.0, gefunden 33.0, Bomben gekauft 0.0, Gold übrig bei Sieg 961, Tode mit Boss in Sicht 2
+Eb  n  Tod  Züge  HPverl  Tränke Kills  Gold  Lvl  Atk  MaxHP  maxHit  medHit
+ 1  40   0   283      4   0.00  24.8    45  1.0  6.0    32      4      4
+ 2  40   0   264      6   0.00  23.4    58  3.9  6.9    43      7      5
+ 3  40   0   267     28   0.35  23.3    64  5.6  7.8    50      7      3
+ 4  40   0   273     28   0.30  23.5    75  7.5  8.3    57      9      3
+ 5  40   1   277     78   1.88  25.3   110  9.0  8.9    63     11      4
+ 6  39   0   239     57   1.15  25.7   175 10.7  9.3    70      8      3
+ 7  39   1   233     45   0.79  24.8   140 12.1  9.5    75      9      3
+ 8  38   0   262     59   0.95  26.0   133 13.4  9.8    80     10      4
+ 9  38   0   235     83   1.58  24.3   131 14.6 10.1    84     10      5
+10  38   2   282    174   3.68  27.8   142 15.7 10.3    89     16      6
+11  36   8   487    385   6.72  51.0   227 17.3 10.6    94     18      5
+12  28   3   446    379   5.82  51.2   309 20.2 10.8   104     18      7
+13  25   4   432    353   4.44  51.6   434 22.6 11.5   114     19      6
+14  21   2   480    373   3.62  58.2   525 24.8 12.0   121     19      8
+15  19   2   406    508   6.42  50.1   642 26.9 12.2   127     25      9
+Tod durch: [["schuetze",5],["golem+schuetze",3],["golem",3],["other",2],["glutgeist+schuetze+skelett+sporling",2],["schuetze+skelett+sporling",1],["golem+schuetze+skelett",1],["skelett+sporling",1]]
+
+=== Zusammenfassung (SEEDS=1, BUILD=heur) ===
+max waldlaeufer Siege 17/40  Median 14  Seelen/Lauf 1407  Gaben 17.2  Ränge 2.9  Stufe RangII 10.0 RangIII 9.0  Restpunkt 0 %  Fähigkeiten/Lauf 305.9 / 92.2 / 28.3  Ressource vor Tod 3.1
+
+Neue Zauber je Lauf:
+max waldlaeufer  markieren 26.1  rauchbombe 5.2  fangnetz 3.2
+
+Knoten (Anteil der Läufe):
+max waldlaeufer  n0_1 63%  n0_2a 63%  n0_2b 28%  n0_3 33%  n0_4a 18%  n0_4b 15%  n0_5 28%  n1_1 60%  n1_2a 60%  n1_2b 35%  n1_3 35%  n1_4a 18%  n1_4b 18%  n1_5 35%  n2_1 65%  n2_2a 65%  n2_2b 33%  n2_3 33%  n2_4a 15%  n2_4b 18%  n2_5 33%
+
+=== max waldlaeufer: Median Ebene 15, Siege 20/40, Big hits(>=50%maxHP) 0, One-shots from full 0
+Gold verdient 1368/Lauf, ausgegeben 655, Tränke gekauft 7.7, gefunden 33.1, Bomben gekauft 0.0, Gold übrig bei Sieg 1135, Tode mit Boss in Sicht 2
+Eb  n  Tod  Züge  HPverl  Tränke Kills  Gold  Lvl  Atk  MaxHP  maxHit  medHit
+ 1  40   0   261      4   0.00  23.3    45  1.0  6.0    32      5      3
+ 2  40   0   257      8   0.00  23.0    53  3.7  7.4    42      7      5
+ 3  40   0   254     22   0.05  21.8    70  5.6  7.9    49      6      2
+ 4  40   2   254     35   0.60  21.7    87  7.3  8.7    56      7      2
+ 5  38   1   245     65   1.55  23.2    90  8.8  8.9    62     10      5
+ 6  37   0   216     40   0.89  23.9   145 10.4  9.5    68      7      4
+ 7  37   0   250     46   0.57  26.0   133 11.7  9.6    72      9      4
+ 8  37   0   270     40   0.35  26.3   141 13.0  9.9    78      9      3
+ 9  37   0   244     81   1.19  24.2   158 14.4 10.1    83     10      5
+10  37   3   276    173   3.70  29.1   176 15.4 10.3    86     16      7
+11  34   6   371    312   5.71  43.0   294 17.1 10.5    93     17      5
+12  28   2   503    423   6.79  57.8   367 19.4 11.1   102     17      6
+13  26   1   418    395   5.77  46.8   487 22.3 11.8   112     18      7
+14  25   3   431    363   4.56  51.8   650 24.2 12.3   118     18      7
+15  22   2   440    538   7.00  50.5   823 26.2 12.9   125     24      8
+Tod durch: [["schuetze",4],["mutter+sporling",2],["golem+schuetze+sporling",2],["golem",2],["schuetze+skelett+sporling",1],["glutgeist+schuetze+skelett+sporling",1],["brand",1],["other",1]]
+
+=== Zusammenfassung (SEEDS=2, BUILD=heur) ===
+max waldlaeufer Siege 20/40  Median 15  Seelen/Lauf 1293  Gaben 16.9  Ränge 2.8  Stufe RangII 9.9 RangIII 9.0  Restpunkt 0 %  Fähigkeiten/Lauf 296.9 / 88.6 / 29.4  Ressource vor Tod 3.2
+
+Neue Zauber je Lauf:
+max waldlaeufer  rauchbombe 5.0  fangnetz 1.2  markieren 31.4
+
+Knoten (Anteil der Läufe):
+max waldlaeufer  n0_1 60%  n0_2a 60%  n0_2b 33%  n0_3 33%  n0_4a 18%  n0_4b 15%  n0_5 33%  n1_1 63%  n1_2a 63%  n1_2b 28%  n1_3 33%  n1_4a 15%  n1_4b 13%  n1_5 28%  n2_1 63%  n2_2a 63%  n2_2b 33%  n2_3 35%  n2_4a 18%  n2_4b 18%  n2_5 33%
+
+=== max waldlaeufer: Median Ebene 15, Siege 22/40, Big hits(>=50%maxHP) 0, One-shots from full 0
+Gold verdient 1471/Lauf, ausgegeben 755, Tränke gekauft 8.4, gefunden 35.5, Bomben gekauft 0.0, Gold übrig bei Sieg 974, Tode mit Boss in Sicht 1
+Eb  n  Tod  Züge  HPverl  Tränke Kills  Gold  Lvl  Atk  MaxHP  maxHit  medHit
+ 1  40   0   244      3   0.00  21.9    45  1.0  6.0    32      4      4
+ 2  40   0   287      4   0.00  25.1    48  3.6  6.7    42      5      4
+ 3  40   0   244     22   0.07  22.0    53  5.5  7.5    50      6      2
+ 4  40   1   271     31   0.40  23.8    78  7.3  8.4    57      8      3
+ 5  39   0   301     64   1.21  26.1   104  8.9  8.9    62     11      5
+ 6  39   0   235     45   0.56  24.4   166 10.7  9.2    69      9      4
+ 7  39   0   252     40   0.26  26.6   148 12.0  9.4    74      8      4
+ 8  39   0   255     63   1.00  25.5   120 13.4  9.6    80      9      3
+ 9  39   1   250     64   0.77  24.7   137 14.5  9.9    83      9      4
+10  38   1   287    182   3.84  28.8   198 15.7 10.2    88     16      7
+11  37   6   471    385   7.30  48.1   313 17.3 10.7    94     18      6
+12  31   2   529    315   3.90  57.8   442 20.1 11.1   103     19      6
+13  29   2   413    202   1.55  50.7   533 22.7 11.5   113     17      7
+14  27   3   425    365   4.96  52.1   613 24.9 12.1   120     20      7
+15  24   2   373    308   3.25  47.9   741 27.0 12.8   128     24      9
+Tod durch: [["golem+schuetze",4],["glutgeist+schuetze+skelett",2],["golem+skelett",2],["other",2],["mutter+skelett+sporling",1],["schuetze+skelett",1],["schuetze+sporling",1],["glutgeist+schuetze",1]]
+
+=== Zusammenfassung (SEEDS=0, BUILD=pirscher) ===
+max waldlaeufer Siege 22/40  Median 15  Seelen/Lauf 1370  Gaben 18.1  Ränge 2.9  Stufe RangII 10.0 RangIII 9.0  Restpunkt 0 %  Fähigkeiten/Lauf 307.7 / 90.4 / 12.2  Ressource vor Tod 2.3
+
+Neue Zauber je Lauf:
+max waldlaeufer  rauchbombe 15.0
+
+Knoten (Anteil der Läufe):
+max waldlaeufer  n0_1 88%  n0_2a 88%  n2_1 100%  n2_2a 100%  n2_2b 98%  n2_3 100%  n2_4a 48%  n2_4b 50%  n2_5 98%
+
+=== max waldlaeufer: Median Ebene 13, Siege 15/40, Big hits(>=50%maxHP) 0, One-shots from full 0
+Gold verdient 1251/Lauf, ausgegeben 662, Tränke gekauft 8.4, gefunden 33.5, Bomben gekauft 0.0, Gold übrig bei Sieg 819, Tode mit Boss in Sicht 2
+Eb  n  Tod  Züge  HPverl  Tränke Kills  Gold  Lvl  Atk  MaxHP  maxHit  medHit
+ 1  40   0   284      4   0.00  24.8    45  1.0  6.0    32      4      4
+ 2  40   0   248      6   0.03  22.7    58  3.9  7.0    43      7      5
+ 3  40   0   293     32   0.53  25.0    66  5.6  7.7    50      7      3
+ 4  40   0   282     32   0.33  23.7    79  7.6  8.3    58      7      2
+ 5  40   0   294     64   1.23  26.1    96  9.0  8.6    64     11      4
+ 6  40   1   244     69   1.48  25.1   159 10.8  8.9    71      8      3
+ 7  39   0   262     41   0.54  26.3   164 12.1  9.3    75      9      4
+ 8  39   0   241     40   0.26  26.0   148 13.6  9.7    81      7      3
+ 9  39   0   271     77   1.26  26.2   162 14.7  9.9    85      9      4
+10  39   2   310    214   4.62  30.5   179 15.9 10.2    89     16      6
+11  37   8   495    338   5.62  49.7   279 17.6 10.5    95     17      5
+12  29   9   469    333   5.03  51.1   366 20.2 10.6   105     17      7
+13  20   1   405    212   1.95  51.2   486 22.9 11.6   116     18      7
+14  19   3   442    302   3.32  52.5   523 25.0 12.0   122     18      8
+15  16   1   371    261   2.56  49.3   572 27.1 12.1   128     23      9
+Tod durch: [["schuetze",5],["golem+schuetze",4],["golem",3],["glutgeist+golem+schuetze",2],["glutgeist+skelett+sporling",2],["mutter+sporling",2],["golem+schuetze+skelett*+sporling",1],["golem+schuetze+skelett",1]]
+
+=== Zusammenfassung (SEEDS=1, BUILD=pirscher) ===
+max waldlaeufer Siege 15/40  Median 13  Seelen/Lauf 1313  Gaben 17.0  Ränge 2.9  Stufe RangII 10.2 RangIII 9.0  Restpunkt 0 %  Fähigkeiten/Lauf 279.1 / 84.4 / 11.7  Ressource vor Tod 1.9
+
+Neue Zauber je Lauf:
+max waldlaeufer  rauchbombe 14.7
+
+Knoten (Anteil der Läufe):
+max waldlaeufer  n0_1 93%  n0_2a 93%  n2_1 100%  n2_2a 100%  n2_2b 98%  n2_3 100%  n2_4a 50%  n2_4b 50%  n2_5 100%
+
+=== max waldlaeufer: Median Ebene 15, Siege 19/40, Big hits(>=50%maxHP) 0, One-shots from full 0
+Gold verdient 1154/Lauf, ausgegeben 625, Tränke gekauft 7.7, gefunden 33.2, Bomben gekauft 0.0, Gold übrig bei Sieg 958, Tode mit Boss in Sicht 3
+Eb  n  Tod  Züge  HPverl  Tränke Kills  Gold  Lvl  Atk  MaxHP  maxHit  medHit
+ 1  40   0   261      4   0.00  23.3    45  1.0  6.0    32      6      3
+ 2  40   0   250      6   0.00  22.8    53  3.7  7.4    42      7      5
+ 3  40   0   254     21   0.03  22.2    69  5.6  8.0    49      6      3
+ 4  40   1   261     34   0.40  21.9    94  7.3  8.4    56      8      2
+ 5  39   2   292     79   2.03  25.7    93  8.8  8.8    61     10      5
+ 6  37   0   232     39   0.59  24.9   151 10.5  9.5    67      9      4
+ 7  37   0   219     45   0.78  24.5   162 12.0  9.8    73      8      4
+ 8  37   0   265     39   0.27  26.8   131 13.1  9.9    77      9      4
+ 9  37   1   269     89   1.73  25.7   103 14.4 10.4    82     11      5
+10  36   3   292    210   5.08  30.6   133 15.6 10.5    86     18      8
+11  33   7   425    283   5.39  46.2   237 17.3 10.8    92     18      6
+12  26   3   491    281   3.50  54.1   248 19.8 11.3   101     18      7
+13  23   1   455    227   1.83  54.0   372 22.6 11.8   111     18      7
+14  22   1   448    251   2.41  53.8   505 24.6 12.5   118     19      8
+15  21   2   443    505   7.57  52.5   638 26.7 12.8   126     25      9
+Tod durch: [["schuetze+skelett",3],["golem+schuetze",2],["other",2],["glutgeist+golem",2],["mutter+sporling",2],["skelett",2],["glutgeist+schuetze+skelett+sporling",1],["brand",1]]
+
+=== Zusammenfassung (SEEDS=2, BUILD=pirscher) ===
+max waldlaeufer Siege 19/40  Median 15  Seelen/Lauf 1324  Gaben 16.7  Ränge 2.8  Stufe RangII 9.7 RangIII 9.0  Restpunkt 0 %  Fähigkeiten/Lauf 279.7 / 83.2 / 13.1  Ressource vor Tod 2.3
+
+Neue Zauber je Lauf:
+max waldlaeufer  rauchbombe 13.8
+
+Knoten (Anteil der Läufe):
+max waldlaeufer  n0_1 80%  n0_2a 80%  n2_1 100%  n2_2a 100%  n2_2b 93%  n2_3 100%  n2_4a 50%  n2_4b 45%  n2_5 93%

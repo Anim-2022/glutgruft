@@ -1,0 +1,50 @@
+=== neu waldlaeufer: Median Ebene 9, Siege 4/80, Big hits(>=50%maxHP) 0, One-shots from full 0
+Gold verdient 480/Lauf, ausgegeben 261, Tränke gekauft 3.6, gefunden 18.7, Bomben gekauft 0.0, Gold übrig bei Sieg 651, Tode mit Boss in Sicht 21
+Eb  n  Tod  Züge  HPverl  Tränke Kills  Gold  Lvl  Atk  MaxHP  maxHit  medHit
+ 1  80   3   280      9   0.16  22.5     0  1.0  4.0    22      6      4
+ 2  77   4   259     15   0.34  21.8    22  3.7  4.7    31      7      4
+ 3  73   4   280     45   1.26  22.1    37  5.5  5.3    38      7      3
+ 4  69   3   290     53   1.32  22.8    57  7.3  5.8    44      8      2
+ 5  66  18   299    133   5.33  25.2    76  8.8  6.2    50     11      5
+ 6  48   2   230     68   1.79  23.5   134 10.5  6.7    57      9      4
+ 7  46   4   231     77   1.52  23.9   149 12.0  7.0    62     10      4
+ 8  42   2   242     72   0.98  25.3   153 13.3  7.3    67      9      3
+ 9  40   1   252    121   1.95  23.9   135 14.5  7.5    71     12      5
+10  39  12   303    268   8.51  28.2   129 15.6  7.7    75     18      7
+11  27  14   370    433  11.30  38.1   217 17.4  7.7    82     18      5
+12  13   4   337    297   5.00  39.6   308 20.2  8.3    93     18      6
+13   9   1   392    303   3.44  49.6   324 22.3  9.3    98     18      7
+14   8   3   414    424   6.88  49.5   305 24.5 10.0   107     19      7
+15   5   1   359    270   2.60  44.8   381 27.2 10.0   114     23      8
+Tod durch: [["skelett",13],["koenig+skelett",10],["schuetze",8],["mutter+sporling",6],["golem+schuetze",4],["schuetze+sporling",4],["schuetze+skelett",4],["golem",3]]
+
+=== max waldlaeufer: Median Ebene 15, Siege 37/80, Big hits(>=50%maxHP) 0, One-shots from full 0
+Gold verdient 1319/Lauf, ausgegeben 675, Tränke gekauft 7.9, gefunden 34.0, Bomben gekauft 0.0, Gold übrig bei Sieg 1050, Tode mit Boss in Sicht 3
+Eb  n  Tod  Züge  HPverl  Tränke Kills  Gold  Lvl  Atk  MaxHP  maxHit  medHit
+ 1  80   0   249      4   0.00  22.4    45  1.0  6.0    32      6      4
+ 2  80   0   264      5   0.01  23.4    51  3.6  6.8    42      6      5
+ 3  80   1   248     24   0.24  22.0    61  5.5  7.5    50      8      3
+ 4  79   2   253     36   0.58  21.7    80  7.2  8.2    57      9      2
+ 5  77   1   272     68   1.66  24.5   102  8.7  8.8    62     11      5
+ 6  76   1   245     42   0.55  24.9   160 10.5  9.3    69      8      4
+ 7  75   1   245     38   0.31  25.5   144 11.9  9.6    74      9      4
+ 8  74   1   242     47   0.78  24.8   141 13.2  9.9    79      9      4
+ 9  73   2   277     72   1.05  26.6   138 14.3 10.2    83     10      5
+10  71   3   281    173   3.82  28.2   164 15.5 10.3    87     16      6
+11  68   8   478    382   6.65  53.8   263 17.3 10.7    94     17      6
+12  60   7   459    392   6.20  53.0   342 20.0 11.3   103     18      6
+13  53   4   440    295   3.04  53.8   416 22.5 11.9   112     20      7
+14  49   6   417    407   5.10  49.2   580 24.7 12.3   120     20      8
+15  43   6   430    432   5.28  51.8   698 26.7 12.7   128     24      9
+Tod durch: [["golem+schuetze",9],["schuetze",6],["schuetze+sporling",4],["other",4],["schuetze+skelett",2],["glutgeist",2],["schuetze+skelett+sporling",2],["glutgeist+golem+sporling",2]]
+
+=== Zusammenfassung (SEEDS=0, BUILD=heur) ===
+neu waldlaeufer Siege  4/80  Median  9  Seelen/Lauf 600  Gaben 9.3  Ränge 4.1  Stufe RangII 7.8 RangIII 10.1  Restpunkt 0 %  Fähigkeiten/Lauf 140.6 / 45.4 / 19.9  Ressource vor Tod 2.5
+max waldlaeufer Siege 37/80  Median 15  Seelen/Lauf 1480  Gaben 17.3  Ränge 2.8  Stufe RangII 9.8 RangIII 9.0  Restpunkt 0 %  Fähigkeiten/Lauf 308.1 / 92.4 / 30.9  Ressource vor Tod 2.9
+
+Neue Zauber je Lauf:
+max waldlaeufer  markieren 29.4  rauchbombe 4.5  fangnetz 1.8
+
+Knoten (Anteil der Läufe):
+neu waldlaeufer  n0_1 81%  n0_2a 81%  n0_4a 30%  n0_4b 33%  n1_1 78%  n1_2a 78%  n1_4a 30%  n1_4b 28%  n2_1 70%  n2_2a 70%  n2_4a 29%  n2_4b 31%
+max waldlaeufer  n0_1 61%  n0_2a 61%  n0_2b 33%  n0_3 34%  n0_4a 18%  n0_4b 16%  n0_5 33%  n1_1 64%  n1_2a 64%  n1_2b 29%  n1_3 31%  n1_4a 15%  n1_4b 16%  n1_5 30%  n2_1 59%  n2_2a 59%  n2_2b 31%  n2_3 34%  n2_4a 15%  n2_4b 16%  n2_5 31%
