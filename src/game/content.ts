@@ -25,7 +25,7 @@ export const CLASSES: Record<ClassId, ClassDef> = {
   },
   magier: {
     id: 'magier', name: 'Magier', desc: 'Zerbrechlich, aber verheerend. Mana kehrt langsam von selbst zurück.',
-    hp: 18, atk: 3, def: 0, resName: 'Mana', resMax: 12, resStart: 12, resCol: '#41a6f6', range: 3, shot: 'Funke',
+    hp: 22, atk: 3, def: 1, resName: 'Mana', resMax: 12, resStart: 12, resCol: '#41a6f6', range: 3, shot: 'Funke',
     skills: [
       { name: 'Feuerball', cost: 6, desc: 'Explosion + Brand' },
       { name: 'Frostnova', cost: 6, desc: 'Friert Gegner in der Nähe ein' },

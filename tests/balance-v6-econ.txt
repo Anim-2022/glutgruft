@@ -19,25 +19,25 @@ Eb  n  Tod  Züge  HPverl  Tränke Kills  Gold  Lvl  Atk  MaxHP  maxHit  medHit
 15  13   2   373    609   5.92  55.0   433 26.7 10.8   122     21      5
 Tod durch: [["schuetze",26],["schuetze+skelett",11],["schuetze+sporling",5],["skelett",4],["sporling",3],["fledermaus",2],["skelett+sporling",2],["glutgeist+schuetze",2]]
 
-=== neu magier: Median Ebene 6, Siege 8/80, Big hits(>=50%maxHP) 0, One-shots from full 0
-Gold verdient 438/Lauf, ausgegeben 232, Tränke gekauft 3.1, gefunden 13.8, Bomben gekauft 0.0, Gold übrig bei Sieg 728, Tode mit Boss in Sicht 4
+=== neu magier: Median Ebene 11, Siege 13/80, Big hits(>=50%maxHP) 0, One-shots from full 0
+Gold verdient 746/Lauf, ausgegeben 441, Tränke gekauft 5.3, gefunden 20.0, Bomben gekauft 0.0, Gold übrig bei Sieg 816, Tode mit Boss in Sicht 5
 Eb  n  Tod  Züge  HPverl  Tränke Kills  Gold  Lvl  Atk  MaxHP  maxHit  medHit
- 1  80   7   266     13   0.59  21.4     0  1.0  3.0    18      7      5
- 2  73   5   282     19   0.95  22.2    22  3.7  3.7    27      9      6
- 3  68  15   279     56   2.40  21.6    45  5.5  4.4    33      8      3
- 4  53   8   285     61   2.09  22.4    56  7.4  5.3    40      9      3
- 5  45   3   281     77   1.98  24.4    69  9.2  5.6    47     12      4
- 6  42   7   224     95   2.71  23.5   130 10.9  6.2    54      9      5
- 7  35   4   255    105   2.31  25.4   150 12.2  6.5    58     10      5
- 8  31   2   266    109   2.13  26.1   123 13.6  6.9    63     10      5
- 9  29   2   284    151   3.17  25.3   146 14.8  7.0    66     11      6
-10  27   4   277    197   4.30  29.3   161 16.0  7.2    71     17      7
-11  23   8   386    365   7.74  41.9   263 17.8  7.6    77     17      7
-12  15   4   408    293   4.00  46.5   350 20.5  8.0    85     19      7
-13  11   1   565    329   3.45  61.1   357 23.0  8.3    93     19      8
-14  10   1   504    299   3.00  58.6   388 25.7  8.5   103     21      8
-15   9   1   467    320   2.56  58.3   459 27.9  8.6   110     27      9
-Tod durch: [["schuetze",19],["skelett",16],["schuetze+skelett",9],["schuetze+sporling",3],["skelett*",2],["glutgeist+golem+schuetze+sporling",2],["other",2],["koenig+skelett",2]]
+ 1  80   2   290     11   0.24  22.8     0  1.0  3.0    22      6      4
+ 2  78   2   300     16   0.49  23.6    22  3.7  3.8    31      8      5
+ 3  76   3   318     49   1.67  24.2    43  5.6  4.5    38      7      2
+ 4  73   1   292     49   1.49  23.1    60  7.4  5.2    45      7      2
+ 5  72   3   311     72   2.10  25.4    66  9.0  5.7    51     11      3
+ 6  69   6   278     84   2.19  26.1   131 10.8  6.0    57      8      4
+ 7  63   1   264     93   2.13  26.3   144 12.3  6.3    62     10      4
+ 8  62   1   276     94   2.00  27.0   145 13.7  6.6    67     10      4
+ 9  61  10   272    120   2.41  25.6   121 14.9  7.0    71     11      5
+10  51   6   298    173   3.78  29.1   133 16.1  7.2    75     16      6
+11  45  18   386    382   8.20  42.9   228 17.7  7.6    80     17      7
+12  27   7   381    366   6.30  43.4   317 20.6  8.2    91     18      7
+13  20   4   425    356   4.10  48.9   288 22.9  9.1   100     19      7
+14  16   1   460    340   3.63  54.6   301 25.1  9.8   108     18      7
+15  15   2   471    466   6.00  58.3   502 27.3 10.3   113     24      9
+Tod durch: [["schuetze",18],["skelett",7],["schuetze+sporling",5],["schuetze+skelett",5],["golem",5],["glutgeist+golem+schuetze+skelett",3],["mutter+sporling",3],["other",3]]
 
 === neu waldlaeufer: Median Ebene 6, Siege 6/80, Big hits(>=50%maxHP) 0, One-shots from full 0
 Gold verdient 482/Lauf, ausgegeben 257, Tränke gekauft 3.3, gefunden 14.1, Bomben gekauft 0.0, Gold übrig bei Sieg 602, Tode mit Boss in Sicht 24
@@ -79,25 +79,25 @@ Eb  n  Tod  Züge  HPverl  Tränke Kills  Gold  Lvl  Atk  MaxHP  maxHit  medHit
 15  30   4   271    471   4.40  44.3   471 26.8 12.4   131     23      7
 Tod durch: [["schuetze",14],["golem+schuetze",5],["golem",4],["schuetze+sporling",4],["schuetze+skelett",4],["skelett+sporling",3],["skelett",3],["schuetze+skelett+sporling",3]]
 
-=== max magier: Median Ebene 11, Siege 9/80, Big hits(>=50%maxHP) 0, One-shots from full 0
-Gold verdient 633/Lauf, ausgegeben 417, Tränke gekauft 5.8, gefunden 18.3, Bomben gekauft 0.0, Gold übrig bei Sieg 377, Tode mit Boss in Sicht 4
+=== max magier: Median Ebene 11, Siege 18/80, Big hits(>=50%maxHP) 0, One-shots from full 0
+Gold verdient 908/Lauf, ausgegeben 549, Tränke gekauft 6.8, gefunden 23.3, Bomben gekauft 0.0, Gold übrig bei Sieg 817, Tode mit Boss in Sicht 3
 Eb  n  Tod  Züge  HPverl  Tränke Kills  Gold  Lvl  Atk  MaxHP  maxHit  medHit
- 1  80   0   279     13   0.19  22.8    45  1.0  3.0    28      7      5
- 2  80   1   284     18   0.47  22.5    52  3.7  3.9    38      9      5
- 3  79   2   300     66   2.19  23.3    63  5.5  4.5    44      8      3
- 4  77   6   302     65   1.65  23.8    73  7.4  5.0    51      9      3
- 5  71   4   296     77   1.80  23.7    86  9.0  5.5    57     11      4
- 6  67   2   267    112   2.49  26.7   137 10.7  5.9    64      9      5
- 7  65   4   261    111   2.40  25.8   137 12.1  6.1    69     11      5
- 8  61   3   262    123   2.33  26.3   123 13.5  6.4    74     10      4
- 9  58  10   249    150   2.90  24.6   124 14.7  6.6    78     11      6
-10  48   5   272    211   4.75  28.3   118 15.9  7.0    83     17      7
-11  43  19   368    442   8.56  41.9   219 17.6  7.3    88     18      7
-12  24   9   339    351   4.42  42.8   309 20.4  8.3    96     19      8
-13  14   1   502    578   7.21  55.1   242 22.7  8.6   103     19      7
-14  13   3   391    406   3.92  47.1   312 24.9  8.6   110     19      9
-15  10   1   397    539   5.70  51.7   161 27.1  8.7   117     24      9
-Tod durch: [["schuetze",19],["skelett",10],["golem",5],["sporling",5],["schuetze+skelett",3],["schuetze+sporling",3],["glutgeist+schuetze",3],["koenig+skelett",2]]
+ 1  80   0   278     10   0.03  22.7    45  1.0  3.0    32      6      4
+ 2  80   0   294     15   0.29  23.1    51  3.7  3.8    42      8      4
+ 3  80   0   314     52   1.26  24.2    60  5.5  4.4    49      7      2
+ 4  80   3   328     70   1.70  24.5    84  7.4  5.0    55      8      2
+ 5  77   1   309     76   1.61  24.8    96  9.0  5.2    61     11      3
+ 6  76   3   268    101   2.05  26.2   152 10.8  5.8    67      8      4
+ 7  73   3   239     98   1.88  25.1   133 12.2  6.1    72     11      4
+ 8  70   2   248    111   2.10  25.0   126 13.6  6.5    77      9      4
+ 9  68   3   276    175   3.41  26.1   128 14.6  6.8    81     10      5
+10  65   8   282    222   4.57  29.3   123 15.8  6.9    85     16      7
+11  57  20   427    519   8.93  47.4   230 17.6  7.2    92     18      7
+12  36   8   455    522   7.67  52.6   314 20.4  7.7   101     19      8
+13  28   5   441    427   4.64  53.1   320 23.1  8.2   110     17      7
+14  23   3   446    447   4.30  54.0   422 25.3  8.5   119     21      8
+15  20   2   427    480   5.05  51.7   526 27.4  8.8   125     26      8
+Tod durch: [["schuetze",14],["golem+schuetze",8],["schuetze+sporling",4],["sporling",4],["golem",3],["golem+skelett",3],["golem+sporling",3],["golem+schuetze+sporling",2]]
 
 === max waldlaeufer: Median Ebene 13, Siege 26/80, Big hits(>=50%maxHP) 0, One-shots from full 0
 Gold verdient 1130/Lauf, ausgegeben 722, Tränke gekauft 7.7, gefunden 24.3, Bomben gekauft 0.0, Gold übrig bei Sieg 744, Tode mit Boss in Sicht 4
@@ -121,21 +121,21 @@ Tod durch: [["schuetze",10],["skelett",5],["sporling",5],["golem+schuetze",5],["
 
 === Zusammenfassung (SEEDS=0, BUILD=heur) ===
 neu krieger     Siege 11/80  Median  9  Seelen/Lauf 384  Gaben 11.0  Ränge 4.6  Stufe RangII 8.0 RangIII 10.3  Restpunkt 0 %  Fähigkeiten/Lauf 210.8 / 18.7 / 59.2  Ressource vor Tod 11.3
-neu magier      Siege  8/80  Median  6  Seelen/Lauf 279  Gaben 8.3  Ränge 3.5  Stufe RangII 7.2 RangIII 10.0  Restpunkt 0 %  Fähigkeiten/Lauf 89.2 / 23.9 / 49.4  Ressource vor Tod 2.4
+neu magier      Siege 13/80  Median 11  Seelen/Lauf 436  Gaben 12.3  Ränge 4.9  Stufe RangII 8.5 RangIII 11.0  Restpunkt 0 %  Fähigkeiten/Lauf 133.8 / 35.5 / 77.3  Ressource vor Tod 1.9
 neu waldlaeufer Siege  6/80  Median  6  Seelen/Lauf 295  Gaben 8.8  Ränge 3.8  Stufe RangII 7.5 RangIII 9.6  Restpunkt 0 %  Fähigkeiten/Lauf 136.8 / 41.1 / 17.9  Ressource vor Tod 2.3
 max krieger     Siege 26/80  Median 13  Seelen/Lauf 588  Gaben 15.7  Ränge 2.8  Stufe RangII 9.5 RangIII 9.0  Restpunkt 0 %  Fähigkeiten/Lauf 240.4 / 17.9 / 77.5  Ressource vor Tod 8.0
-max magier      Siege  9/80  Median 11  Seelen/Lauf 407  Gaben 11.7  Ränge 2.4  Stufe RangII 7.9 RangIII 9.0  Restpunkt 0 %  Fähigkeiten/Lauf 101.7 / 23.0 / 40.1  Ressource vor Tod 2.4
+max magier      Siege 18/80  Median 11  Seelen/Lauf 530  Gaben 14.3  Ränge 2.6  Stufe RangII 9.2 RangIII 9.0  Restpunkt 0 %  Fähigkeiten/Lauf 122.6 / 29.0 / 51.5  Ressource vor Tod 1.9
 max waldlaeufer Siege 26/80  Median 13  Seelen/Lauf 607  Gaben 15.8  Ränge 2.8  Stufe RangII 9.6 RangIII 9.0  Restpunkt 0 %  Fähigkeiten/Lauf 293.7 / 84.8 / 29.8  Ressource vor Tod 3.1
 
 Neue Zauber je Lauf:
 max krieger      schildwurf 35.2  herausforderung 41.2  sturmangriff 35.8
-max magier       flammenwand 6.7  arkanschild 33.9  eislanze 27.8
+max magier       flammenwand 10.7  arkanschild 41.8  eislanze 40.2
 max waldlaeufer  markieren 26.8  rauchbombe 5.5  fangnetz 1.9
 
 Knoten (Anteil der Läufe):
 neu krieger      n0_1 91%  n0_2a 91%  n0_4a 36%  n0_4b 40%  n1_1 81%  n1_2a 81%  n1_4a 28%  n1_4b 36%  n2_1 76%  n2_2a 76%  n2_4a 34%  n2_4b 39%
-neu magier       n0_1 58%  n0_2a 58%  n0_4a 25%  n0_4b 24%  n1_1 63%  n1_2a 63%  n1_4a 33%  n1_4b 23%  n2_1 70%  n2_2a 70%  n2_4a 26%  n2_4b 26%
+neu magier       n0_1 88%  n0_2a 88%  n0_4a 41%  n0_4b 36%  n1_1 86%  n1_2a 86%  n1_4a 39%  n1_4b 35%  n2_1 89%  n2_2a 89%  n2_4a 41%  n2_4b 38%
 neu waldlaeufer  n0_1 74%  n0_2a 74%  n0_4a 29%  n0_4b 31%  n1_1 74%  n1_2a 74%  n1_4a 26%  n1_4b 25%  n2_1 68%  n2_2a 68%  n2_4a 24%  n2_4b 30%
 max krieger      n0_1 59%  n0_2a 59%  n0_2b 33%  n0_3 34%  n0_4a 18%  n0_4b 16%  n0_5 34%  n1_1 60%  n1_2a 60%  n1_2b 30%  n1_3 33%  n1_4a 16%  n1_4b 16%  n1_5 33%  n2_1 58%  n2_2a 58%  n2_2b 31%  n2_3 34%  n2_4a 15%  n2_4b 18%  n2_5 31%
-max magier       n0_1 53%  n0_2a 53%  n0_2b 26%  n0_3 34%  n0_4a 16%  n0_4b 16%  n0_5 33%  n1_1 51%  n1_2a 51%  n1_2b 21%  n1_3 31%  n1_4a 13%  n1_4b 13%  n1_5 23%  n2_1 45%  n2_2a 45%  n2_2b 24%  n2_3 34%  n2_4a 15%  n2_4b 15%  n2_5 29%
+max magier       n0_1 60%  n0_2a 60%  n0_2b 31%  n0_3 34%  n0_4a 18%  n0_4b 16%  n0_5 34%  n1_1 58%  n1_2a 58%  n1_2b 25%  n1_3 33%  n1_4a 15%  n1_4b 16%  n1_5 29%  n2_1 53%  n2_2a 53%  n2_2b 28%  n2_3 34%  n2_4a 16%  n2_4b 14%  n2_5 29%
 max waldlaeufer  n0_1 59%  n0_2a 59%  n0_2b 33%  n0_3 34%  n0_4a 18%  n0_4b 16%  n0_5 33%  n1_1 60%  n1_2a 60%  n1_2b 31%  n1_3 33%  n1_4a 16%  n1_4b 16%  n1_5 31%  n2_1 60%  n2_2a 60%  n2_2b 29%  n2_3 34%  n2_4a 15%  n2_4b 16%  n2_5 31%
