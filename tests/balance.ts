@@ -2,9 +2,10 @@
 // Umgebung: N (Seeds je Zelle, 40), SEEDS=0,1,2 (Sätze), BUILD=heur,eis,eis-nokey (Varianten; -nokey ohne T5),
 // Stellschrauben je Variante: BUILD=heur:treePtsMax=6:kryoRegen=0.75 (siehe TUNE in content.ts)
 // CLASS=magier (CLS geht auch), META=neu|max, PAR (Prozesse, Vorgabe Kerne − 1; 1 = alles hier nacheinander)
+// HAZARDS=on|off, MIMICS=on|off (neue Systeme; alle aus = Bit für Bit wie vorher), ECON=1 (Wirtschaftszeile auch ohne sie)
 import { defaultMeta } from '../src/core/save';
 import { newRun, act, Run, playerAtk, spellAt } from '../src/game/run';
-import { CLASS_ORDER, MOBS, treeNodes, ClassId, TUNE } from '../src/game/content';
+import { CLASS_ORDER, MOBS, treeNodes, ClassId, TUNE, FEATURES } from '../src/game/content';
 import { botAction, setBuild, Build } from './bot';
 
 type Proc = { env: Record<string, string | undefined>; argv: string[]; execPath: string; stdout: { write(s: string): void }; getBuiltinModule(n: string): unknown };
@@ -23,6 +24,10 @@ type Cell = { variant: string; set: number; mname: string; cls: ClassId };
 type Result = { out: string[]; sum: string; su: Record<string, number>; freq: Record<string, number> };
 
 const TUNE0 = { ...TUNE };
+FEATURES.hazards = ENV.HAZARDS !== 'off';
+FEATURES.mimics = ENV.MIMICS !== 'off';
+const EXTRA = FEATURES.hazards || FEATURES.mimics || ENV.ECON === '1';
+
 function runCell({ variant: full, set, mname, cls }: Cell): Result {
   const [variant, ...tunes] = full.split(':');
   Object.assign(TUNE, TUNE0);
@@ -41,6 +46,7 @@ function runCell({ variant: full, set, mname, cls }: Cell): Result {
     const uses = [0, 0, 0], resEnd: number[] = []; let souls = 0, gaben = 0, ranks = 0, rest = 0, ptsAll = 0; const rankLvl: number[][] = [[], []];
     const freq: Record<string, number> = {};
     let goldTotal = 0, goldSpent = 0, potBought = 0, potFound = 0, bombBought = 0, goldLeft = 0, bossDeaths = 0;
+    const tele: Record<string, number> = {}, rar = [0, 0, 0, 0]; let relics = 0, items = 0, cons = 0;
     for (let s = 1; s <= N; s++) {
       const run = newRun(s * 7919 + 13 + set * 1000003, cls, meta);
       if (drop.length) run.pool = run.pool.filter(id => !drop.some(d => id === d || id.endsWith(`_${d}`)));
@@ -55,6 +61,7 @@ function runCell({ variant: full, set, mname, cls }: Cell): Result {
         run.fx = [];
         const sk0 = run.p.skillLvl.slice(), res0 = run.p.res;
         act(run, a);
+        for (const fx of run.fx) if (fx.k === 'loot') { if (fx.item.use) cons++; else { items++; rar[fx.item.rar]++; } }
         run.p.skillLvl.forEach((v, k) => { if (v > sk0[k]) rankLvl[v - 1].push(run.p.lvl); });
         if (a.t === 'skill' && a.i < 3 && run.turn > t0) uses[a.i]++;
         if (a.t === 'skill' && a.i >= 3 && run.turn > t0) { const id = spellAt(run.p, a.i)!; su[id] = (su[id] ?? 0) + 1; }
@@ -83,6 +90,8 @@ function runCell({ variant: full, set, mname, cls }: Cell): Result {
         }
       }
       if (run.mode === 'win') { wins++; goldLeft += run.p.gold; }
+      for (const [k, v] of Object.entries(run.tele ?? {})) tele[k] = (tele[k] ?? 0) + v;
+      relics += run.p.relics.length;
       souls += run.souls; gaben += run.p.perks.length; ranks += run.p.skillLvl.reduce((x, y) => x + y, 0);
       rest += run.p.rest; ptsAll += run.p.tree.length + run.p.pts + run.p.rest;
       for (const id of run.p.tree) freq[id] = (freq[id] ?? 0) + 1;
@@ -91,6 +100,11 @@ function runCell({ variant: full, set, mname, cls }: Cell): Result {
     finalF.sort((a, b) => a - b);
     out.push(`\n=== ${mname} ${cls}: Median Ebene ${finalF[N >> 1]}, Siege ${wins}/${N}, Big hits(>=50%maxHP) ${bigHits}, One-shots from full ${oneShots}`);
     out.push(`Gold verdient ${(goldTotal/N).toFixed(0)}/Lauf, ausgegeben ${(goldSpent/N).toFixed(0)}, Tränke gekauft ${(potBought/N).toFixed(1)}, gefunden ${(potFound/N).toFixed(1)}, Bomben gekauft ${(bombBought/N).toFixed(1)}, Gold übrig bei Sieg ${wins ? (goldLeft/wins).toFixed(0) : '-'}, Tode mit Boss in Sicht ${bossDeaths}`);
+    if (EXTRA) {
+      const t = (k: string) => ((tele[k] ?? 0) / N).toFixed(2);
+      out.push(`Wirtschaft/Lauf: Reliquien ${(relics / N).toFixed(2)}, Gegenstände ${(items / N).toFixed(1)} (Seltenheit ${rar.map(r => (r / N).toFixed(1)).join('/')}), Verbrauchsgüter ${(cons / N).toFixed(1)}, Seelen ${(souls / N).toFixed(0)}`);
+      out.push(`Fallen/Lauf: ausgelöst ${t('trapHit')}, Schaden ${t('trapDmg')}, von Gegnern ${t('trapMob')}, entdeckt ${t('trapSpot')} · Mimiks/Lauf: getroffen ${t('mimicMet')}, besiegt ${t('mimicKilled')}, Seltenheit+1 ${t('mimicRarUp')}`);
+    }
     out.push('Eb  n  Tod  Züge  HPverl  Tränke Kills  Gold  Lvl  Atk  MaxHP  maxHit  medHit');
     for (const f of Object.keys(fl).map(Number).sort((a, b) => a - b)) {
       const x = fl[f]; const d = x.dmgTaken.sort((a,b)=>a-b);
