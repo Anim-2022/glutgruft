@@ -176,9 +176,9 @@ export const TUNE = { treePtsMax: 6, kryoMana: 2, kryoRegen: 0.75, kCost: 0 };
 export const FEATURES = { hazards: true, mimics: true, events: true, eventRate: 1, eventForce: '' };
 // Ereignisse: Ruhe-Auslöser, Zweitereignis bei Rate 1, Obergrenze zusätzlicher Reliquienwahlen je Lauf,
 // Schattenzwilling als Anteil der Heldenwerte (nur Grundangriff)
-export const EVENT = { calmMin: 25, calmMax: 40, calmChance: 0.15, second: 0.45, relicCap: 2, relicChance: 0.25,
+export const EVENT = { calmMin: 25, calmMax: 40, calmChance: 0.15, second: 0.45, relicCap: 2, relicChance: 0.2,
   // Lohnstufen (nach dem ersten Messlauf deutlich gesenkt: mit Ereignissen stiegen Siege und Gold zu stark)
-  gold1: 3, potion1: 0.3, souls2: 5, item2: 0.35, gold3: 4, souls3: 8, twinHp: 0.55, twinAtk: 0.65, noteChance: 0.3 };
+  mobXp: 0.35, gold1: 3, potion1: 0.3, souls2: 5, item2: 0.25, cons2: 1, item3: 0.5, gold3: 4, souls3: 8, twinHp: 0.55, twinAtk: 0.65, noteChance: 0.3 };
 // Versteckte Bodenfallen und Mimiks
 export const HAZARD = { minFloor: 2, spot: 0.35, spotSicht: 0.1, mimic: 0.12, mimicRarUp: 0.25 };
 // Texte der Knoten T2a, T2b, T3, T5

@@ -1012,7 +1012,8 @@ function evApi(run: Run): EvApi {
     chance: x => rng.chance(x), int: (a, b) => rng.int(a, b),
     say: s => say(run, s),
     table: () => spawnTable(run.floor),
-    spawn(e, kind, x, y) { const m = spawnMob(run, kind, x, y); m.awake = true; m.ev = true; e.mobs.push(m.id); e.total++; return m; },
+    // Ereignisgegner geben weniger Erfahrung (und damit Gold und Seelen) – sonst wird der Held durch Ereignisse zu schnell stark
+    spawn(e, kind, x, y) { const m = spawnMob(run, kind, x, y); m.awake = true; m.ev = true; m.xp = Math.max(1, Math.round(m.xp * EVENT.mobXp)); e.mobs.push(m.id); e.total++; return m; },
     alive: e => run.mobs.filter(m => e.mobs.includes(m.id) && m.hp > 0),
     vanish(e) {
       for (const m of api.alive(e)) run.fx.push({ k: 'num', x: m.x, y: m.y, s: 'puff', col: '#94b0c2' });
@@ -1082,7 +1083,7 @@ function evApi(run: Run): EvApi {
       m.maxHp = m.hp = Math.max(6, Math.round(p.maxHp * EVENT.twinHp));
       m.atk = Math.max(2, Math.round(playerAtk(p) * EVENT.twinAtk * (CLASSES[p.cls].range ? 0.8 : 1)));
       m.def = Math.floor(p.def / 2);
-      m.xp = 10 + 2 * run.floor;
+      m.xp = Math.round((10 + 2 * run.floor) * EVENT.mobXp);
       return m;
     },
   };
@@ -1100,6 +1101,7 @@ function evReward(run: Run, tier: number): string {
   if (tier === 2) {
     const s = a.souls(R.souls2);
     if (rng.chance(R.item2)) { const it = genItem(run); takeItem(run, it, 'Lohn'); tele(run, 'evItems'); return `${it.name}, ${s} Seelen`; }
+    if (!rng.chance(R.cons2)) return `${s} Seelen`;
     if (rng.chance(0.5)) { p.potions++; return `ein Heiltrank, ${s} Seelen`; }
     p.bombs++; return `eine Bombe, ${s} Seelen`;
   }
@@ -1111,6 +1113,7 @@ function evReward(run: Run, tier: number): string {
     run.mode = 'perk';
     return 'Wahl einer Reliquie';
   }
+  if (!rng.chance(R.item3)) return `${a.gold(2 * (R.gold3 + run.floor))} Gold, ${a.souls(R.souls3)} Seelen`;
   const it = genItem(run, false, 1);
   takeItem(run, it, 'Lohn'); tele(run, 'evItems');
   return `${it.name}, ${a.gold(R.gold3 + run.floor)} Gold, ${a.souls(R.souls3)} Seelen`;
