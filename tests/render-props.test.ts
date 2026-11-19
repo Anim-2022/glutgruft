@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { RNG } from '../src/core/rng';
 import { genDungeon, W, H, T, wallLike, walkable } from '../src/game/dungeon';
-import { propAt, SPACING } from '../src/render/props';
+import { propAt, SPACING, torchSpots, TORCH_GAP } from '../src/render/props';
 
 // Dekor ist reine Darstellung: fest am Feld, nur auf Wandfront oder freiem Boden, nie in einem Gang
 describe('Dekor je Biom', () => {
@@ -34,6 +34,16 @@ describe('Dekor je Biom', () => {
       for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) if (propAt(tiles, seed, x, y)) spots.push([x, y]);
       for (const [ax, ay] of spots) for (const [bx, by] of spots) if (ax !== bx || ay !== by) expect(Math.max(Math.abs(ax - bx), Math.abs(ay - by))).toBeGreaterThan(SPACING);
       expect(tiles).toEqual(before);
+    }
+  });
+
+  it('Fackeln stehen nie dicht beieinander und nur auf Wandfronten', () => {
+    for (const style of [0, 1, 2]) for (let seed = 1; seed <= 6; seed++) {
+      const { tiles } = genDungeon(new RNG(seed * 31 + style), style);
+      const t = torchSpots(tiles, seed);
+      expect(t.length).toBeGreaterThan(2);
+      for (const i of t) { expect(tiles[i]).toBe(T.WALL); expect(walkable(tiles[i + W])).toBe(true); }
+      for (const a of t) for (const b of t) if (a !== b) expect(Math.max(Math.abs((a % W) - (b % W)), Math.abs(((a / W) | 0) - ((b / W) | 0)))).toBeGreaterThan(TORCH_GAP);
     }
   });
 });

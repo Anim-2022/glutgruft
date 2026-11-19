@@ -4,7 +4,7 @@ export const VW = 640, VH = 360, TS = 16;
 import { PAL, SPR, ACTORS, NO_OUTLINE, VIEWS, FLOATERS, WEAPON_ART, WeaponArt, DECALS } from './sprites';
 import { tr } from '../core/i18n';
 import { poseFrames } from './poses';
-import { floorMacro, capBase, capEdges, capTiles, plinth, grassBed, scorchTiles } from './tiles';
+import { floorMacro, capBase, capEdges, capTiles, plinth, grassBed, scorchTiles, floorDecals } from './tiles';
 export { PAL };
 
 export const sprites: Record<string, HTMLCanvasElement> = {};
@@ -22,7 +22,7 @@ export function hex(col: string): [number, number, number] {
 }
 
 export interface TileSet {
-  floor: HTMLCanvasElement[]; floorX: HTMLCanvasElement[]; walls: HTMLCanvasElement[]; lava: HTMLCanvasElement[]; wall: HTMLCanvasElement; top: HTMLCanvasElement; cap: HTMLCanvasElement; hi: string; grass: HTMLCanvasElement[]; burnt: HTMLCanvasElement; decals: HTMLCanvasElement[];
+  floor: HTMLCanvasElement[]; floorX: HTMLCanvasElement[]; walls: HTMLCanvasElement[]; lava: HTMLCanvasElement[]; wall: HTMLCanvasElement; top: HTMLCanvasElement; cap: HTMLCanvasElement; hi: string; grass: HTMLCanvasElement[]; burnt: HTMLCanvasElement; decals: HTMLCanvasElement[][]; // Bodenspuren je Art, viele Spielarten
   floorM: HTMLCanvasElement[][]; // Bodenmuster 2×2: Spielart → vier Viertel
   caps: HTMLCanvasElement[]; capEdge: HTMLCanvasElement[]; // Mauerkrone und ihre Kanten je offene Seiten (Bit 1 oben, 2 links, 4 rechts)
   bed: HTMLCanvasElement; // Moosgrund unter Gras
@@ -203,14 +203,8 @@ export function bake(): void {
     bg.fillStyle = 'rgba(0,0,0,0.45)'; bg.fillRect(0, 0, TS, TS);
     bg.fillStyle = '#566c86';
     for (let i = 0; i < 5; i++) bg.fillRect((rnd() * 15) | 0, (rnd() * 15) | 0, 1, 1);
-    // Bodendekor: Knochen, Kiesel, Riss, Pfütze, biomtypischer Fleck
-    const decals: HTMLCanvasElement[] = [];
-    const decal = (f: (g: CanvasRenderingContext2D) => void) => { const [c, g] = mk(TS, TS); f(g); decals.push(c); };
-    decal(g => { g.fillStyle = '#c9d4dc'; g.fillRect(4, 9, 7, 1); g.fillRect(3, 8, 2, 3); g.fillRect(10, 8, 2, 3); g.fillStyle = '#94b0c2'; g.fillRect(5, 10, 5, 1); });
-    decal(g => { g.fillStyle = b.brick; g.fillRect(3, 5, 2, 2); g.fillRect(10, 9, 3, 2); g.fillRect(6, 12, 2, 1); g.fillStyle = b.hi; g.fillRect(3, 5, 2, 1); g.fillRect(10, 9, 3, 1); });
-    decal(g => { g.fillStyle = b.top; g.fillRect(4, 4, 1, 3); g.fillRect(5, 6, 3, 1); g.fillRect(7, 7, 1, 3); g.fillRect(8, 9, 3, 1); g.fillRect(10, 10, 1, 2); });
-    decal(g => { g.fillStyle = b.mortar; g.fillRect(4, 7, 8, 4); g.fillRect(5, 6, 6, 6); g.fillStyle = b.hi; g.fillRect(6, 7, 3, 1); });
-    decal(g => { g.fillStyle = b.g1; g.fillRect(2, 11, 4, 2); g.fillRect(10, 3, 3, 2); g.fillStyle = b.g2; g.fillRect(3, 11, 2, 1); g.fillRect(11, 3, 1, 1); });
+    // Bodenspuren: Risse, Kiesel, Knochen, Flecken, Biomflecken – je viele Spielarten, gedreht und gespiegelt
+    const decals = floorDecals(b, bi, rnd);
     // Phase 2: Spielarten von Wand und Boden, Lava im Fels der Glutschmiede
     const copy = (src: HTMLCanvasElement, f: (g: CanvasRenderingContext2D) => void) => { const [c, g] = mk(TS, TS); g.drawImage(src, 0, 0); f(g); return c; };
     const px = (g: CanvasRenderingContext2D, col: string, pts: number[][]) => { g.fillStyle = col; for (const [x, y, w = 1, h = 1] of pts) g.fillRect(x, y, w, h); };

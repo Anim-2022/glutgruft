@@ -13,10 +13,10 @@ const px = (g: CanvasRenderingContext2D, col: string, x: number, y: number, w = 
 // Rückgabe: je Spielart vier Viertel [oben-links, oben-rechts, unten-links, unten-rechts]
 export function floorMacro(b: BiomeCols, bi: number, rnd: () => number): HTMLCanvasElement[][] {
   const out: HTMLCanvasElement[][] = [];
-  for (let v = 0; v < 3; v++) {
+  for (let v = 0; v < MACRO_VARIANTS; v++) {
     const [c, g] = mk(32, 32);
     px(g, b.floor, 0, 0, 32, 32);
-    if (bi === 0) gruftFloor(g, b, v, rnd);
+    if (bi === 0) gruftFloor(g, b, v % SLABS.length, rnd);
     else if (bi === 1) caveFloor(g, b, rnd);
     else forgeFloor(g, b, v, rnd);
     const parts: HTMLCanvasElement[] = [];
@@ -31,7 +31,11 @@ const SLABS = [
   [[0, 0, 12, 10], [12, 0, 20, 10], [0, 10, 20, 12], [20, 10, 12, 12], [0, 22, 10, 10], [10, 22, 22, 10]],
   [[0, 0, 16, 16], [16, 0, 16, 8], [16, 8, 16, 8], [0, 16, 8, 16], [8, 16, 24, 16]],
   [[0, 0, 10, 14], [10, 0, 22, 6], [10, 6, 12, 8], [22, 6, 10, 8], [0, 14, 16, 18], [16, 14, 16, 18]],
+  [[0, 0, 32, 10], [0, 10, 14, 12], [14, 10, 18, 12], [0, 22, 20, 10], [20, 22, 12, 10]],
+  [[0, 0, 8, 8], [8, 0, 8, 8], [16, 0, 16, 16], [0, 8, 16, 8], [0, 16, 10, 16], [10, 16, 22, 8], [10, 24, 22, 8]],
+  [[0, 0, 20, 12], [20, 0, 12, 20], [0, 12, 10, 20], [10, 12, 10, 10], [10, 22, 10, 10], [20, 20, 12, 12]],
 ];
+const MACRO_VARIANTS = 6;
 function gruftFloor(g: CanvasRenderingContext2D, b: BiomeCols, v: number, rnd: () => number) {
   for (const [x, y, w, h] of SLABS[v]) {
     const t = rnd();
@@ -40,7 +44,12 @@ function gruftFloor(g: CanvasRenderingContext2D, b: BiomeCols, v: number, rnd: (
     px(g, b.speck, x, y, w - 1, 1); // Glanzkante oben
     for (let k = 0; k < (w * h) / 40; k++) px(g, b.speck, x + 1 + ((rnd() * (w - 3)) | 0), y + 2 + ((rnd() * (h - 4)) | 0));
     px(g, b.mortar, x + w - 1, y, 1, h); px(g, b.mortar, x, y + h - 1, w, 1); // Fugen rechts und unten
-    if (rnd() < 0.3) { const cx = x + 2 + ((rnd() * (w - 5)) | 0), cy = y + 2 + ((rnd() * (h - 5)) | 0); px(g, b.mortar, cx, cy, 2, 1); px(g, b.mortar, cx + 1, cy + 1, 1, 2); }
+    if (rnd() < 0.3) { // Sprung in der Platte: kurzer, zufällig laufender Riss
+      let cx = x + 2 + ((rnd() * (w - 5)) | 0), cy = y + 2 + ((rnd() * (h - 5)) | 0);
+      const dxs = rnd() < 0.5 ? 1 : -1;
+      for (let k = 2 + ((rnd() * 4) | 0); k > 0 && cx > x && cx < x + w - 1 && cy < y + h - 1; k--) { px(g, b.mortar, cx, cy); if (rnd() < 0.5) cx += dxs; else cy++; }
+    }
+    if (rnd() < 0.25) px(g, b.mortar, x + (rnd() < 0.5 ? 0 : w - 3), y + h - 3, 2, 2); // abgeschlagene Ecke
   }
 }
 
@@ -60,7 +69,7 @@ function caveFloor(g: CanvasRenderingContext2D, b: BiomeCols, rnd: () => number)
 
 // Schmiede: große Eisen- und Steinplatten (Grundrisse wie in der Gruft), Nieten nur an großen Platten, Ruß und Rost
 function forgeFloor(g: CanvasRenderingContext2D, b: BiomeCols, v: number, rnd: () => number) {
-  for (const [x, y, w, h] of SLABS[(v + 1) % SLABS.length]) {
+  for (const [x, y, w, h] of SLABS[(v + 2) % SLABS.length]) {
     if (rnd() < 0.45) { g.fillStyle = 'rgba(0,0,0,0.10)'; g.fillRect(x, y, w, h); }
     px(g, b.speck, x, y, w - 1, 1);
     px(g, b.mortar, x + w - 1, y, 1, h); px(g, b.mortar, x, y + h - 1, w, 1);
@@ -214,4 +223,71 @@ export function scorchTiles(rnd: () => number): { scorch: HTMLCanvasElement[]; c
     char.push(c);
   }
   return { scorch, core, char };
+}
+
+// ---- Bodenspuren: viele Spielarten je Art, jeweils gedreht und gespiegelt ----
+// Drehung (k × 90°) und Spiegelung eines 16×16-Bildes
+export function orient(src: HTMLCanvasElement, k: number, flip: boolean): HTMLCanvasElement {
+  const [c, g] = mk(TS, TS);
+  g.translate(TS / 2, TS / 2);
+  g.rotate((k * Math.PI) / 2);
+  if (flip) g.scale(-1, 1);
+  g.drawImage(src, -TS / 2, -TS / 2);
+  return c;
+}
+const all8 = (src: HTMLCanvasElement) => [0, 1, 2, 3].flatMap(k => [orient(src, k, false), orient(src, k, true)]);
+
+// Arten: 0 Riss, 1 Kiesel, 2 Knochen, 3 Fleck, 4 biomtypisch (Moos, Pilzrasen, Ruß)
+export function floorDecals(b: BiomeCols, bi: number, rnd: () => number): HTMLCanvasElement[][] {
+  const crack = () => {
+    const [c, g] = mk(TS, TS);
+    let x = 3 + ((rnd() * 4) | 0), y = 3 + ((rnd() * 4) | 0);
+    const len = 6 + ((rnd() * 6) | 0);
+    for (let s = 0; s < len; s++) {
+      px(g, b.top, x, y);
+      if (s === 3 && rnd() < 0.6) { let bx = x, by = y; for (let t = 0; t < 3; t++) { bx += rnd() < 0.5 ? 1 : 0; by += 1; px(g, b.top, bx, by); } }
+      if (rnd() < 0.55) x++; else y++;
+      if (x > 13 || y > 13) break;
+    }
+    px(g, b.speck, Math.min(14, x + 1), y); // heller Ausbruch an der Kante
+    return c;
+  };
+  const pebbles = () => {
+    const [c, g] = mk(TS, TS);
+    for (let k = 2 + ((rnd() * 3) | 0); k > 0; k--) {
+      const x = 2 + ((rnd() * 11) | 0), y = 2 + ((rnd() * 11) | 0), w = 1 + ((rnd() * 2) | 0);
+      px(g, b.brick, x, y, w, 1 + (w > 1 && rnd() < 0.5 ? 1 : 0)); px(g, b.hi, x, y); px(g, b.mortar, x, y + 1 + (w > 1 ? 1 : 0), w, 1);
+    }
+    return c;
+  };
+  const BONES = [
+    (g: CanvasRenderingContext2D) => { px(g, '#c9d4dc', 4, 8, 8, 1); px(g, '#c9d4dc', 3, 7, 2, 3); px(g, '#c9d4dc', 11, 7, 2, 3); px(g, '#94b0c2', 5, 9, 6, 1); },
+    (g: CanvasRenderingContext2D) => { for (let k = 0; k < 6; k++) { px(g, '#c9d4dc', 4 + k, 4 + k); px(g, '#c9d4dc', 10 - k, 4 + k); } px(g, '#94b0c2', 3, 3, 2, 2); px(g, '#94b0c2', 10, 3, 2, 2); px(g, '#94b0c2', 3, 10, 2, 2); px(g, '#94b0c2', 10, 10, 2, 2); },
+    (g: CanvasRenderingContext2D) => { px(g, '#c9d4dc', 6, 3, 1, 9); for (const y of [4, 6, 8, 10]) { px(g, '#c9d4dc', 3, y, 3, 1); px(g, '#c9d4dc', 7, y, 3, 1); px(g, '#94b0c2', 3, y + 1, 1, 1); px(g, '#94b0c2', 9, y + 1, 1, 1); } },
+    (g: CanvasRenderingContext2D) => { px(g, '#c9d4dc', 3, 10, 4, 1); px(g, '#94b0c2', 9, 5, 1, 4); px(g, '#c9d4dc', 10, 4, 1, 1); px(g, '#c9d4dc', 12, 11, 2, 1); },
+  ];
+  const stain = (col: string, hl: string | null) => {
+    const [c, g] = mk(TS, TS);
+    const cx = 5 + rnd() * 6, cy = 5 + rnd() * 6;
+    for (let k = 0; k < 3; k++) {
+      const ox = cx + (rnd() - 0.5) * 6, oy = cy + (rnd() - 0.5) * 5, rx = 1.5 + rnd() * 2.5, ry = 1 + rnd() * 2;
+      for (let y = 0; y < TS; y++) for (let x = 0; x < TS; x++) if (((x - ox) / rx) ** 2 + ((y - oy) / ry) ** 2 <= 1) px(g, col, x, y);
+    }
+    if (hl) px(g, hl, Math.round(cx) - 1, Math.round(cy) - 1, 2, 1);
+    return c;
+  };
+  const spot = [b.g1, b.g1, '#1c0f14'][bi], spot2 = [b.g2, b.g2, '#4a4d58'][bi];
+  return [
+    Array.from({ length: 5 }, crack).flatMap(all8),
+    Array.from({ length: 5 }, pebbles).flatMap(c => [c, orient(c, 0, true)]),
+    BONES.map(f => { const [c, g] = mk(TS, TS); f(g); return c; }).flatMap(all8),
+    Array.from({ length: 4 }, () => stain(b.mortar, b.hi)),
+    Array.from({ length: 4 }, () => { const c = stain(spot, null), g = c.getContext('2d')!; for (let k = 0; k < 3; k++) px(g, spot2, 4 + ((rnd() * 8) | 0), 4 + ((rnd() * 8) | 0)); return c; }),
+  ];
+}
+// Art nach Hash gewichtet: Risse häufig, Biomflecken selten; Knochen in der Gruft häufiger
+export function pickDecal(sets: HTMLCanvasElement[][], bi: number, h: number): HTMLCanvasElement {
+  const r = h % 20, cat = r < 7 ? 0 : r < 11 ? 1 : r < (bi === 0 ? 15 : 13) ? 2 : r < 17 ? 3 : 4;
+  const list = sets[cat];
+  return list[(h >>> 8) % list.length];
 }

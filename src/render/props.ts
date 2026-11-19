@@ -3,7 +3,7 @@
 //  - an der Wandfront (Ketten, Spinnweben, Banner, Wurzeln, Tropfsteine, Lüftungsgitter)
 //  - am Fuß einer Wand auf dem Boden (Kerzen, Knochen, Kristalle, Leuchtpilze, Barren, Kohle)
 //  - flach im Boden mitten im Raum (Grabplatte, Pfütze, Glutrost)
-import { W, H, T, wallLike, opaque } from '../game/dungeon';
+import { W, H, T, wallLike, opaque, walkable } from '../game/dungeon';
 import type { Light } from './light';
 
 const TS = 16;
@@ -23,114 +23,201 @@ function outline(c: HTMLCanvasElement) {
 }
 
 interface Prop { frames: HTMLCanvasElement[]; light?: (f: number) => Omit<Light, 'x' | 'y'>; ly?: number; }
-const bake = (paint: Paint, n = 1, line = false, light?: Prop['light'], ly = 0.4): Prop => {
-  const frames = Array.from({ length: n }, (_, f) => { const [c, g] = mk(); paint(g, f); if (line) outline(c); return c; });
-  return { frames, light, ly };
-};
+
+// Jede Art hat mehrere Spielarten: Malfunktion mit Spielart v und eigenem Zufall R (fest je Spielart,
+// in allen Bildern gleich), dazu je eine gespiegelte Fassung.
+type R = () => number;
+type VPaint = (g: CanvasRenderingContext2D, f: number, v: number, r: R) => void;
+interface Spec { paint: VPaint; n: number; frames?: number; line?: boolean; light?: (f: number, v: number) => Omit<Light, 'x' | 'y'> | undefined; ly?: number; mirror?: boolean; }
+const rng = (seed: number): R => () => { let t = (seed = (seed + 0x6d2b79f5) >>> 0); t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+const flipped = (c: HTMLCanvasElement) => { const [m, g] = mk(); g.translate(TS, 0); g.scale(-1, 1); g.drawImage(c, 0, 0); return m; };
+let specSeed = 1;
+function bakeSpec(sp: Spec): Prop[] {
+  const out: Prop[] = [], seed = (specSeed += 7919);
+  for (let v = 0; v < sp.n; v++) {
+    const frames = Array.from({ length: sp.frames ?? 1 }, (_, f) => { const [c, g] = mk(); sp.paint(g, f, v, rng(seed + v * 104729)); if (sp.line) outline(c); return c; });
+    const light = sp.light && sp.light(0, v) ? (f: number) => sp.light!(f, v)! : undefined;
+    out.push({ frames, light, ly: sp.ly });
+    if (sp.mirror !== false) out.push({ frames: frames.map(flipped), light, ly: sp.ly });
+  }
+  return out;
+}
+const I = (r: R, a: number, b: number) => a + Math.floor(r() * (b - a + 1)); // ganze Zahl in [a, b]
 
 // ---- Wandfront ----
-const chains: Paint = g => {
-  for (const x of [4, 11]) { for (let y = 0; y < 9; y++) { px(g, '#1a1c2c', x + 1, y); px(g, y % 2 ? '#c9d4dc' : '#8b8f9c', x, y); } }
-  px(g, '#8b8f9c', 10, 9, 3, 1); px(g, '#8b8f9c', 10, 10, 1, 2); px(g, '#8b8f9c', 12, 10, 1, 2); px(g, '#c9d4dc', 10, 12, 3, 1); px(g, '#1a1c2c', 10, 13, 3, 1);
+const chains: VPaint = (g, _f, v) => {
+  const link = (x: number, y0: number, y1: number) => { for (let y = y0; y < y1; y++) { px(g, '#1a1c2c', x + 1, y); px(g, y % 2 ? '#c9d4dc' : '#8b8f9c', x, y); } };
+  if (v === 0) { link(4, 0, 9); link(11, 0, 9); px(g, '#8b8f9c', 10, 9, 3, 1); px(g, '#8b8f9c', 10, 10, 1, 2); px(g, '#8b8f9c', 12, 10, 1, 2); px(g, '#c9d4dc', 10, 12, 3, 1); }
+  else if (v === 1) { link(7, 0, 11); px(g, '#8b8f9c', 6, 11, 3, 1); px(g, '#8b8f9c', 6, 12, 1, 2); px(g, '#8b8f9c', 8, 12, 1, 2); px(g, '#c9d4dc', 6, 14, 3, 1); }
+  else { px(g, '#4a4d58', 1, 2, 2, 2); px(g, '#4a4d58', 13, 2, 2, 2); for (let x = 3; x <= 12; x++) { const y = 3 + Math.round(4 * Math.sin(((x - 3) / 9) * Math.PI)); px(g, '#1a1c2c', x, y + 1); px(g, x % 2 ? '#c9d4dc' : '#8b8f9c', x, y); } }
 };
-const cobweb: Paint = g => {
+const cobweb: VPaint = (g, _f, v, r) => {
+  const n = v === 0 ? 7 : 5;
   g.globalAlpha = 0.6;
-  for (let k = 0; k < 7; k++) { px(g, '#c9d4dc', k, 0); px(g, '#c9d4dc', 0, k); }
-  for (let k = 0; k < 6; k++) px(g, '#c9d4dc', k, k);
-  for (const r of [3, 5]) for (let k = 0; k <= r; k++) px(g, '#94b0c2', k, r - k);
+  for (let k = 0; k < n; k++) { px(g, '#c9d4dc', k, 0); px(g, '#c9d4dc', 0, k); }
+  for (let k = 0; k < n - 1; k++) px(g, '#c9d4dc', k, k);
+  for (const rr of v === 0 ? [3, 5] : [3]) for (let k = 0; k <= rr; k++) px(g, '#94b0c2', k, rr - k);
+  if (v === 1) { const x = I(r, 3, 5); for (let y = 2; y < 9; y++) px(g, '#c9d4dc', x, y); g.globalAlpha = 1; px(g, '#1a1c2c', x - 1, 9, 3, 2); px(g, '#b13e53', x, 9); }
   g.globalAlpha = 1;
 };
-const banner: Paint = g => {
+const BANNER = [['#7d2b45', '#b13e53', '#ffcd75'], ['#29366f', '#3b5dc9', '#c9d4dc'], ['#1e6b3a', '#38b764', '#ffcd75']];
+const banner: VPaint = (g, _f, v, r) => {
+  const [d, m, e] = BANNER[v % 3];
   px(g, '#5a3a28', 4, 1, 8, 1); px(g, '#ffcd75', 4, 1); px(g, '#ffcd75', 11, 1);
-  px(g, '#7d2b45', 5, 2, 6, 7); px(g, '#b13e53', 6, 2, 4, 6);
-  px(g, '#ffcd75', 7, 4, 2, 2);
-  px(g, '#7d2b45', 5, 9); px(g, '#7d2b45', 7, 9, 2, 1); px(g, '#7d2b45', 10, 9);
+  px(g, d, 5, 2, 6, 8); px(g, m, 6, 2, 4, 7);
+  if (v === 0) { px(g, e, 7, 4, 2, 2); px(g, e, 6, 5); px(g, e, 9, 4); }
+  else if (v === 1) { px(g, e, 7, 3, 2, 5); px(g, e, 6, 4, 4, 1); }
+  else { px(g, e, 7, 3, 2, 2); px(g, d, 7, 4); px(g, e, 7, 6, 2, 1); }
+  for (let x = 5; x <= 10; x++) if (r() < 0.45) px(g, d, x, 10); // ausgefranster Saum
 };
-const roots: Paint = g => {
-  for (const [x, len] of [[3, 9], [8, 6], [12, 10]]) for (let y = 0; y < len; y++) px(g, y % 3 ? '#257179' : '#38b764', x + (y > 4 && x === 12 ? -1 : 0), y);
-  px(g, '#a7f070', 2, 4); px(g, '#a7f070', 9, 3); px(g, '#a7f070', 13, 7);
+const roots: VPaint = (g, _f, _v, r) => {
+  for (let k = I(r, 3, 4); k > 0; k--) {
+    let x = I(r, 1, 14);
+    const len = I(r, 4, 11);
+    for (let y = 0; y < len; y++) { px(g, y % 3 ? '#257179' : '#38b764', x, y); if (r() < 0.2) x = Math.max(0, Math.min(15, x + (r() < 0.5 ? -1 : 1))); if (r() < 0.12) px(g, '#a7f070', x + 1, y); }
+  }
 };
-const drips: Paint = (g, f) => {
-  for (const [x, len] of [[2, 4], [7, 6], [12, 3]]) {
+const drips: VPaint = (g, f, _v, r) => {
+  let tip = 7;
+  for (let k = I(r, 2, 4), x = I(r, 1, 3); k > 0 && x < 14; k--, x += I(r, 3, 5)) {
+    const len = I(r, 3, 7);
     for (let y = 0; y < len; y++) { const w = Math.max(1, 3 - Math.floor(y / 2)); px(g, '#2f8f85', x + 1 - (w >> 1), y, w, 1); }
     px(g, '#55b89c', x, 0, 1, len - 1);
+    if (len > 4) tip = x;
   }
-  px(g, '#73eff7', 8, 7 + f * 3);
+  px(g, '#73eff7', tip, 7 + f * 3);
 };
-const hooks: Paint = g => {
-  for (let y = 0; y < 7; y++) { px(g, '#1a1c2c', 9, y); px(g, y % 2 ? '#c9d4dc' : '#8b8f9c', 8, y); }
-  px(g, '#8b8f9c', 8, 7, 1, 2); px(g, '#8b8f9c', 9, 9); px(g, '#8b8f9c', 10, 8);
+const glowmoss: VPaint = (g, f, _v, r) => {
+  for (let k = 0; k < 3; k++) { const x = I(r, 1, 11), y = I(r, 1, 8); px(g, '#1e6b3a', x, y, 4, 2); px(g, '#38b764', x + 1, y, 2, 1); }
+  for (let k = 0; k < 5; k++) px(g, (k + f) % 2 ? '#a7f070' : '#73eff7', I(r, 1, 14), I(r, 1, 10));
 };
-const vent: Paint = (g, f) => {
-  px(g, '#1c0f14', 3, 3, 10, 7); px(g, '#4a4d58', 3, 3, 10, 1); px(g, '#4a4d58', 3, 9, 10, 1);
-  for (let x = 4; x < 12; x += 2) px(g, f ? '#ef7d57' : '#b13e53', x, 4, 1, 5);
-  px(g, '#ffcd75', 6 + f * 2, 6);
+const hooks: VPaint = (g, _f, v) => {
+  const chain = (x: number, y1: number) => { for (let y = 0; y < y1; y++) { px(g, '#1a1c2c', x + 1, y); px(g, y % 2 ? '#c9d4dc' : '#8b8f9c', x, y); } };
+  if (v === 0) { chain(8, 7); px(g, '#8b8f9c', 8, 7, 1, 2); px(g, '#8b8f9c', 9, 9); px(g, '#8b8f9c', 10, 8); }
+  else if (v === 1) { // Zange und Hammer am Haken
+    px(g, '#4a4d58', 3, 1, 10, 1);
+    px(g, '#8b8f9c', 4, 2, 1, 7); px(g, '#8b8f9c', 6, 2, 1, 7); px(g, '#4a4d58', 5, 8, 1, 2);
+    px(g, '#5a3a28', 10, 2, 1, 6); px(g, '#4a4d58', 8, 8, 5, 2); px(g, '#8b8f9c', 8, 8, 5, 1);
+  } else { chain(7, 8); px(g, '#4a4d58', 5, 8, 5, 4); px(g, '#8b8f9c', 5, 8, 5, 1); px(g, '#1a1c2c', 5, 12, 5, 1); }
+};
+const vent: VPaint = (g, f, v) => {
+  if (v === 0) {
+    px(g, '#1c0f14', 3, 3, 10, 7); px(g, '#4a4d58', 3, 3, 10, 1); px(g, '#4a4d58', 3, 9, 10, 1);
+    for (let x = 4; x < 12; x += 2) px(g, f ? '#ef7d57' : '#b13e53', x, 4, 1, 5);
+    px(g, '#ffcd75', 6 + f * 2, 6);
+  } else {
+    for (let y = 0; y < 9; y++) for (let x = 0; x < 9; x++) { const d = (x - 4) ** 2 + (y - 4) ** 2; if (d <= 16) px(g, d > 9 ? '#4a4d58' : (x + y + f) % 3 ? '#b13e53' : '#ef7d57', 4 + x, 2 + y); }
+    px(g, '#8b8f9c', 6, 2, 5, 1); px(g, '#ffcd75', 8, 6);
+  }
 };
 
 // ---- am Fuß der Wand (Boden) ----
-const candles: Paint = (g, f) => {
-  px(g, '#d9cfb4', 2, 11, 7, 2);
-  for (const [x, h] of [[3, 5], [5, 3], [7, 4]]) {
+const candles: VPaint = (g, f, _v, r) => {
+  const n = I(r, 2, 4), xs: number[] = [];
+  for (let k = 0; k < n; k++) xs.push(I(r, 2, 12));
+  xs.sort((a, b) => a - b);
+  px(g, '#d9cfb4', xs[0] - 1, 12, xs[n - 1] - xs[0] + 3, 1);
+  xs.forEach((x, k) => {
+    const h = I(r, 2, 6);
     px(g, '#d9cfb4', x, 12 - h, 1, h); px(g, '#c9d4dc', x, 12 - h, 1, 1);
-    px(g, (x + f) % 2 ? '#ffcd75' : '#ef7d57', x, 11 - h - (x === 5 ? f : 0), 1, 1);
+    if (r() < 0.4) px(g, '#d9cfb4', x + 1, 12 - h + 1, 1, 2); // Wachstropfen
+    px(g, (k + f) % 2 ? '#ffcd75' : '#ef7d57', x, 11 - h - ((k + f) % 3 === 0 ? 1 : 0));
+  });
+};
+const bones: VPaint = (g, _f, v, r) => {
+  const skull = (x: number, y: number) => { px(g, '#c9d4dc', x, y, 4, 3); px(g, '#c9d4dc', x + 1, y + 3, 2, 1); px(g, '#1a1c2c', x + 1, y + 1); px(g, '#1a1c2c', x + 3, y + 1); px(g, '#94b0c2', x, y + 2, 1, 1); };
+  const bone = (x: number, y: number, len: number, vert: boolean) => {
+    if (vert) { px(g, '#c9d4dc', x, y, 1, len); px(g, '#c9d4dc', x - 1, y, 3, 1); px(g, '#c9d4dc', x - 1, y + len - 1, 3, 1); }
+    else { px(g, '#c9d4dc', x, y, len, 1); px(g, '#c9d4dc', x, y - 1, 1, 3); px(g, '#c9d4dc', x + len - 1, y - 1, 1, 3); px(g, '#94b0c2', x + 1, y + 1, len - 2, 1); }
+  };
+  if (v === 0) { skull(9, 8); bone(2, 12, 6, false); bone(5, 9, 4, true); }
+  else if (v === 1) { // Brustkorb
+    px(g, '#c9d4dc', 7, 6, 1, 7);
+    for (const y of [7, 9, 11]) { px(g, '#c9d4dc', 4, y, 3, 1); px(g, '#c9d4dc', 8, y, 3, 1); px(g, '#94b0c2', 4, y + 1, 1, 1); px(g, '#94b0c2', 10, y + 1, 1, 1); }
+    skull(11, 10);
+  } else { for (let k = 0; k < 3; k++) bone(I(r, 2, 8), I(r, 7, 13), I(r, 3, 6), r() < 0.4); if (r() < 0.6) skull(I(r, 2, 10), 9); }
+};
+const CRYSTAL = [['#41a6f6', '#73eff7', '#f4f4f4', '#73eff7'], ['#29366f', '#41a6f6', '#c9d4dc', '#41a6f6'], ['#5d275d', '#9a4fc0', '#f4f4f4', '#9a4fc0']];
+const crystals: VPaint = (g, _f, v, r) => {
+  const [d, m, w] = CRYSTAL[v % 3];
+  for (let k = I(r, 3, 5); k > 0; k--) {
+    const x = I(r, 2, 12), h = I(r, 3, 10), y0 = 13 - h;
+    px(g, d, x, y0, 2, h); px(g, m, x, y0, 1, h); px(g, w, x, y0, 1, 1);
+  }
+  px(g, '#29366f', 2, 13, 12, 1);
+};
+const shrooms: VPaint = (g, _f, v, r) => {
+  const [cap, hi] = v % 2 ? ['#41a6f6', '#73eff7'] : ['#38b764', '#a7f070'];
+  for (let k = I(r, 2, 4); k > 0; k--) {
+    const w = I(r, 2, 4), x = I(r, 1, 14 - w), y = I(r, 6, 10);
+    px(g, '#d9cfb4', x + (w >> 1), y + 1, 1, 13 - y);
+    px(g, cap, x, y + 1, w, 1); px(g, hi, x, y, w, 1); px(g, '#f4f4f4', x + 1, y);
   }
 };
-const bones: Paint = g => {
-  px(g, '#c9d4dc', 9, 8, 4, 3); px(g, '#1a1c2c', 10, 9); px(g, '#1a1c2c', 12, 9); px(g, '#94b0c2', 10, 11, 2, 1);
-  px(g, '#c9d4dc', 3, 12, 6, 1); px(g, '#c9d4dc', 2, 11, 1, 3); px(g, '#c9d4dc', 9, 11, 1, 3);
-  px(g, '#94b0c2', 5, 10, 1, 2); px(g, '#94b0c2', 4, 9, 3, 1);
-};
-const crystals: Paint = g => {
-  const shard = (x: number, y0: number, h: number) => { px(g, '#41a6f6', x, y0, 2, h); px(g, '#73eff7', x, y0, 1, h); px(g, '#f4f4f4', x, y0, 1, 1); };
-  shard(4, 6, 7); shard(7, 3, 10); shard(10, 7, 6); shard(12, 9, 4);
-  px(g, '#29366f', 3, 13, 11, 1);
-};
-const shrooms: Paint = g => {
-  for (const [x, y, w] of [[3, 8, 4], [8, 10, 3], [11, 7, 4]]) {
-    px(g, '#d9cfb4', x + (w >> 1) - (w > 3 ? 1 : 0), y + 2, 1, 13 - y - 2 + 1);
-    px(g, '#38b764', x, y + 1, w, 1); px(g, '#a7f070', x, y, w, 1); px(g, '#f4f4f4', x + 1, y);
+const ingots: VPaint = (g, f, _v, r) => {
+  const rows = I(r, 1, 3);
+  for (let k = 0; k < rows; k++) {
+    const y = 12 - k * 2, x0 = 2 + k * 2 + I(r, 0, 1);
+    for (let x = x0; x <= 12 - k * 2; x += 5) { px(g, '#b13e53', x, y, 4, 2); px(g, (f + k + x) % 3 === 0 ? '#ffcd75' : '#ef7d57', x, y, 4, 1); }
   }
 };
-const ingots: Paint = (g, f) => {
-  for (const [x, y] of [[3, 11], [8, 11], [5, 9]]) { px(g, '#b13e53', x, y, 5, 2); px(g, f && x === 5 ? '#ffcd75' : '#ef7d57', x, y, 5, 1); }
-  px(g, '#ffcd75', 6, 9);
-};
-const coal: Paint = (g, f) => {
-  px(g, '#1c0f14', 3, 10, 9, 3); px(g, '#1c0f14', 5, 8, 5, 2); px(g, '#4a4d58', 5, 8, 2, 1); px(g, '#4a4d58', 9, 10, 2, 1);
-  px(g, f ? '#ffcd75' : '#ef7d57', 7, 10); px(g, '#ef7d57', 4, 12); px(g, f ? '#ef7d57' : '#b13e53', 10, 11);
+const coal: VPaint = (g, f, _v, r) => {
+  for (let k = 0; k < 6; k++) { const x = I(r, 2, 11), y = I(r, 8, 12); px(g, '#1c0f14', x, y, I(r, 2, 4), 2); }
+  for (let k = 0; k < 3; k++) px(g, '#4a4d58', I(r, 3, 12), I(r, 8, 11));
+  for (let k = 0; k < 3; k++) px(g, (k + f) % 2 ? '#ffcd75' : '#ef7d57', I(r, 3, 12), I(r, 9, 12));
 };
 
 // ---- flach im Boden ----
-const slab: Paint = g => {
-  px(g, '#333c57', 3, 4, 10, 8); px(g, '#566c86', 3, 4, 10, 1); px(g, '#566c86', 3, 4, 1, 8);
-  px(g, '#1a1c2c', 5, 6, 6, 1); px(g, '#1a1c2c', 7, 7, 2, 3); px(g, '#1a1c2c', 5, 10, 6, 1);
+const slab: VPaint = (g, _f, v, r) => {
+  const w = I(r, 8, 11), h = I(r, 6, 9), x = (16 - w) >> 1, y = (16 - h) >> 1;
+  px(g, '#333c57', x, y, w, h); px(g, '#566c86', x, y, w, 1); px(g, '#566c86', x, y, 1, h);
+  const cx = x + (w >> 1), cy = y + (h >> 1);
+  if (v === 0) { px(g, '#1a1c2c', cx - 1, y + 2, 1, h - 4); px(g, '#1a1c2c', cx - 3, cy - 1, 5, 1); }
+  else if (v === 1) { px(g, '#1a1c2c', cx - 2, cy - 2, 4, 3); px(g, '#566c86', cx - 1, cy - 1); px(g, '#566c86', cx + 1, cy - 1); px(g, '#1a1c2c', cx - 1, cy + 1, 2, 1); }
+  else for (let k = 0; k < 3; k++) px(g, '#1a1c2c', x + 2, y + 2 + k * 2, w - 4 - I(r, 0, 2), 1);
+  if (r() < 0.5) px(g, '#1a1c2c', x + w - 3, y + h - 2, 2, 1); // Sprung
 };
-const puddle: Paint = (g, f) => {
-  px(g, '#29366f', 3, 6, 10, 5); px(g, '#29366f', 2, 7, 12, 3); px(g, '#3b5dc9', 4, 7, 7, 2);
-  px(g, '#73eff7', 5 + f * 4, 7, 2, 1); px(g, '#41a6f6', 9 - f * 3, 9, 1, 1);
+const puddle: VPaint = (g, f, _v, r) => {
+  const cx = 8 + (r() - 0.5) * 3, cy = 8 + (r() - 0.5) * 2;
+  for (let k = 0; k < 3; k++) {
+    const ox = cx + (r() - 0.5) * 6, oy = cy + (r() - 0.5) * 3, rx = 2.5 + r() * 2.5, ry = 1.5 + r() * 1.5;
+    for (let y = 0; y < TS; y++) for (let x = 0; x < TS; x++) if (((x - ox) / rx) ** 2 + ((y - oy) / ry) ** 2 <= 1) px(g, '#29366f', x, y);
+  }
+  for (let y = 0; y < TS; y++) for (let x = 0; x < TS; x++) if (((x - cx) / 3) ** 2 + ((y - cy) / 1.4) ** 2 <= 1) px(g, '#3b5dc9', x, y);
+  px(g, '#73eff7', Math.round(cx) - 2 + f * 3, Math.round(cy) - 1, 2, 1);
 };
-const grate: Paint = (g, f) => {
-  px(g, '#4a4d58', 3, 3, 10, 10); px(g, '#1c0f14', 4, 4, 8, 8);
-  for (let x = 5; x < 12; x += 2) px(g, f ? '#ef7d57' : '#b13e53', x, 5, 1, 6);
-  px(g, '#8b8f9c', 3, 3, 10, 1); px(g, '#8b8f9c', 4, 7, 8, 1);
+const grate: VPaint = (g, f, v) => {
+  if (v === 0) {
+    px(g, '#4a4d58', 3, 3, 10, 10); px(g, '#1c0f14', 4, 4, 8, 8);
+    for (let x = 5; x < 12; x += 2) px(g, f ? '#ef7d57' : '#b13e53', x, 5, 1, 6);
+    px(g, '#8b8f9c', 3, 3, 10, 1); px(g, '#8b8f9c', 4, 7, 8, 1);
+  } else {
+    for (let y = 0; y < 11; y++) for (let x = 0; x < 11; x++) {
+      const d = (x - 5) ** 2 + (y - 5) ** 2;
+      if (d > 25) continue;
+      px(g, d > 18 ? '#4a4d58' : x % 2 === 0 ? '#8b8f9c' : (x + y + f) % 4 ? '#b13e53' : '#ef7d57', 2 + x, 2 + y);
+    }
+  }
 };
 
-const warm = (r: number, a = 0.75): Prop['light'] => f => ({ r: r + (f ? 0.15 : 0), col: '#ef7d57', a });
+const warm = (r: number, a = 0.75) => (f: number) => ({ r: r + (f ? 0.15 : 0), col: '#ef7d57', a });
 
 interface BiomeProps { wall: Prop[]; foot: Prop[]; flat: Prop[]; }
 let SETS: BiomeProps[] | null = null;
 function sets(): BiomeProps[] {
   if (SETS) return SETS;
+  const B = bakeSpec;
   SETS = [
-    { wall: [bake(chains), bake(cobweb), bake(banner)],
-      foot: [bake(candles, 2, true, f => ({ r: 1.7 + (f ? 0.15 : 0), col: '#ffcd75', a: 0.8 }), 0.6), bake(bones, 1, true)],
-      flat: [bake(slab)] },
-    { wall: [bake(roots), bake(drips, 2)],
-      foot: [bake(crystals, 1, true, () => ({ r: 2.4, col: '#73eff7', a: 0.9 }), 0.5), bake(shrooms, 1, true, () => ({ r: 1.8, col: '#a7f070', a: 0.8 }), 0.6)],
-      flat: [bake(puddle, 2)] },
-    { wall: [bake(hooks), bake(vent, 2, false, warm(1.4, 0.6), 0.3)],
-      foot: [bake(ingots, 2, true, warm(1.6), 0.7), bake(coal, 2, true, warm(1.2, 0.6), 0.7)],
-      flat: [bake(grate, 2, false, warm(1.7, 0.7), 0.5)] },
+    { wall: [...B({ paint: chains, n: 3 }), ...B({ paint: cobweb, n: 2 }), ...B({ paint: banner, n: 3 })],
+      foot: [...B({ paint: candles, n: 4, frames: 2, line: true, light: f => ({ r: 1.7 + (f ? 0.15 : 0), col: '#ffcd75', a: 0.8 }), ly: 0.6 }), ...B({ paint: bones, n: 3, line: true })],
+      flat: B({ paint: slab, n: 3 }) },
+    { wall: [...B({ paint: roots, n: 3 }), ...B({ paint: drips, n: 3, frames: 2 }), ...B({ paint: glowmoss, n: 2, frames: 2, light: () => ({ r: 1.4, col: '#a7f070', a: 0.6 }), ly: 0.3 })],
+      foot: [...B({ paint: crystals, n: 3, line: true, light: (_f, v) => ({ r: 2.4, col: CRYSTAL[v % 3][3], a: 0.9 }), ly: 0.5 }),
+        ...B({ paint: shrooms, n: 4, line: true, light: (_f, v) => ({ r: 1.8, col: v % 2 ? '#73eff7' : '#a7f070', a: 0.8 }), ly: 0.6 })],
+      flat: B({ paint: puddle, n: 4, frames: 2 }) },
+    { wall: [...B({ paint: hooks, n: 3 }), ...B({ paint: vent, n: 2, frames: 2, light: warm(1.4, 0.6), ly: 0.3 })],
+      foot: [...B({ paint: ingots, n: 3, frames: 2, line: true, light: warm(1.6), ly: 0.7 }), ...B({ paint: coal, n: 3, frames: 2, line: true, light: warm(1.2, 0.6), ly: 0.7 })],
+      flat: B({ paint: grate, n: 2, frames: 2, light: warm(1.7, 0.7), ly: 0.5 }) },
   ];
   return SETS;
 }
@@ -191,6 +278,26 @@ export function propsFor(tiles: Uint8Array, seed: number): (PropSpot | null)[] {
 }
 export const propAt = (tiles: Uint8Array, seed: number, x: number, y: number) => propsFor(tiles, seed)[y * W + x];
 
+// Fackeln: Kandidaten auf Wandfronten, von nahe beieinanderliegenden bleibt nur einer (mind. TORCH_GAP + 1 Felder)
+export const TORCH_GAP = 4;
+export function torchSpots(tiles: Uint8Array, seed: number): number[] {
+  const cand = (x: number, y: number) => {
+    const i = y * W + x;
+    return x > 0 && y > 0 && x < W - 1 && y < H - 1 && tiles[i] === T.WALL && walkable(tiles[i + W]) && hp(x, y, seed) % 5 === 0;
+  };
+  const out: number[] = [];
+  for (let y = 1; y < H - 1; y++) for (let x = 1; x < W - 1; x++) {
+    if (!cand(x, y)) continue;
+    const h = hp(x, y, seed ^ 0x5bd1);
+    let best = true;
+    for (let dy = -TORCH_GAP; dy <= TORCH_GAP && best; dy++) for (let dx = -TORCH_GAP; dx <= TORCH_GAP; dx++) {
+      if ((dx || dy) && cand(x + dx, y + dy)) { const o = hp(x + dx, y + dy, seed ^ 0x5bd1); if (o > h || (o === h && dy * W + dx < 0)) { best = false; break; } }
+    }
+    if (best) out.push(y * W + x);
+  }
+  return out;
+}
+
 export function drawProp(ctx: CanvasRenderingContext2D, bi: number, p: PropSpot, x: number, y: number, dx: number, dy: number, time: number, lights: Light[]) {
   const list = sets()[bi][p.kind], prop = list[p.pick % list.length];
   const f = prop.frames.length > 1 ? Math.floor(time * 4 + x * 0.7 + y) % prop.frames.length : 0;
@@ -211,3 +318,6 @@ export function recolor(src: HTMLCanvasElement, map: Record<string, string>): HT
   g.putImageData(d, 0, 0);
   return c;
 }
+
+// Für Galerie-Bildschirmfotos: alle Spielarten je Biom und Art
+export const propSets = () => sets();
