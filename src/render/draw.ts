@@ -6,8 +6,8 @@ import { onDeath, drawDecals, drawDying, resetDeaths, reducedFx } from './deaths
 import { drawItemIcon, drawIcon, PERK_ICON } from './icons';
 import { Light, applyLight, AMBIENTS } from './light';
 import { dropShadow, drawAO } from './shade';
-import { floorTint, softEdged } from './tiles';
-import { propsFor, drawProp, recolor } from './props';
+import { floorTint, softEdged, pickDecal } from './tiles';
+import { propsFor, drawProp, recolor, torchSpots } from './props';
 import { stepAmbient, drawAmbient, drawFog, resetAmbient, postFx } from './ambient';
 import { drawFlames, smoke, drawSmoke, resetFire, trackBurns, drawEmbers } from './fire';
 
@@ -84,10 +84,7 @@ function buildLight(run: Run) {
   if (key === lightKey) return;
   lightKey = key;
   torches.clear();
-  for (let y = 1; y < H - 1; y++) for (let x = 1; x < W - 1; x++) {
-    const i = y * W + x;
-    if (run.tiles[i] === T.WALL && walkable(run.tiles[i + W]) && hash(x, y, run.seed + run.floor) % 7 === 0) torches.add(i);
-  }
+  for (const i of torchSpots(run.tiles, run.seed + run.floor)) torches.add(i);
 }
 
 export function resetView() {
@@ -197,6 +194,9 @@ export function drawRun(ctx: CanvasRenderingContext2D, run: Run, dt: number, tim
   ctx.fillStyle = '#08090f'; ctx.fillRect(0, 0, VW, VH);
   const bio = biomeOf(run.floor), ts = tilesets[bio], boss = run.floor % 5 === 0, fx = !reducedFx();
   const props = propsFor(run.tiles, run.seed + run.floor);
+  // Bodenspur auf etwa jedem elften Feld, aber nie direkt neben einer anderen (keine Häufchen)
+  const dseed = run.seed + run.floor * 7, dcand = (x: number, y: number) => hash(x, y, dseed) % 11 === 0;
+  const decalAt = (x: number, y: number) => dcand(x, y) && !dcand(x - 1, y) && !dcand(x, y - 1) && !dcand(x - 1, y - 1) && !dcand(x + 1, y - 1);
   buildLight(run);
   const lights: Light[] = [], floorTiles: number[] = [];
   const flick = (n: number) => 0.92 + 0.08 * Math.sin(time * 9 + n) + 0.04 * Math.sin(time * 23 + n * 1.7);
@@ -254,7 +254,7 @@ export function drawRun(ctx: CanvasRenderingContext2D, run: Run, dt: number, tim
       if (t === T.FLOOR) {
         const pr = props[i];
         if (pr) drawProp(ctx, bio, pr, x, y, dx, dy, time, lights);
-        else { const h = hash(x, y, run.seed + run.floor * 7); if (h % 9 === 0) ctx.drawImage(ts.decals[(h >>> 8) % ts.decals.length], dx, dy); }
+        else if (decalAt(x, y)) ctx.drawImage(pickDecal(ts.decals, bio, hash(x, y, run.seed + run.floor * 7)), dx, dy);
       }
       if (t === T.GRASS) ctx.drawImage(ts.grass[(x * 5 + y * 3) % 3], dx, dy);
       else if (t === T.BURNT) {
