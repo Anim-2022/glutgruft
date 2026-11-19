@@ -939,7 +939,7 @@ function kill(run: Run, m: Actor) {
     p.keys++;
     p.potions++;
     say(run, `${m.name} lässt einen Schlüssel und einen Heiltrank fallen.`);
-  } else if (run.rng.chance(0.015)) {
+  } else if (run.rng.chance(0.025)) {
     p.potions++;
     say(run, `${m.name} lässt einen Heiltrank fallen.`);
   }
