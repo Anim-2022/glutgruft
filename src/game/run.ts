@@ -1186,7 +1186,7 @@ function kill(run: Run, m: Actor) {
     // Beute wie aus einer Truhe, etwas Gold dazu, manchmal ein besseres Stück
     const up = run.rng.chance(HAZARD.mimicRarUp) ? 1 : 0;
     tele(run, 'mimicKilled'); if (up) tele(run, 'mimicRarUp');
-    const g = Math.round((5 + run.floor) * (1 + (p.aff.gold ?? 0) / 100));
+    const g = Math.round((2 + run.floor / 2) * (1 + (p.aff.gold ?? 0) / 100));
     p.gold += g;
     say(run, `Der Mimik ist besiegt: ${g} Gold${up ? ', und er hütete etwas Besonderes' : ''}.`);
     chestLoot(run, 'Mimik', up);
