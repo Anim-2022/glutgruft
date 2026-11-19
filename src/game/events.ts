@@ -197,7 +197,7 @@ export const EVENTS: EvDef[] = [
     goal: (a, e) => `Raus aus dem Raum oder ausweichen · noch ${left(e)} Züge`,
   },
   {
-    id: 'dieb', cat: 'challenge', trigger: 'calm', title: 'Diebesratte!', tier: 0, limit: 15, vanish: true,
+    id: 'dieb', cat: 'challenge', trigger: 'calm', title: 'Diebesratte!', tier: 0, limit: 25, vanish: true,
     intro: ['Eine Ratte schnappt sich deinen Geldbeutel!', 'Etwas zupft an deinem Gürtel – dein Gold!'],
     start(a, e) {
       const s = a.near(2, 3);
@@ -213,7 +213,7 @@ export const EVENTS: EvDef[] = [
     lost: (a, e) => (e.data.stolen ? `Die Ratte ist mit ${e.data.stolen} Gold verschwunden.` : 'Die Ratte ist verschwunden.'),
   },
   {
-    id: 'goblin', cat: 'challenge', trigger: 'calm', title: 'Schatzgoblin!', tier: 3, limit: 20, vanish: true,
+    id: 'goblin', cat: 'challenge', trigger: 'calm', title: 'Schatzgoblin!', tier: 3, limit: 30, vanish: true,
     intro: ['Ein Goblin mit einem prall gefüllten Sack kichert und rennt los!', 'Klimper, klimper – ein Schatzgoblin!'],
     start(a, e) { const s = a.near(4, 7); if (!s) return false; a.spawn(e, 'goblin', s[0], s[1]); return true; },
     tick: killAll,
@@ -227,7 +227,7 @@ export const EVENTS: EvDef[] = [
       const s = a.near(8, 14);
       if (!s) return false;
       e.mark = s[1] * W + s[0];
-      e.limit = Math.ceil(s[2] * 1.5) + 3;
+      e.limit = Math.ceil(s[2] * 2) + 6;
       return true;
     },
     tick: (a, e) => (a.atPlayer(e.mark!) ? 'won' : 'run'),
@@ -257,7 +257,7 @@ export const EVENTS: EvDef[] = [
     goal: (a, e) => `Überlebe noch ${left(e)} Züge (${a.alive(e).length} geweckt)`,
   },
   {
-    id: 'seelen', cat: 'flavour', trigger: 'calm', title: 'Seelensturm', tier: 0, limit: 20, vanish: true, survive: true,
+    id: 'seelen', cat: 'flavour', trigger: 'calm', title: 'Seelensturm', tier: 0, limit: 30, vanish: true, survive: true,
     intro: ['Seelenlichter tanzen um dich herum. Fang sie!', 'Ein Hauch – und plötzlich schweben Lichter überall.'],
     start(a, e) {
       for (let k = 0; k < 5; k++) { const s = a.near(2, 7); if (s) a.spawn(e, 'irrlicht', s[0], s[1]); }
@@ -303,7 +303,7 @@ export const EVENTS: EvDef[] = [
       if (!s) return false;
       e.mark = s[1] * W + s[0];
       e.data.chest = 1;
-      e.limit = Math.ceil(s[2] * 1.5) + 3;
+      e.limit = Math.ceil(s[2] * 2) + 6;
       return true;
     },
     tick: (a, e) => (a.atPlayer(e.mark!) ? 'won' : 'run'),
@@ -389,7 +389,7 @@ export const EVENTS: EvDef[] = [
       for (let k = 0; k < 6 && ms.length < 3; k++) { const s = a.near(4, 12); if (s && !ms.includes(s[1] * W + s[0])) { ms.push(s[1] * W + s[0]); sum += s[2]; } }
       if (ms.length < 3) return false;
       e.marks = ms; e.data.look = 1; e.data.need = 3;
-      e.limit = 2 * sum + 4; // reicht immer: Hin und zurück zu jeder Kerze
+      e.limit = 2 * sum + 10; // reicht immer: Hin und zurück zu jeder Kerze, mit Puffer
       return true;
     },
     tick(a, e) { take(a, e, () => a.say('Eine Kerze brennt.')); return e.marks!.length ? 'run' : 'won'; },
@@ -417,7 +417,7 @@ export const EVENTS: EvDef[] = [
       const s = a.near(7, 14);
       if (!s) return false;
       e.mark = s[1] * W + s[0]; e.data.look = 4;
-      e.limit = Math.ceil(s[2] * 1.5) + 3;
+      e.limit = Math.ceil(s[2] * 2) + 6;
       return true;
     },
     tick(a, e) {
@@ -447,7 +447,7 @@ export const EVENTS: EvDef[] = [
     goal: (a, e) => `Weiche der grünen Welle aus · noch ${left(e)} Züge`,
   },
   {
-    id: 'pilzring', cat: 'challenge', trigger: 'room', biome: 1, title: 'Pilzring', tier: 2, limit: 30,
+    id: 'pilzring', cat: 'challenge', trigger: 'room', biome: 1, title: 'Pilzring', tier: 2, limit: 40,
     intro: ['Ein Ring aus Pilzen leuchtet auf. Wer darin ausharrt, wird belohnt.', 'Die Pilze summen. Stell dich in den Kreis!'],
     start(a, e) {
       const r = e.room!, cx = r.x + (r.w >> 1), cy = r.y + (r.h >> 1);
@@ -465,7 +465,7 @@ export const EVENTS: EvDef[] = [
     lost: () => 'Der Ring verblasst.',
   },
   {
-    id: 'leuchtpilze', cat: 'flavour', trigger: 'calm', biome: 1, title: 'Leuchtpilze', tier: 0, limit: 25, survive: true,
+    id: 'leuchtpilze', cat: 'flavour', trigger: 'calm', biome: 1, title: 'Leuchtpilze', tier: 0, limit: 40, survive: true,
     intro: ['Ringsum leuchten blaue Pilze. Sie riechen ... gesund.', 'Blaue Pilze! Die heilen, sagt man.'],
     start(a, e) {
       const ms: number[] = [];
@@ -533,10 +533,10 @@ export const EVENTS: EvDef[] = [
     goal: (a, e) => `Zerstöre den Riesenpilz oder halte Abstand · noch ${left(e)} Züge`,
   },
   {
-    id: 'brutnest', cat: 'challenge', trigger: 'room', biome: 1, title: 'Brutnest', tier: 0, limit: 40,
+    id: 'brutnest', cat: 'challenge', trigger: 'room', biome: 1, title: 'Brutnest', tier: 0, limit: 50,
     intro: ['Grüne Eier pulsieren. Zerstöre sie, bevor sie schlüpfen!', 'Ein Nest. Es zuckt. Schnell!'],
     start(a, e) {
-      e.data.hatch = 8;
+      e.data.hatch = 12;
       for (let k = 0; k < 3; k++) { const t = far(a, e, 2); if (t >= 0) a.spawn(e, 'ei', t % W, (t / W) | 0); }
       return e.mobs.length > 0;
     },
