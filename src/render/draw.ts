@@ -746,7 +746,7 @@ function hud(ctx: CanvasRenderingContext2D, run: Run, time: number) {
     // Ziel des laufenden Ereignisses
     const ev = eventGoal(run);
     if (ev) {
-      const s = `${ev.title} ${ev.goal}`, gw = tr(s).length * 6 + 12;
+      const s = `${ev.title} – ${ev.goal}`, gw = tr(s).length * 6 + 12;
       ctx.fillStyle = 'rgba(8,9,15,0.7)'; ctx.fillRect(VW / 2 - gw / 2, 56, gw, 14);
       text(ctx, s, VW / 2, 59, ev.col, 8, 'center');
     }

@@ -73,6 +73,20 @@ const spawnAt = (a: EvApi, e: EvState, spots: [number, number][], n: number, stu
 };
 const shuffled = <T>(a: EvApi, xs: T[]) => { const o = [...xs]; for (let i = o.length - 1; i > 0; i--) { const j = a.int(0, i); [o[i], o[j]] = [o[j], o[i]]; } return o; };
 
+// Fallenkammer: ein Drittel des Raums wird rot, neben dem Helden bleibt immer ein Feld frei
+function spikeWarn(a: EvApi, e: EvState) {
+  const room = a.roomTiles(e.room!), tiles = room.filter(() => a.chance(0.3)), p = a.p;
+  const around = room.filter(i => Math.abs((i % W) - p.x) <= 1 && Math.abs(((i / W) | 0) - p.y) <= 1);
+  if (around.length && around.every(i => tiles.includes(i))) tiles.splice(tiles.indexOf(around[a.int(0, around.length - 1)]), 1);
+  a.warn(tiles);
+}
+// Einsturz: 4–6 Felder, oft genau dort, wo der Held steht
+function rockWarn(a: EvApi, e: EvState) {
+  const tiles = shuffled(a, a.roomTiles(e.room!)).slice(0, a.int(4, 6)), p = a.p, pi = p.y * W + p.x;
+  if (a.chance(0.5) && !tiles.includes(pi)) tiles.push(pi);
+  a.warn(tiles);
+}
+
 export const EVENTS: EvDef[] = [
   {
     id: 'hinterhalt', cat: 'danger', trigger: 'room', title: 'Hinterhalt!', tier: 2, limit: 40,
@@ -84,14 +98,10 @@ export const EVENTS: EvDef[] = [
   {
     id: 'fallenkammer', cat: 'danger', trigger: 'room', title: 'Fallenkammer!', tier: 2, limit: 8, survive: true,
     intro: ['Gitter fallen herab! Aus dem Boden schießen Stacheln.', 'Klack. Die Türen sind zu. Der Boden hat Löcher.'],
-    start(a, e) { a.seal(e); return true; },
+    start(a, e) { a.seal(e); spikeWarn(a, e); return true; },
     tick(a, e) {
       a.strike(3 + Math.floor(a.floor / 2), 'spike');
-      const room = a.roomTiles(e.room!), tiles = room.filter(() => a.chance(0.3)), p = a.p;
-      // mindestens ein sicheres Feld neben dem Helden
-      const around = room.filter(i => Math.abs((i % W) - p.x) <= 1 && Math.abs(((i / W) | 0) - p.y) <= 1);
-      if (around.length && around.every(i => tiles.includes(i))) tiles.splice(tiles.indexOf(around[a.int(0, around.length - 1)]), 1);
-      if (e.turns < e.limit) a.warn(tiles);
+      if (e.turns < e.limit) spikeWarn(a, e);
       return 'run';
     },
     goal: (a, e) => `Weiche den roten Feldern aus · noch ${left(e)} Züge`,
@@ -112,14 +122,10 @@ export const EVENTS: EvDef[] = [
   {
     id: 'einsturz', cat: 'challenge', trigger: 'room', title: 'Einsturz!', tier: 2, limit: 6, survive: true,
     intro: ['Die Decke knirscht. Steine lösen sich!', 'Staub rieselt. Gleich kommt hier alles herunter.'],
-    start(a, e) { e.data.n = 0; return a.roomTiles(e.room!).length > 6; },
+    start(a, e) { if (a.roomTiles(e.room!).length <= 6) return false; rockWarn(a, e); return true; },
     tick(a, e) {
       a.strike(4 + Math.floor(a.floor / 2), 'rock');
-      if (e.turns >= e.limit) return 'run';
-      const tiles = shuffled(a, a.roomTiles(e.room!)).slice(0, a.int(4, 6));
-      const p = a.p, pi = p.y * W + p.x;
-      if (a.chance(0.5) && !tiles.includes(pi)) tiles.push(pi);
-      a.warn(tiles);
+      if (e.turns < e.limit) rockWarn(a, e);
       return 'run';
     },
     goal: (a, e) => `Raus aus dem Raum oder ausweichen · noch ${left(e)} Züge`,

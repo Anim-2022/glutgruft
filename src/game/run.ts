@@ -1124,7 +1124,7 @@ function evStart(run: Run, plan: EvPlan): boolean {
   if (!ok) { tele(run, 'evSkip'); return false; }
   run.ev = e;
   const intro = d.intro[run.rng.int(0, d.intro.length - 1)];
-  say(run, `Ereignis: ${d.title} ${intro}`);
+  say(run, `Ereignis: ${d.title} – ${intro}`);
   run.fx.push({ k: 'banner', title: `EREIGNIS: ${d.title}`, sub: intro, col: d.cat === 'danger' ? '#ef7d57' : d.cat === 'challenge' ? '#ffcd75' : '#73eff7' }, { k: 'shake', n: d.cat === 'danger' ? 4 : 1 });
   tele(run, `evStart_${d.id}`);
   return true;
