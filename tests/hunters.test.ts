@@ -90,6 +90,41 @@ describe('Jäger', () => {
     }
   });
 
+  it('wer bleibt, wird härter gejagt: jeder weitere Jäger stärker, Abstände 30, 25, 20, 15, 15', () => {
+    FEATURES.hunterForce = 'echse';
+    const r = arena(7);
+    r.p.hp = r.p.maxHp = 100000;
+    r.floorTurns = HUNTER.first - 1;
+    const spawns: { t: number; hp: number; atk: number }[] = [];
+    for (let i = 0; i < 140 && spawns.length < 5; i++) {
+      const before = new Set(r.mobs.map(m => m.id));
+      act(r, { t: 'wait' });
+      for (const m of hunters(r)) if (!before.has(m.id)) spawns.push({ t: r.floorTurns!, hp: m.maxHp, atk: m.atk });
+      // Jäger festhalten und vor der Obergrenze wegnehmen, damit nur der Takt gemessen wird
+      for (const m of hunters(r)) { m.x = 2 + (m.id % 3); m.y = 5 + (m.id % 3); m.st.stun = 9; }
+      if (hunters(r).length >= HUNTER.cap) r.mobs = r.mobs.filter(m => !MOBS[m.kind].hunter);
+    }
+    expect(spawns.length).toBe(5);
+    const gaps = spawns.slice(1).map((s, i) => s.t - spawns[i].t);
+    expect(gaps).toEqual([30, 25, 20, 15]);
+    for (let i = 1; i < spawns.length; i++) {
+      expect(spawns[i].hp).toBeGreaterThan(spawns[i - 1].hp);
+      expect(spawns[i].atk).toBeGreaterThanOrEqual(spawns[i - 1].atk); // Angriff steigt jede zweite Stufe
+    }
+    expect(spawns[4].atk).toBeGreaterThan(spawns[2].atk);
+    expect(spawns[2].atk).toBeGreaterThan(spawns[0].atk);
+    expect(r.log.some(l => l.includes('Stufe 3'))).toBe(true);
+  });
+
+  it('neue Ebene: die Jagd beginnt wieder bei Stufe 1', () => {
+    FEATURES.events = false;
+    const r = newRun(4, 'krieger', defaultMeta());
+    r.hunt!.n = 3;
+    r.tiles[r.p.y * W + r.p.x] = T.STAIRS; act(r, { t: 'descend' });
+    expect(r.hunt!.n).toBe(0);
+    expect(r.hunt!.next).toBe(HUNTER.first);
+  });
+
   it('keine Jäger auf Bossebenen', () => {
     FEATURES.events = false;
     const r = newRun(9, 'krieger', defaultMeta());

@@ -629,6 +629,7 @@ const EN: Record<string, string> = {
   "Verlasse das rote Feld!": "Leave the red tile!",
   "Aus Medusas Haar fällt eine Schlange!": "A snake drops from Medusa's hair!",
   "verfehlt": "missed",
+  " (Stufe ": " (stage ",
 };
 
 const exact = new Map(Object.entries(EN));

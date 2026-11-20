@@ -1,0 +1,10 @@
+# Balance v8 (harder game) – commit 2808cbd, N=80, SEEDS=0,1,2, no DIFF_SET
+# Wins/80 per seed set (0,1,2) and mean
+neu krieger     9  7 11   mean  9.0
+neu magier      5 11  9   mean  8.3
+neu waldlaeufer 4  8  5   mean  5.7
+max krieger    36 44 23   mean 34.3
+max magier     19 25 12   mean 18.7
+max waldlaeufer 18 17 14  mean 16.3
+# Before this change (main, hunters baseline): 14.0 / 22.3 / 12.3 / 35.0 / 35.7 / 29.0
+# Median floor: neu 7-11, max 11-15. Winners' gold left 630-1186 (before ~700-1000).

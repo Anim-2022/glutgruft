@@ -189,14 +189,26 @@ export const TUNE = { treePtsMax: 6, kryoMana: 2, kryoRegen: 0.75, kCost: 0 };
 export const FEATURES = { hunters: true, hunterForce: '', hazards: true, mimics: true, events: true, eventRate: 1, eventForce: '', eventForceBiome: false };
 // Jäger: erster nach `first` Zügen auf einer Ebene, dann alle `interval` Züge, höchstens `cap` zugleich
 // pool: [Art, Gewicht, ab Ebene]; unter Ebene `weakBelow` sind Jäger schwächer (weak)
-export const HUNTER = { first: 560, interval: 30, cap: 4, warn: 30, pool: [['echse', 50, 1], ['krake', 20, 1], ['drache', 15, 6], ['medusa', 10, 4], ['tod', 5, 11]] as [string, number, number][], snakes: 4, weakBelow: 6, weak: 0.7, todCd: 6, krakeCd: 2 };
+export const HUNTER = { first: 560, interval: 30, cap: 4, warn: 30, pool: [['echse', 50, 1], ['krake', 20, 1], ['drache', 15, 6], ['medusa', 10, 4], ['tod', 5, 11]] as [string, number, number][], snakes: 4, weakBelow: 6, weak: 0.7, todCd: 6, krakeCd: 2,
+  // jeder weitere Jäger auf derselben Ebene: +growHp Leben, +growAtk Angriff; Abstand schrumpft um shrink bis minInterval
+  growHp: 0.15, growAtk: 1, shrink: 5, minInterval: 15 }; // Angriff +growAtk nur jede zweite Stufe
 // Ereignisse: Ruhe-Auslöser, Zweitereignis bei Rate 1, Obergrenze zusätzlicher Reliquienwahlen je Lauf,
 // Schattenzwilling als Anteil der Heldenwerte (nur Grundangriff)
 export const EVENT = { biomeShare: 0.6, calmMin: 25, calmMax: 40, calmChance: 0.15, second: 0.45, relicCap: 2, relicChance: 0.2,
   // Lohnstufen (nach dem ersten Messlauf deutlich gesenkt: mit Ereignissen stiegen Siege und Gold zu stark)
   mobXp: 0.35, gold1: 3, potion1: 0.3, souls2: 5, item2: 0.25, cons2: 1, item3: 0.5, gold3: 4, souls3: 8, twinHp: 0.55, twinAtk: 0.65, noteChance: 0.3 };
 // Versteckte Bodenfallen und Mimiks
-export const HAZARD = { minFloor: 2, spot: 0.35, spotSicht: 0.1, mimic: 0.12, mimicRarUp: 0.25 };
+// Schwierigkeit (Tester: das Spiel war zu leicht). Gegner, Heilung, Fallen und Ereignisse an einer Stelle.
+export const DIFF = {
+  mobHp: 1.02, mobAtk: 1.01, bossHp: 1,        // Gegnerwerte (Multiplikatoren wirken über 15 Ebenen stark)
+  roomDiv: 5,                                  // je roomDiv Ebenen ein Gegner mehr je Raum
+  potionHeal: 0.45, chestPotion: 0.21, dropPotion: 0.025, // Heiltrank heilt 45 %
+  fountain: 0.45, fountainHeal: 0.34,          // Brunnen heilt 34 % (vorher 35 %)
+  potionPrice: 1,                              // Heiltrankpreis beim Händler
+  trapDmg: 1.05, trapExtra: 0,                 // Fallen 5 % härter
+  dangerWeight: 1.15,                          // gefährliche Ereignisse 15 % öfter gezogen
+};
+export const HAZARD = { minFloor: 2, spot: 0.35, spotSicht: 0.1, mimic: 0.15, mimicRarUp: 0.25 };
 // Texte der Knoten T2a, T2b, T3, T5
 export const NODE_TEXT: Partial<Record<ClassId, Record<string, [string, string]>>> = {
   magier: {
