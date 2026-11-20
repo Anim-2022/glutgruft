@@ -200,15 +200,15 @@ export const EVENT = { biomeShare: 0.6, calmMin: 25, calmMax: 40, calmChance: 0.
 // Versteckte Bodenfallen und Mimiks
 // Schwierigkeit (Tester: das Spiel war zu leicht). Gegner, Heilung, Fallen und Ereignisse an einer Stelle.
 export const DIFF = {
-  mobHp: 1.18, mobAtk: 1.15, bossHp: 1.1,      // Gegnerwerte
-  roomDiv: 4,                                  // je roomDiv Ebenen ein Gegner mehr je Raum (vorher 5)
-  potionHeal: 0.38, chestPotion: 0.14, dropPotion: 0.015, // Heiltrank heilt 38 % (vorher 45 %), seltener in Truhen und bei Gegnern
-  fountain: 0.3, fountainHeal: 0.3,            // Brunnen seltener und schwächer
-  potionPrice: 1.3,                            // Heiltränke beim Händler teurer
-  trapDmg: 1.4, trapExtra: 1,                  // Fallen härter und eine mehr je Ebene
-  dangerWeight: 2,                             // gefährliche Ereignisse doppelt so oft gezogen
+  mobHp: 1.02, mobAtk: 1.01, bossHp: 1,        // Gegnerwerte (Multiplikatoren wirken über 15 Ebenen stark)
+  roomDiv: 5,                                  // je roomDiv Ebenen ein Gegner mehr je Raum
+  potionHeal: 0.43, chestPotion: 0.21, dropPotion: 0.025, // Heiltrank heilt 43 % (vorher 45 %)
+  fountain: 0.45, fountainHeal: 0.34,          // Brunnen heilt 34 % (vorher 35 %)
+  potionPrice: 1,                              // Heiltrankpreis beim Händler
+  trapDmg: 1.1, trapExtra: 0,                  // Fallen 10 % härter
+  dangerWeight: 1.3,                           // gefährliche Ereignisse 30 % öfter gezogen
 };
-export const HAZARD = { minFloor: 2, spot: 0.35, spotSicht: 0.1, mimic: 0.18, mimicRarUp: 0.25 };
+export const HAZARD = { minFloor: 2, spot: 0.35, spotSicht: 0.1, mimic: 0.15, mimicRarUp: 0.25 };
 // Texte der Knoten T2a, T2b, T3, T5
 export const NODE_TEXT: Partial<Record<ClassId, Record<string, [string, string]>>> = {
   magier: {
