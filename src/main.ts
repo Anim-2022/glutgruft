@@ -2,7 +2,7 @@ import { drawIcon, UPG_ICON } from './render/icons';
 import { titleScene, drawLogo, drawTitleMenu, menuStep, menuHit } from './render/title';
 import { VW, VH, bake, sprites, tilesets, text, panel, wrap, figure } from './render/gfx';
 import { getLang, setLang } from './core/i18n';
-import { drawRun, drawCard, setTutStep, drawTree, treeMove, treeFocus, treeCursor, resetView, setMouse, toggleMap, setTutorial, tileAt, getOverlay, setOverlay, invMove, invAction, invDrop, invClick, lootIndex, lootDone } from './render/draw';
+import { drawRun, drawCard, setTutStep, drawTree, treeMove, treeFocus, treeCursor, treeHit, resetView, setMouse, toggleMap, setTutorial, tileAt, getOverlay, setOverlay, invMove, invAction, invDrop, invClick, lootIndex, lootDone } from './render/draw';
 import { sfx, soundOn, toggleSound, wakeAudio } from './core/audio';
 import { reducedFx, setReducedFx } from './render/deaths';
 import { loadMeta, saveMeta } from './core/save';
@@ -71,6 +71,16 @@ function endSaved() {
   if (!saved) return;
   meta.souls += saved.souls; saveMeta(meta); saved = null; run = null; storeRun(); flash('Lauf beendet – Splitter gutgeschrieben.');
 }
+// ENTER (oder Mausklick) im Fertigkeitsbaum des Lagers: Knoten freischalten
+function baumEnter() {
+  const cls = CLASS_ORDER[clsIdx], n = treeNode(cls, treeCursor())!, own = meta.tree[cls] ?? [];
+  if (!n.cost || own.includes(n.id)) flash(n.cost ? 'Schon freigeschaltet.' : 'Immer verfügbar.');
+  else if (n.parent && treeNode(cls, n.parent)!.cost && !own.includes(n.parent)) flash('Erst den vorigen Knoten freischalten.');
+  else if (meta.souls < n.cost) flash('Nicht genug Seelensplitter.');
+  else { meta.souls -= n.cost; meta.tree[cls] = [...own, n.id]; saveMeta(meta); sfx('level'); }
+}
+// Zurück-Taste oben links im Fertigkeitsbaum des Lagers
+const BAUM_BACK = { x: 14, y: 10, w: 58, h: 16 };
 // Klickflächen des Lagers, beim Zeichnen gesammelt: Zeile (Auswahl + ENTER) oder eigene Aktion
 type Hit = { x: number; y: number; w: number; h: number; row?: number; act?: () => void };
 let lagerHits: Hit[] = [];
@@ -147,11 +157,7 @@ function onKey(k: string): boolean {
     if (mv) { treeMove(cls, mv[0], mv[1]); return true; }
     if (k === 'escape' || k === 'backspace') { scene = 'lager'; return true; }
     if (k === 'enter') {
-      const n = treeNode(cls, treeCursor())!, own = meta.tree[cls] ?? [];
-      if (!n.cost || own.includes(n.id)) flash(n.cost ? 'Schon freigeschaltet.' : 'Immer verfügbar.');
-      else if (n.parent && treeNode(cls, n.parent)!.cost && !own.includes(n.parent)) flash('Erst den vorigen Knoten freischalten.');
-      else if (meta.souls < n.cost) flash('Nicht genug Seelensplitter.');
-      else { meta.souls -= n.cost; meta.tree[cls] = [...own, n.id]; saveMeta(meta); }
+      baumEnter();
       return true;
     }
     return false;
@@ -230,8 +236,11 @@ cv.addEventListener('mousemove', e => {
   const mx = ((e.clientX - r.left) * VW) / r.width, my = ((e.clientY - r.top) * VH) / r.height;
   setMouse(mx, my);
   if (scene === 'title') { const i = menuHit(mx, my, TITLE_ITEMS); if (i >= 0) tRow = i; }
+  mouse.x = mx; mouse.y = my;
   if (scene === 'lager' && !card) { const h = lagerHit(mx, my); if (h && h.row !== undefined) row = h.row; }
-  cv.style.cursor = (scene === 'title' && menuHit(mx, my, TITLE_ITEMS) >= 0) || (scene === 'lager' && lagerHit(mx, my)) ? 'pointer' : '';
+  const tree = scene === 'baum' || (scene === 'run' && run?.mode === 'tree'), node = tree ? treeHit(mx, my) : null;
+  if (node) treeFocus(scene === 'baum' ? CLASS_ORDER[clsIdx] : run!.p.cls, node);
+  cv.style.cursor = (scene === 'title' && menuHit(mx, my, TITLE_ITEMS) >= 0) || (scene === 'lager' && lagerHit(mx, my)) || node || (scene === 'baum' && inBox(mouse, BAUM_BACK)) ? 'pointer' : '';
 });
 // oberste Klickfläche unter dem Zeiger (später gezeichnet = oben)
 function lagerHit(mx: number, my: number): Hit | undefined {
@@ -244,6 +253,15 @@ cv.addEventListener('click', e => {
   const mx = ((e.clientX - r.left) * VW) / r.width, my = ((e.clientY - r.top) * VH) / r.height;
   wakeAudio();
   if (card) { tutDone(card.id); card = null; return; }   // Lehrgangskarte: Klick wie ENTER
+  if (scene === 'baum') {
+    if (inBox({ x: mx, y: my }, BAUM_BACK)) { scene = 'lager'; return; }
+    const id = treeHit(mx, my); if (id) { treeFocus(CLASS_ORDER[clsIdx], id); baumEnter(); }
+    return;
+  }
+  if (scene === 'run' && run?.mode === 'tree') {
+    const id = treeHit(mx, my); if (id) { treeFocus(run.p.cls, id); const n = run.p.tree.length; act(run, { t: 'learn', id }); if (run.p.tree.length > n) sfx('level'); storeRun(); }
+    return;
+  }
   if (scene === 'lager') { const h = lagerHit(mx, my); if (h?.act) h.act(); else if (h?.row !== undefined) { row = h.row; lagerEnter(); } return; }
   if (scene === 'title') { const i = menuHit(mx, my, TITLE_ITEMS); if (i >= 0) { tRow = i; titleAction(); } return; }
   if (scene !== 'run' || !run) return;
@@ -500,8 +518,13 @@ function drawLagerTree(time: number, dt: number) {
     id => { const n = treeNode(cls, id)!; return !n.cost ? '#free' : own.includes(id) ? 'freigeschaltet' : `${n.cost} Splitter`; },
     `Pfeile: wählen · ENTER: freischalten · ESC: zurück · ${meta.souls} Seelensplitter`,
     id => { const n = treeNode(cls, id)!; return !n.cost ? 'Ohne Seelensplitter, steht in jedem Lauf zur Wahl.' : own.includes(id) ? 'Steht in jedem Lauf zur Wahl.' : 'Freischalten: kommt in die Auswahl der Läufe.'; });
+  const b = BAUM_BACK, on = inBox(mouse, b);
+  plate(b.x, b.y, b.w, b.h, on);
+  text(ctx, '< ZURÜCK', b.x + b.w / 2, b.y + 4, on ? '#ffcd75' : '#c9d4dc', 8, 'center');
   if (noteT > 0) { noteT -= dt; text(ctx, note, VW / 2, 346, '#ffcd75', 8, 'center'); }
 }
+const mouse = { x: -1, y: -1 };
+const inBox = (p: { x: number; y: number }, b: { x: number; y: number; w: number; h: number }) => p.x >= b.x && p.x < b.x + b.w && p.y >= b.y && p.y < b.y + b.h;
 
 let last = performance.now();
 function frame(now: number) {

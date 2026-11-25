@@ -1337,6 +1337,11 @@ const bundledOf = (cls: ClassId, id: string) => treeNodes(cls).find(n => n.bundl
 const tierOf = (cls: ClassId, id: string) => treeNode(cls, id)!.tier;
 let treeSel = 'n0_1';
 export const treeCursor = () => treeSel;
+// Klickflächen der Knoten, beim Zeichnen gesammelt (Lager und Lauf teilen sich das Bild)
+let treeRects: { id: string; x: number; y: number; w: number; h: number }[] = [];
+export function treeHit(mx: number, my: number): string | null {
+  return treeRects.find(r => mx >= r.x && mx < r.x + r.w && my >= r.y && my < r.y + r.h)?.id ?? null;
+}
 export function treeFocus(cls: ClassId, id: string) { if (treeNode(cls, id)) treeSel = id; }
 export function treeMove(cls: ClassId, dx: number, dy: number) {
   const rows = rowsOf(cls), n = treeNode(cls, treeSel) ?? treeNode(cls, 'n0_1')!, r = rows.findIndex(q => q.includes(n.tier));
@@ -1365,6 +1370,7 @@ function freeMark(ctx: CanvasRenderingContext2D, x: number, y: number, col: stri
 export function drawTree(ctx: CanvasRenderingContext2D, cls: ClassId, title: string, stateOf: (id: string) => TreeState, tag: (id: string) => string, foot: string, status: (id: string) => string) {
   ctx.fillStyle = 'rgba(13,14,23,0.88)'; ctx.fillRect(0, 0, VW, VH);
   text(ctx, title, VW / 2, 14, '#ffcd75', 16, 'center');
+  treeRects = [];
   const colW = 196, gap = 6, x0 = (VW - 3 * colW - 2 * gap) >> 1, rows = rowsOf(cls);
   const rowH = 26, step = rows.length > 2 ? 32 : 60, top = 62;
   for (let b = 0; b < 3; b++) {
@@ -1380,6 +1386,7 @@ export function drawTree(ctx: CanvasRenderingContext2D, cls: ClassId, title: str
       row.forEach((t, k) => {
         const id = `n${b}_${t}`, x = row.length > 1 ? cx + 4 + k * (w + 6) : cx + 13;
         const st = stateOf(id), col = TREE_COL[st], sel = id === treeSel, node = treeNode(cls, id)!;
+        treeRects.push({ id, x, y, w, h: rowH });
         panel(ctx, x, y, w, rowH, sel ? '#f4f4f4' : col, sel ? 'rgba(60,50,40,0.95)' : st === 'locked' ? 'rgba(13,14,23,0.9)' : 'rgba(28,32,51,0.95)');
         const mark = (st === 'learned' ? '+' : '') + (node.key ? '*' : '');
         text(ctx, cut(`${mark}${mark ? ' ' : ''}${tr(shortName(cls, id))}`, Math.floor((w - 6) / 6)), x + w / 2, y + 5, st === 'locked' ? '#566c86' : '#f4f4f4', 8, 'center');
