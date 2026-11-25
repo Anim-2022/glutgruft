@@ -119,6 +119,7 @@ export interface Run {
   evRooms?: Room[];          // Räume der Ebene (für Raumereignisse)
   evNote?: number;           // Ebene des letzten Fundzettels
   relicOps?: number;         // zusätzliche Reliquienwahlen aus Ereignissen
+  phoenixUsed?: boolean;     // Phönixfeder in diesem Lauf verbraucht
   warn?: number[];           // Felder, die im nächsten Zug getroffen werden
   // Jäger (nur gesetzt, wenn eingeschaltet)
   floorTurns?: number;       // Züge auf dieser Ebene
@@ -410,6 +411,8 @@ function manage(run: Run, a: Action): boolean {
 }
 
 // Ware des Händlers: zwei Stücke Ausrüstung und ein Verbrauchsgegenstand
+// Feilscherring: der Händler verlangt 25 % weniger
+const haggle = (run: Run, o: Offer) => { if (has(run.p, 'feilscher')) o.price = Math.max(1, Math.round(o.price * 0.75)); return o; };
 function wares(run: Run): Offer[] {
   const f = run.floor, offers: Offer[] = [];
   for (let k = 0; k < 2; k++) {
@@ -418,18 +421,18 @@ function wares(run: Run): Offer[] {
   }
   const c = genConsumable(run);
   offers.push({ kind: 'item', name: c.name, desc: itemText(c), price: 14 + f, sold: false, item: c });
-  return offers;
+  return offers.map(o => haggle(run, o));
 }
 
 function stock(run: Run): Offer[] {
   const f = run.floor;
-  return [
+  return ([
     { kind: 'potion', name: 'Heiltrank', desc: 'Heilt einen großen Teil deines Lebens', price: Math.round((20 + 4 * f) * DIFF.potionPrice), sold: false, left: 3 },
     { kind: 'bomb', name: 'Bombe', desc: 'Sprengt Gegner, Wände und Säulen', price: 10 + f, sold: false, left: 2 },
     ...wares(run),
     { kind: 'forge', name: 'Schmied', desc: `Waffe +1 Angriff, sonst Rüstung +1 Vert. (bis +${FORGE_MAX} je Stück)`, price: 30 + 4 * f, sold: false, left: 2 },
     { kind: 'reroll', name: 'Neue Ware', desc: 'Der Händler tauscht seine Ausrüstung aus', price: 12 + 2 * f, sold: false, left: 2 },
-  ];
+  ] as Offer[]).map(o => (o.kind === 'item' ? o : haggle(run, o)));
 }
 
 // Schmied: angelegte Waffe, sonst Rüstung; jedes Stück höchstens FORGE_MAX-mal
@@ -803,6 +806,8 @@ function nextFloor(run: Run) {
   if (run.runeUsed) run.runeUsed = false;
   run.p.keys = 0;
   if (has(run.p, 'sprengmeister') && run.floor > 1) run.p.bombs++;
+  if (has(run.p, 'kraeuter') && run.floor > 1 && run.floor % 2 === 0) run.p.potions++;
+  if (has(run.p, 'mondstein') && run.floor > 1) { const q = run.p; q.hp = Math.min(q.maxHp, q.hp + Math.ceil(q.maxHp * 0.3)); q.res = q.resMax; }
   [run.p.x, run.p.y] = center(rooms[0]);
   const last = rooms[rooms.length - 1];
   const bossFloor = run.floor % FLOORS_PER_BIOME === 0;
@@ -929,11 +934,11 @@ function stepHazard(run: Run, a: Actor) {
   const name = HAZARD_NAMES[h.kind];
   if (isP) { tele(run, 'trapHit'); run.fx.push({ k: 'shake', n: 3 }); }
   else tele(run, 'trapMob');
-  const hp0 = p.hp;
+  const hp0 = p.hp, tm = isP && has(p, 'spuernase') ? 0.5 : 1;
   switch (h.kind) {
     case 'stachel':
       if (shown) say(run, isP ? `${name}! Stacheln schießen aus dem Boden.` : `${a.name} tritt in eine ${name}!`);
-      damage(run, a, Math.round((3 + run.floor / 2) * DIFF.trapDmg), isP ? '#b13e53' : '#c9d4dc');
+      damage(run, a, Math.round((3 + run.floor / 2) * DIFF.trapDmg * tm), isP ? '#b13e53' : '#c9d4dc');
       break;
     case 'pfeil': {
       // Der Pfeil kommt aus der nächsten Wand in einer der vier Richtungen
@@ -944,7 +949,7 @@ function stepHazard(run: Run, a: Actor) {
       }
       if (src && shown) run.fx.push({ k: 'arrow', x0: src[0], y0: src[1], x1: a.x, y1: a.y, col: '#c9d4dc', heavy: false });
       if (shown) say(run, isP ? `${name}! Ein Pfeil zischt aus der Wand.` : `${a.name} löst eine ${name} aus!`);
-      damage(run, a, Math.round((2 + run.floor / 2) * DIFF.trapDmg), isP ? '#b13e53' : '#c9d4dc');
+      damage(run, a, Math.round((2 + run.floor / 2) * DIFF.trapDmg * tm), isP ? '#b13e53' : '#c9d4dc');
       break;
     }
     case 'gas':
@@ -1716,6 +1721,7 @@ function damage(run: Run, dst: Actor, amt: number, col = '#f4f4f4', crit = false
   if (dst.st.sproede) amt *= 1.5;
   if (dst !== p && dst.st.stun && hasNode(p, 'n1_2a') && p.cls === 'magier') amt *= 1.25; // Raureif
   if (dst !== p && dst.st.mark) amt *= 1.3; // Markieren
+  if (dst !== p && dst.st.stun && has(p, 'sturmglocke')) amt *= 1.3;
   amt = Math.max(1, Math.round(amt));
   if (dst === p && p.shield) {
     const ab = Math.min(p.shield, amt);
@@ -1767,7 +1773,13 @@ function playerHit(run: Run, dst: Actor, base: number, sure = false) {
   if (a.gift && run.rng.chance(a.gift / 100)) dst.st.gift = 3;
   if (a.brand && run.rng.chance(a.brand / 100)) dst.st.brand = 3;
   if (a.frost && run.rng.chance(Math.min(35, a.frost) / 100)) stun(run, dst, 1);
+  if (crit && has(p, 'funkenstein')) dst.st.brand = Math.max(dst.st.brand ?? 0, 3);
   damage(run, dst, (crit ? base * 2 : base) - dst.def, '#f4f4f4', crit);
+  // Richtbeil: normale Gegner unter 20 % Leben fallen sofort
+  if (has(p, 'richtbeil') && dst.hp > 0 && !dst.boss && !MOBS[dst.kind]?.hunter && dst.hp < dst.maxHp * 0.2 && run.mobs.includes(dst)) {
+    run.fx.push({ k: 'num', x: dst.x, y: dst.y, s: 'Hinrichtung', col: '#b13e53' });
+    damage(run, dst, dst.hp, '#b13e53');
+  }
   if (has(p, 'donnerfaust') && ++p.hits % 5 === 0) {
     run.fx.push({ k: 'shake', n: 4 });
     for (const m of run.mobs.filter(m => m !== dst && cheb(m, dst) <= 1)) damage(run, m, base * 0.6, '#ffcd75');
@@ -1797,6 +1809,12 @@ function fatal(run: Run) {
   const p = run.p;
   if (p.hp > 0) return;
   if (has(p, 'eisenwille') && !run.willUsed) { run.willUsed = true; p.hp = 1; say(run, 'Eisenwille hält dich am Leben!'); return; }
+  if (has(p, 'phoenix') && !run.phoenixUsed) {
+    run.phoenixUsed = true; p.hp = Math.ceil(p.maxHp / 2); delete p.st.gift; delete p.st.brand;
+    run.fx.push({ k: 'boom', x: p.x, y: p.y, r: 1 }, { k: 'num', x: p.x, y: p.y, s: `+${p.hp}`, col: '#ffcd75' });
+    say(run, 'Die Phönixfeder verglüht – du erhebst dich erneut!');
+    return;
+  }
   p.hp = 0;
   run.mode = 'dead';
   run.fx.push({ k: 'pdeath', x: p.x, y: p.y });
@@ -1810,8 +1828,10 @@ function kill(run: Run, m: Actor) {
   run.kills++;
   p.exp += m.xp;
   run.souls += Math.max(1, Math.round((m.xp / 10) * p.soulMul));
-  p.gold += Math.ceil((m.xp / 6) * (1 + (p.aff.gold ?? 0) / 100));
+  p.gold += Math.ceil((m.xp / 6) * (1 + (p.aff.gold ?? 0) / 100)) * (has(p, 'goldzahn') ? 2 : 1);
   if (p.aff.ausdauer) gain(p, p.aff.ausdauer);
+  if (has(p, 'kriegstrommel')) gain(p, 1);
+  if (has(p, 'blutegel') && p.hp > 0) p.hp = m.boss ? p.maxHp : Math.min(p.maxHp, p.hp + 1);
   if (p.aff.asche && !m.boss) {
     run.fx.push({ k: 'boom', x: m.x, y: m.y, r: 1 });
     for (const o of run.mobs.filter(o => cheb(o, m) <= 1)) damage(run, o, 4 + p.lvl, '#ef7d57');
@@ -1928,6 +1948,8 @@ function applyPerk(run: Run, id: string) {
   if (RELICS[id]) {
     p.relics.push(id);
     if (id === 'blutpakt') { p.atk += 3; p.maxHp = Math.max(5, Math.round(p.maxHp * 0.8)); p.hp = Math.min(p.hp, p.maxHp); }
+    if (id === 'titanenherz') { p.maxHp += 15; p.hp += 15; }
+    if (id === 'falkenauge') p.crit += 0.12;
     say(run, `Reliquie: ${RELICS[id].name}`);
     return;
   }
@@ -2544,7 +2566,7 @@ function hitPlayer(run: Run, m: Actor, melee: boolean) {
   m.f = Math.abs(p.x - m.x) >= Math.abs(p.y - m.y) ? [Math.sign(p.x - m.x), 0] : [0, Math.sign(p.y - m.y)];
   if (melee) run.fx.push({ k: 'lunge', id: m.id, dx: Math.sign(p.x - m.x), dy: Math.sign(p.y - m.y) }, { k: 'swipe', x: p.x, y: p.y, dx: Math.sign(p.x - m.x), dy: Math.sign(p.y - m.y), big: !!m.boss });
   if (melee && inSmoke(p) && run.rng.chance(0.5)) { run.fx.push({ k: 'num', x: p.x, y: p.y, s: 'verfehlt', col: '#94b0c2' }); return; }
-  if (p.st.dodge || (p.aff.flink && run.rng.chance(Math.min(40, p.aff.flink) / 100))) { run.fx.push({ k: 'num', x: p.x, y: p.y, s: 'verfehlt', col: '#94b0c2' }); if (p.aff.konter) p.st.konter = 1; return; }
+  if (p.st.dodge || (p.aff.flink && run.rng.chance(Math.min(40, p.aff.flink) / 100)) || (has(p, 'schleier') && run.rng.chance(0.1))) { run.fx.push({ k: 'num', x: p.x, y: p.y, s: 'verfehlt', col: '#94b0c2' }); if (p.aff.konter) p.st.konter = 1; return; }
   const atk = Math.max(1, (melee ? m.atk : Math.round(m.atk * 0.7)) - (m.st.schwach ? 1 : 0)); // Fernschüsse treffen schwächer
   damage(run, p, Math.max(Math.ceil(atk * 0.3), atk - p.def - (p.st.wall ? 3 : 0) - (p.st.eis ? 2 : 0) - (p.st.sw ? 2 : 0)) - (has(p, 'steinhaut') ? 1 : 0), '#b13e53');
   run.fx.push({ k: 'shake', n: m.boss ? 5 : 2 });
@@ -2558,6 +2580,7 @@ function hitPlayer(run: Run, m: Actor, melee: boolean) {
   if (d.poison && run.rng.chance(0.5)) p.st.gift = 4;
   if (d.burn && run.rng.chance(0.5)) p.st.brand = 3;
   if (melee && p.thorns) damage(run, m, p.thorns * (p.aff.stachel ? 2 : 1), '#a7f070');
+  if (melee && has(p, 'dornenkrone') && m.hp > 0) damage(run, m, 3, '#a7f070');
 }
 
 function moveMob(run: Run, m: Actor, x: number, y: number) {

@@ -231,3 +231,20 @@ describe('Ausprägungen und Synergien', () => {
     }
   });
 });
+
+describe('Neue Reliquien', () => {
+  const take = (run: ReturnType<typeof newRun>, id: string) => { run.perkChoices = [id]; run.mode = 'perk'; act(run, { t: 'perk', i: 0 }); };
+  it('Titanenherz und Falkenauge ändern die Werte', () => {
+    const run = newRun(3, 'krieger', defaultMeta()), hp = run.p.maxHp, crit = run.p.crit;
+    take(run, 'titanenherz'); take(run, 'falkenauge');
+    expect(run.p.maxHp).toBe(hp + 15);
+    expect(run.p.crit).toBeCloseTo(crit + 0.12);
+    expect(run.p.relics).toEqual(['titanenherz', 'falkenauge']);
+  });
+  it('jede Reliquie lässt sich nehmen', () => {
+    const run = newRun(4, 'magier', defaultMeta());
+    for (const id of Object.keys(RELICS)) take(run, id);
+    expect(run.p.relics.length).toBe(Object.keys(RELICS).length);
+    expect(run.mode).toBe('play');
+  });
+});

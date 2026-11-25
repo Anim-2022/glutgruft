@@ -338,6 +338,21 @@ export const RELICS: Record<string, PerkDef> = {
   eisenwille: { name: 'Eisenwille', desc: 'Überlebe einmal pro Ebene einen tödlichen Treffer' },
   jaeger: { name: 'Riesentöter', desc: '+50 % Schaden gegen Bosse' },
   echo: { name: 'Echo', desc: 'Fähigkeiten kosten 1 weniger' },
+  blutegel: { name: 'Blutegel', desc: 'Jeder Sieg heilt 1 Leben, ein besiegter Boss heilt dich ganz' },
+  kriegstrommel: { name: 'Kriegstrommel', desc: 'Jeder Sieg gibt 1 Klassenressource' },
+  funkenstein: { name: 'Funkenstein', desc: 'Kritische Treffer setzen das Ziel in Brand' },
+  schleier: { name: 'Schattenschleier', desc: '10 % Chance, jedem Angriff auszuweichen' },
+  dornenkrone: { name: 'Dornenkrone', desc: 'Wer dich im Nahkampf trifft, erleidet 3 Schaden' },
+  richtbeil: { name: 'Richtbeil', desc: 'Normale Gegner unter 20 % Leben sterben durch deinen Treffer' },
+  falkenauge: { name: 'Falkenauge', desc: '+12 % kritische Trefferchance' },
+  goldzahn: { name: 'Goldzahn', desc: 'Gegner lassen doppelt so viel Gold fallen' },
+  phoenix: { name: 'Phönixfeder', desc: 'Einmal je Lauf: statt zu sterben mit halbem Leben aufstehen' },
+  mondstein: { name: 'Mondstein', desc: 'Jede neue Ebene heilt 30 % Leben und füllt die Klassenressource' },
+  titanenherz: { name: 'Titanenherz', desc: '+15 max. Leben' },
+  sturmglocke: { name: 'Sturmglocke', desc: 'Betäubte Gegner erleiden +30 % Schaden' },
+  spuernase: { name: 'Spürnase', desc: 'Stachel- und Pfeilfallen richten nur halben Schaden an' },
+  feilscher: { name: 'Feilscherring', desc: 'Der Händler verlangt 25 % weniger' },
+  kraeuter: { name: 'Kräuterbeutel', desc: 'Jede zweite neue Ebene: +1 Heiltrank' },
 };
 
 export const RARITY = ['Gewöhnlich', 'Selten', 'Episch', 'Legendär'];
