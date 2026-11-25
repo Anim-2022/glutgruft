@@ -250,6 +250,11 @@ const EN: Record<string, string> = {
   'Pfeile wählen · ENTER bestätigen': 'Arrows select · ENTER confirm',
   'Pfeile wählen · ENTER bestätigen · Maus: klicken': 'Arrows select · ENTER confirm · Mouse: click',
   'LEHRGANG NEU': 'RESTART TUTORIAL',
+  'FÄHIGKEITEN': 'SKILLS', ' freigeschaltet  >': ' unlocked  >', 'LEERTASTE': 'SPACE', 'gespeicherter Lauf': 'saved run',
+  'Klick oder ENTER: ': 'Click or ENTER: ', 'Seelensplitter kaufen dauerhafte Verbesserungen.': 'Soul shards buy permanent upgrades.',
+  'L: Sprache · V: Vollbild · M: Ton': 'L: language · V: fullscreen · M: sound',
+  'Pfeile/Maus: wählen · ENTER/Klick: kaufen · LEERTASTE: Abstieg · ESC: Titel': 'Arrows/mouse: select · ENTER/click: buy · SPACE: descend · ESC: title',
+
   'VOLLBILD: AN': 'FULLSCREEN: ON',
   'VOLLBILD: AUS': 'FULLSCREEN: OFF',
   'Bewegen: Pfeile/WASD · Fähigkeiten: 1-3 · Rucksack: I · Hilfe: H': 'Move: arrows/WASD · Skills: 1-3 · Backpack: I · Help: H',
