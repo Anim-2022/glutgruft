@@ -26,6 +26,64 @@ export function floorMacro(b: BiomeCols, bi: number, rnd: () => number): HTMLCan
   return out;
 }
 
+// ---- Whole-floor bake: one canvas per level, patterns and tint in world coordinates (no square seams) ----
+// Crypt and forge keep their slab layouts (seams there are real mortar joints); the cave gets one continuous
+// rock noise; small details (moss, glowing joints) are stamped at free pixel positions instead of whole tiles;
+// the brightness wave is applied per pixel. Rendering only; seed = run seed + floor.
+const hw = (x: number, y: number, s: number) => (Math.imul(x, 73856093) ^ Math.imul(y, 19349663) ^ Math.imul(s, 83492791)) >>> 0;
+export function bakeFloor(b: BiomeCols, bi: number, macro: HTMLCanvasElement[][], seed: number, w: number, h: number): HTMLCanvasElement {
+  const [c, g] = mk(w * TS, h * TS), PW = w * TS, PH = h * TS;
+  px(g, b.floor, 0, 0, PW, PH);
+  if (bi === 1) caveWorld(g, b, seed, PW, PH);
+  else for (let by = 0; by < Math.ceil(h / 2); by++) for (let bx = 0; bx < Math.ceil(w / 2); bx++) {
+    const parts = macro[hw(bx, by, 404 + seed) % macro.length];
+    parts.forEach((q, k) => g.drawImage(q, bx * 32 + (k & 1) * TS, by * 32 + (k >> 1) * TS));
+  }
+  // details at free pixel positions
+  const n = Math.round((w * h) / 7);
+  for (let k = 0; k < n; k++) {
+    const hk = hw(k, seed, 77), x = hk % PW, y = (hk >>> 11) % PH, r = 2 + ((hk >>> 5) % 3);
+    if (bi === 1) blob(g, x, y, r, b.g1, b.g2);
+    else if (bi === 2 && k % 2 === 0) { px(g, '#7d2b45', x, y, 3 + (hk % 3), 1); if (hk % 4 === 0) px(g, '#ef7d57', x + 1, y); }
+  }
+  // brightness wave, per pixel (formerly one flat overlay per tile)
+  const img = g.getImageData(0, 0, PW, PH), d = img.data;
+  for (let y = 0; y < PH; y++) for (let x = 0; x < PW; x++) {
+    const tv = floorTint(x / TS, y / TS), i = (y * PW + x) * 4;
+    if (tv > 0) { const a = tv * 0.045; d[i] += (255 - d[i]) * a; d[i + 1] += (255 - d[i + 1]) * a; d[i + 2] += (255 - d[i + 2]) * a; }
+    else { const a = 1 + tv * 0.11; d[i] *= a; d[i + 1] *= a; d[i + 2] *= a; }
+  }
+  g.putImageData(img, 0, 0);
+  return c;
+}
+// dithered round patch (moss): dense core, frayed rim
+function blob(g: CanvasRenderingContext2D, cx: number, cy: number, r: number, c1: string, c2: string) {
+  for (let y = -r; y <= r; y++) for (let x = -r; x <= r; x++) {
+    const d = (x * x + y * y) / (r * r);
+    if (d > 1 || BAYER[((cy + y) & 3) * 4 + ((cx + x) & 3)] < d) continue;
+    px(g, d < 0.3 ? c2 : c1, cx + x, cy + y);
+  }
+}
+// continuous rock: two octaves of value noise on the world grid, ordered dither, pebbles and hairline cracks
+function caveWorld(g: CanvasRenderingContext2D, b: BiomeCols, seed: number, PW: number, PH: number) {
+  const val = (i: number, j: number, s: number) => (hw(i, j, seed * 3 + s) % 1000) / 1000;
+  const noise = (x: number, y: number, cell: number, s: number) => {
+    const fx = x / cell, fy = y / cell, i = Math.floor(fx), j = Math.floor(fy), u = fx - i, v = fy - j;
+    const su = u * u * (3 - 2 * u), sv = v * v * (3 - 2 * v);
+    return (val(i, j, s) * (1 - su) + val(i + 1, j, s) * su) * (1 - sv) + (val(i, j + 1, s) * (1 - su) + val(i + 1, j + 1, s) * su) * sv;
+  };
+  for (let y = 0; y < PH; y++) for (let x = 0; x < PW; x++) {
+    const n = noise(x, y, 8, 1) * 0.65 + noise(x, y, 23, 2) * 0.35, dth = n + (BAYER[(y & 3) * 4 + (x & 3)] - 0.5) * 0.2;
+    if (dth < 0.3) px(g, b.mortar, x, y); else if (dth > 0.7) px(g, b.speck, x, y);
+  }
+  const tiles = (PW * PH) / (TS * TS);
+  for (let k = 0; k < tiles * 1.5; k++) { const hk = hw(k, seed, 91), x = hk % PW, y = (hk >>> 12) % PH; px(g, b.brick, x, y, 2, 1); px(g, b.hi, x, y); px(g, b.mortar, x, y + 1, 2, 1); }
+  for (let k = 0; k < tiles / 4; k++) {
+    const hk = hw(k, seed, 93); let x = hk % PW, y = (hk >>> 12) % PH;
+    for (let s2 = 0; s2 < 5; s2++) { px(g, b.top, x, y); x += (hw(k, s2, 95) & 1); y += 1; }
+  }
+}
+
 // Gruft: Steinplatten unterschiedlicher Größe mit Fugen, leicht verschieden getönt
 const SLABS = [
   [[0, 0, 12, 10], [12, 0, 20, 10], [0, 10, 20, 12], [20, 10, 12, 12], [0, 22, 10, 10], [10, 22, 22, 10]],
@@ -121,18 +179,6 @@ export function capTiles(b: BiomeCols, base: HTMLCanvasElement, edges: HTMLCanva
     g.drawImage(e, 0, 0);
     return c;
   });
-}
-// ruhigere Oberfläche der Mauerkrone (ohne Ziegelgitter, das wie Frontmauerwerk wirkt)
-export function capBase(b: BiomeCols, bi: number, rnd: () => number): HTMLCanvasElement {
-  const [c, g] = mk(TS, TS);
-  px(g, b.cap, 0, 0, TS, TS);
-  g.fillStyle = 'rgba(0,0,0,0.22)';
-  if (bi === 1) for (let i = 0; i < 7; i++) g.fillRect((rnd() * 13) | 0, (rnd() * 14) | 0, 2 + ((rnd() * 2) | 0), 1 + ((rnd() * 2) | 0));
-  else { g.fillRect(3, 8, 9, 1); g.fillRect(9, 2, 1, 6); g.fillRect(5, 9, 1, 5); }
-  g.fillStyle = 'rgba(255,255,255,0.08)';
-  for (let i = 0; i < 5; i++) g.fillRect((rnd() * 15) | 0, (rnd() * 15) | 0, 1 + ((rnd() * 2) | 0), 1);
-  if (bi === 2) { px(g, '#7d2b45', 4, 4, 1, 3); px(g, '#ef7d57', 4, 5); px(g, '#7d2b45', 12, 11, 2, 1); }
-  return c;
 }
 
 // ---- Sockel der Wandfront: Fuge, dunklere Sockelsteine, Übergang zum Boden ----

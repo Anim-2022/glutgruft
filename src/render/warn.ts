@@ -16,13 +16,16 @@ export function threatOf(run: Run, m: Actor): Threat {
 }
 
 // Welche Statusanzeigen eine Figur bekommt (Reihenfolge = Zeichenreihenfolge). Nur lesend.
-export type Mark = 'stun' | 'brand' | 'gift' | 'sproede' | 'wall' | 'dodge';
+export type Mark = 'stun' | 'brand' | 'gift' | 'sproede' | 'wall' | 'dodge' | 'netz' | 'mark' | 'schwach';
 export function statusMarks(a: Actor, isPlayer: boolean): Mark[] {
   const st = a.st, out: Mark[] = [];
   if (st.stun) out.push('stun');
   if (st.brand) out.push('brand');
   if (st.gift) out.push('gift');
   if (st.sproede) out.push('sproede');
+  if (st.netz) out.push('netz');
+  if (st.mark) out.push('mark');
+  if (st.schwach) out.push('schwach');
   if (isPlayer && st.wall) out.push('wall');
   if (isPlayer && st.dodge) out.push('dodge');
   return out;

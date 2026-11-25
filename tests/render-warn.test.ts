@@ -21,6 +21,7 @@ describe('render warnings and statuses are pure', () => {
       { ...base, id: 902, kind: 'schuetze', x: far[0], y: far[1], awake: true, st: { sproede: 2 }, cd: 0 },
       { ...base, id: 903, kind: 'golem', x: adj[0], y: adj[1], awake: true, st: {}, cd: 1 },
       { ...base, id: 904, kind: 'ratte', x: adj[0], y: adj[1], awake: true, st: { stun: 2 }, cd: 0 },
+      { ...base, id: 905, kind: 'ratte', x: adj[0], y: adj[1], awake: true, st: { netz: 1, mark: 2, schwach: 2 }, cd: 0 },
       ...run.mobs.slice(1),
     ];
     p.st.wall = 2; p.st.dodge = 1;
@@ -30,7 +31,7 @@ describe('render warnings and statuses are pure', () => {
       for (const m of run.mobs) { seen.add(threatOf(run, m)); statusMarks(m, false).forEach(x => marks.add(x)); }
       statusMarks(p, true).forEach(x => marks.add(x));
     }
-    expect([...marks].sort()).toEqual(['brand', 'dodge', 'gift', 'sproede', 'stun', 'wall']);
+    expect([...marks].sort()).toEqual(['brand', 'dodge', 'gift', 'mark', 'netz', 'schwach', 'sproede', 'stun', 'wall']);
     expect(seen.has('melee')).toBe(true);
     expect(seen.has('shot')).toBe(true);
     expect(seen.has(null)).toBe(true);

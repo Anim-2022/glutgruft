@@ -186,14 +186,30 @@ export const NEW_SKILLS: Record<string, SkillDef & { branch: number }> = {
 export const TUNE = { treePtsMax: 6, kryoMana: 2, kryoRegen: 0.75, kCost: 0 };
 // Schalter für neue Systeme (Messungen: tests/balance.ts mit HAZARDS=off, MIMICS=off). Aus heißt:
 // keine Zufallszahl und keine Änderung am Lauf – das Ergebnis gleicht dann Bit für Bit dem Stand davor.
-export const FEATURES = { hunters: true, hunterForce: '', hazards: true, mimics: true, events: true, eventRate: 1, eventForce: '', eventForceBiome: false };
+export const FEATURES = { hunters: true, hunterForce: '', hazards: true, mimics: true, events: true, eventRate: 1, eventForce: '', eventForceBiome: false, destruction: true, huntPressure: true };
+// Destructible world (FEATURES.destruction). Placement uses its own RNG seeded from seed + floor, so the main
+// stream (monsters, loot, events) is unchanged; with the switch off nothing is placed and no rule applies.
+// Per room: chance of a group and its size; per biome [crypt, cave, forge]. Pots: share of gold / potion / rat.
+export const DESTR = {
+  pot: [0.45, 0.35, 0.4], potN: [1, 3] as [number, number], potGold: 0.2, potPotion: 0.03, potRat: 0.15,
+  oil: [0.12, 0, 0.2], oilBarrel: 0.4, oilN: [3, 6] as [number, number],
+  water: [0, 0.3, 0], waterN: [3, 7] as [number, number],
+  web: [0.3, 0.25, 0], webN: [1, 3] as [number, number],
+  spore: [0, 0.35, 0], sporeN: [1, 2] as [number, number],
+  gasTurns: 2, gasPoison: 3, oilBurn: 3,
+  secret: [1, 2] as [number, number], secretMinGain: 10, // way around must be at least this much longer
+};
 // Jäger: erster nach `first` Zügen auf einer Ebene, dann alle `interval` Züge, höchstens `cap` zugleich
 // pool: [Art, Gewicht, ab Ebene]; unter Ebene `weakBelow` sind Jäger schwächer (weak)
 export const HUNTER = { first: 560, interval: 30, cap: 4, warn: 30, pool: [['echse', 50, 1], ['krake', 20, 1], ['drache', 15, 6], ['medusa', 10, 4], ['tod', 5, 11]] as [string, number, number][], snakes: 4, weakBelow: 6, weak: 0.8, todCd: 6, krakeCd: 2,
   // Spezialangriffe: Abklingzeiten, Versteinerung, Raserei unter rageAt Leben (+rageAtk), Betäubung höchstens stunMax Züge
   leapCd: 4, tailCd: 4, rainCd: 5, gazeCd: 4, blinkCd: 5, stoneTurns: 2, rageAt: 0.4, rageAtk: 2, stunMax: 2,
   // jeder weitere Jäger auf derselben Ebene: +growHp Leben, +growAtk Angriff; Abstand schrumpft um shrink bis minInterval
-  growHp: 0.15, growAtk: 1, shrink: 5, minInterval: 15 }; // Angriff +growAtk nur jede zweite Stufe
+  growHp: 0.15, growAtk: 1, shrink: 5, minInterval: 15, // Angriff +growAtk nur jede zweite Stufe
+  // Anti-farming (FEATURES.huntPressure): the k-th hunter killed on a floor gives reward × rewardDecay[k] (last value
+  // for all later ones); from pairFrom spawned hunters on they come in pairs, from deathFrom on Death comes, reward-free;
+  // stronger growth per stage; stun at most 1 turn from stage stun1From; no passive regen while one is alive
+  rewardDecay: [1, 0.4, 0.15, 0], pairFrom: 2, deathFrom: 4, growHp2: 0.3, growAtk2: 1, stun1From: 2 };
 // Ereignisse: Ruhe-Auslöser, Zweitereignis bei Rate 1, Obergrenze zusätzlicher Reliquienwahlen je Lauf,
 // Schattenzwilling als Anteil der Heldenwerte (nur Grundangriff)
 export const EVENT = { biomeShare: 0.6, calmMin: 25, calmMax: 40, calmChance: 0.15, second: 0.45, relicCap: 2, relicChance: 0.2,

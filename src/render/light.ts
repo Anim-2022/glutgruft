@@ -160,11 +160,27 @@ export function applyLight(ctx: CanvasRenderingContext2D, view: LightView, light
       const b = BAYER[(y & 3) * 4 + (x & 3)];
       const ti = tx >= 0 && ty >= 0 && tx < W && ty < H ? ty * W + tx : -1;
       let alpha: number;
-      if (ti >= 0 && view.vis[ti]) {
+      // darkness of a tile that is only remembered (or never seen)
+      const memA = (t: number) => (t >= 0 && view.seen[t] ? amb.memory : amb.dark);
+      // the edge of sight is blended between tile centres (bilinear, then dithered) instead of stepping a whole tile
+      const ux = wx / TS - 0.5, uy = wy / TS - 0.5, i0 = Math.floor(ux), j0 = Math.floor(uy), fx = ux - i0, fy = uy - j0;
+      const at = (gx: number, gy: number) => (gx >= 0 && gy >= 0 && gx < W && gy < H ? gy * W + gx : -1);
+      const q = [at(i0, j0), at(i0 + 1, j0), at(i0, j0 + 1), at(i0 + 1, j0 + 1)], wq = [(1 - fx) * (1 - fy), fx * (1 - fy), (1 - fx) * fy, fx * fy];
+      let vw = 0, mem = 0;
+      for (let k = 0; k < 4; k++) { const t = q[k]; if (t >= 0 && view.vis[t] && !opaque(view.tiles[t])) vw += wq[k]; else mem += wq[k] * memA(t); }
+      const own = ti >= 0 && view.vis[ti];
+      if (own) {
         let l = lum[i];
         if (wallLike(view.tiles[ti])) l = 1 - (1 - l) * (1 - WALL_MIN);
-        alpha = amb.dark * (1 - Math.floor(l * LEVELS + b) / LEVELS);
-      } else alpha = ti >= 0 && view.seen[ti] ? amb.memory : amb.dark;
+        const lit = amb.dark * (1 - l);
+        // walls keep their own lighting; floor fades into memory toward unseen neighbours
+        const mix = opaque(view.tiles[ti]) || vw >= 0.999 ? lit : lit * vw + mem;
+        alpha = amb.dark * Math.floor((mix / amb.dark) * LEVELS + b) / LEVELS;
+      } else {
+        const lit = vw > 0 ? amb.dark * (1 - Math.min(1, lum[i] * 0.6)) : 0;
+        const mix = vw > 0 && !opaque(view.tiles[ti] ?? 0) ? lit * vw * 0.5 + memA(ti) * (1 - vw * 0.5) : memA(ti);
+        alpha = amb.dark * Math.floor((mix / amb.dark) * LEVELS + b) / LEVELS;
+      }
       d[i * 4] = ar; d[i * 4 + 1] = ag; d[i * 4 + 2] = ab; d[i * 4 + 3] = Math.max(0, alpha) * 255;
       const vis = ti >= 0 && view.vis[ti];
       for (let k = 0; k < 3; k++) gd[i * 4 + k] = vis ? Math.floor((Math.min(GLOW_MAX, glow[i * 3 + k]) / 255) * 12 + b) * (255 / 12) : 0;

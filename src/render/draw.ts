@@ -1,4 +1,4 @@
-import { VW, VH, TS, sprites, masks, tilesets, text, panel, bar, heroLook, figure } from './gfx';
+import { VW, VH, TS, sprites, masks, tilesets, text, panel, bar, heroLook, figure, BIOMES as FLOOR_COLS } from './gfx';
 import { GLOW } from './sprites';
 import { W, H, T, wallLike, walkable } from '../game/dungeon';
 import { threatOf, statusMarks } from './warn';
@@ -6,29 +6,36 @@ import { onDeath, drawDecals, drawDying, resetDeaths, reducedFx } from './deaths
 import { drawItemIcon, drawIcon, PERK_ICON } from './icons';
 import { Light, applyLight, AMBIENTS } from './light';
 import { dropShadow, drawAO } from './shade';
-import { floorTint, softEdged, pickDecal } from './tiles';
+import { softEdged, pickDecal, bakeFloor } from './tiles';
 import { propsFor, drawProp, recolor, torchSpots } from './props';
 import { stepAmbient, drawAmbient, drawFog, resetAmbient, postFx } from './ambient';
-import { drawFlames, smoke, drawSmoke, resetFire, trackBurns, drawEmbers } from './fire';
+import { drawFlames, smoke, drawSmoke, resetFire, trackBurns, drawEmbers, fireAge, pruneFire } from './fire';
 
 // Arena des Bosses: Fackeln brennen in seiner Farbe [außen, Kern], dazu eine Aura um ihn
 const BOSS_FLAME: [string, string][] = [['#9a4fc0', '#c9d4dc'], ['#38b764', '#a7f070'], ['#ef7d57', '#f4f4f4']];
 const bossTorch: HTMLCanvasElement[][] = [];
 const torchOf = (bi: number, f: number) => (bossTorch[bi] ??= [0, 1].map(k => recolor(sprites[`torch${k}`], { '#ef7d57': BOSS_FLAME[bi][0], '#ffcd75': BOSS_FLAME[bi][1] })))[f];
 import { sfx } from '../core/audio';
+import { schedule, advance, held, anim, peekAnim, startLunge, setPose, hitActor, hitstop, resetTimeline, busy, LUNGE_T, FLASH_T, RECOIL_T } from './timeline';
+import { addNum, drawNums, addShake, stepShake, critFlash, hurtFlash, drawScreenFlash, splat, drawSpots, tinted, noteKill, resetJuice } from './juice';
+import { fxScale, fxLevel } from './fxopts';
+import { drawWorldTile, drawGas, MAT_COLS, MAT_SOUND } from './world';
 import { hunterFx, resetHunterFx, isHunter, leaping, leapLift, drawHunterAura, hunterGlow, drawHunterBar, drawHunterMarks, stepHunterFx, stoneOverlay } from './hunters';
-import { Run, Actor, xpNeed, skillCost, skillReady, spellAt, itemText, itemValue, itemScore, perkInfo, skillModName, shotRange, RANKS, SORT_NAMES, BAG_MAX, RUNE_NAMES, availableNodes, puzzleGoal, eventGoal, hunterWarn, hunterInfo, dartWarn, inVault, VAULT_NAMES, HAZARD_NAMES } from '../game/run';
+import { Run, Actor, xpNeed, skillCost, skillReady, spellAt, itemText, itemValue, itemScore, perkInfo, skillModName, shotRange, RANKS, SORT_NAMES, BAG_MAX, RUNE_NAMES, availableNodes, puzzleGoal, eventGoal, hunterWarn, hunterInfo, hunted, dartWarn, inVault, VAULT_NAMES, HAZARD_NAMES } from '../game/run';
 import { ClassId, treeNodes, NEW_SKILLS, TUNE, BRANCH_NAMES, SKILL_UP, treeNode, nodeText, CLASSES, MOBS, PERKS, RELICS, RARITY, RARITY_COL, BIOME_NAMES, biomeOf, Item, AFFIX, CONSUMABLES, SLOT_NAMES, ULT, ULT_LEVEL, USE_ORDER, SYNERGIES } from '../game/content';
 
 const pos = new Map<number, { x: number; y: number }>();
-const lunges = new Map<number, { dx: number; dy: number; t: number }>();
-const flashes = new Map<number, number>();
-const nums: { x: number; y: number; s: string; col: string; t: number }[] = [];
 const bolts: { x0: number; y0: number; x1: number; y1: number; col: string; t: number }[] = [];
 const booms: { x: number; y: number; r: number; t: number }[] = [];
-const fuseTags: { x: number; y: number; n: number }[] = []; // Zähler über brennenden Lunten (nach dem Licht gezeichnet)
-const bits: { x: number; y: number; vx: number; vy: number; col: string; t: number; g?: number }[] = [];
-let shake = 0;
+const fuseTags: { x: number; y: number; n: number }[] = []; // counters over burning fuses (drawn after the light)
+const fireBlocks = new Map<number, { x: number; y: number; n: number; k: number }>(); // fire lights merged per 3×3 block
+// Particles; fy: floor height where heavy particles come to rest (then fade slowly)
+const bits: { x: number; y: number; vx: number; vy: number; col: string; t: number; g?: number; fy?: number; rest?: number; rl?: number }[] = [];
+const BIT_MAX = 400, BIT_T = 0.55, REST_T = 1.5;
+const shake = (n: number, dir: [number, number] | null = null) => addShake(n, dir);
+// Direction of the last blow or shot (for recoil, splatter, camera kick)
+let hitDir: [number, number] | null = null, hitDirT = 0;
+const setDir = (dx: number, dy: number) => { hitDir = [dx, dy]; hitDirT = 0; };
 // Fähigkeitseffekte (nur Darstellung)
 type Shot = { x0: number; y0: number; x1: number; y1: number; col: string; kind: 'fire' | 'arrow' | 'heavy'; r: number; t: number; dur: number };
 const shots: Shot[] = [];
@@ -38,14 +45,13 @@ const bashes: { x: number; y: number; dx: number; dy: number; t: number }[] = []
 const swipes: { x: number; y: number; dx: number; dy: number; big: boolean; t: number }[] = [];
 let deathT = -1; // Zeit seit dem Tod des Helden, -1 = lebt
 const SWIPE_T = 0.2, DEATH_T = 1.3;
-// Posen der Figuren: a Angriff, c Zauber (Bild aus poses.ts), Restdauer in Sekunden
-const poses = new Map<number, { k: string; t: number }>();
-const pose = (id: number, k: string, t = 0.22) => poses.set(id, { k, t });
+// Actor poses: a attack, c cast (frame from poses.ts), time left in seconds – state lives in timeline.ts
+const pose = (id: number, k: string, t = 0.22) => setPose(id, k, t);
 const RING_T = 0.38, SPARK_T = 0.18, BASH_T = 0.22;
 const burstBits = (x: number, y: number, n: number, cols: string[], v0: number, v1: number, up = 30, g?: number) => {
   for (let k = 0; k < n; k++) {
     const ang = Math.random() * Math.PI * 2, v = v0 + Math.random() * (v1 - v0);
-    bits.push({ x, y, vx: Math.cos(ang) * v, vy: Math.sin(ang) * v - up, col: cols[k % cols.length], t: 0, g });
+    bits.push({ x, y, vx: Math.cos(ang) * v, vy: Math.sin(ang) * v - up, col: cols[k % cols.length], t: 0, g, fy: g === undefined || g > 100 ? y + 3 + Math.random() * 9 : undefined });
   }
 };
 const cam = { x: 0, y: 0 };
@@ -53,7 +59,6 @@ const view = { ox: 0, oy: 0 };
 // Bildschirmpunkt -> Kartenfeld (für Mausklicks)
 export const tileAt = (mx: number, my: number): [number, number] => [Math.floor((mx - view.ox) / TS), Math.floor((my - view.oy) / TS)];
 
-const LUNGE_T = 0.16, FLASH_T = 0.12;
 
 // ---- Anzeigeoptionen ----
 const mouse = { x: -1, y: -1 };
@@ -79,6 +84,14 @@ const torches = new Set<number>();
 let lightKey = '';
 const hash = (x: number, y: number, s: number) => (Math.imul(x, 73856093) ^ Math.imul(y, 19349663) ^ Math.imul(s, 83492791)) >>> 0;
 
+// whole floor of the level, baked once per level (tiles.ts)
+let floorBake: { key: string; c: HTMLCanvasElement } | null = null;
+function floorOf(run: Run, bio: number): HTMLCanvasElement {
+  const key = `${run.seed}:${run.floor}`;
+  if (floorBake?.key !== key) floorBake = { key, c: bakeFloor(FLOOR_COLS[bio], bio, tilesets[bio].floorM, (run.seed + run.floor * 7919) >>> 0, W, H) };
+  return floorBake.c;
+}
+
 function buildLight(run: Run) {
   const key = `${run.seed}:${run.floor}`;
   if (key === lightKey) return;
@@ -88,16 +101,25 @@ function buildLight(run: Run) {
 }
 
 export function resetView() {
-  pos.clear(); lunges.clear(); flashes.clear();
-  nums.length = 0; bolts.length = 0; bits.length = 0; booms.length = 0; shake = 0;
-  shots.length = 0; rings.length = 0; sparks.length = 0; bashes.length = 0; swipes.length = 0; deathT = -1; poses.clear();
+  pos.clear(); resetTimeline(); resetJuice();
+  bolts.length = 0; bits.length = 0; booms.length = 0;
+  shots.length = 0; rings.length = 0; sparks.length = 0; bashes.length = 0; swipes.length = 0; deathT = -1;
   resetDeaths(); resetAmbient(); resetFire(); resetHunterFx(); fuseTags.length = 0;
 }
 
 function smooth(a: Actor, dt: number) {
   let p = pos.get(a.id);
   if (!p || (Math.abs(p.x - a.x) + Math.abs(p.y - a.y) > 3 && !leaping(a.id))) { p = { x: a.x, y: a.y }; pos.set(a.id, p); }
-  const k = Math.min(1, dt * (leaping(a.id) ? 7 : 11));
+  // an enemy whose beat has not come yet still stands at its old position
+  if (held(a.id)) return p;
+  // knockback: just hit and more than a tile away – slide fast, dust at the feet
+  const an = peekAnim(a.id), d = Math.abs(p.x - a.x) + Math.abs(p.y - a.y);
+  const knock = !!an && an.hurt < 0.3 && d > 0.9 && !leaping(a.id);
+  if (knock && !an.knocked) {
+    an.knocked = true;
+    burstBits(p.x * TS + 8, p.y * TS + 13, Math.round(8 * fxScale()) + 2, ['#94b0c2', '#566c86', '#c9d4dc'], 10, 40, 12);
+  }
+  const k = Math.min(1, dt * (leaping(a.id) ? 7 : knock ? 28 : 11));
   p.x += (a.x - p.x) * k; p.y += (a.y - p.y) * k;
   return p;
 }
@@ -108,6 +130,7 @@ const OBJ_SHADOW: Record<number, [number, number]> = {
   [T.PILLAR]: [15, 14], [T.BARREL]: [14, 13], [T.CHEST]: [13, 16], [T.CHEST_OPEN]: [13, 16], [T.ALTAR]: [15, 14], [T.ALTAR_USED]: [15, 14],
   [T.TRADER]: [15, 14], [T.CRATE]: [15, 16], [T.CRATE_ON]: [15, 16], [T.TABLET]: [15, 14], [T.LEVER]: [14, 10], [T.CURSED]: [14, 15],
   [T.FOUNTAIN]: [15, 15], [T.FOUNTAIN_DRY]: [15, 15], [T.BRAZIER]: [15, 10], [T.BRAZIER_ON]: [15, 10], [T.STATUE]: [15, 14], [T.MIMIC]: [13, 16],
+  [T.POT]: [14, 10], [T.SPORE]: [15, 12],
 };
 const FLY = new Set(['fledermaus', 'glutgeist', 'tod']);
 
@@ -116,26 +139,66 @@ const TILE_SPR: Record<number, string> = {
   [T.CRATE]: 'crate', [T.CRATE_ON]: 'crate', [T.PLATE]: 'plate', [T.LEVER]: 'lever', [T.TABLET]: 'tablet', [T.GOAL]: 'goal',
   [T.CURSED]: 'cursed', [T.TRADER]: 'trader', [T.FOUNTAIN]: 'fountain', [T.FOUNTAIN_DRY]: 'fountain_dry', [T.GATE]: 'gate', [T.BRAZIER]: 'brazier', [T.BRAZIER_ON]: 'brazier_on', [T.STATUE]: 'statue', [T.MIMIC]: 'chest',
   [T.BARREL]: 'barrel', [T.PILLAR]: 'pillar', [T.RUBBLE]: 'rubble', [T.FRAGILE]: 'crack', [T.FRAGILE2]: 'crack2',
+  [T.POT]: 'pot', [T.SPORE]: 'spore',
 };
 
 export function drawRun(ctx: CanvasRenderingContext2D, run: Run, dt: number, time: number) {
-  for (const f of run.fx.splice(0)) {
+  // play effects back in order (timeline.ts); frame time stands still during hitstop
+  schedule(run.fx.splice(0));
+  const tick = advance(dt);
+  dt = tick.sdt;
+  hitDirT += dt;
+  if (hitDirT > 0.3) hitDir = null;
+  const actorAt = (x: number, y: number): Actor | undefined => (run.p.x === x && run.p.y === y ? run.p : run.mobs.find(m => m.x === x && m.y === y));
+  for (const f of tick.out) {
     const hs = hunterFx(f);
-    if (hs >= 0) { shake = Math.max(shake, reducedFx() ? 0 : hs); continue; }
+    if (hs >= 0) { shake(hs); continue; }
     switch (f.k) {
-      case 'num': nums.push({ x: f.x * TS + 8, y: f.y * TS - nums.filter(n => n.t < 0.1).length * 8, s: f.s, col: f.col, t: 0 }); break;
-      case 'shake': shake = Math.max(shake, f.n); break;
-      case 'bolt': bolts.push({ ...f, t: 0 }); sfx('zap'); if (f.x0 === run.p.x && f.y0 === run.p.y) pose(0, 'a'); break;
-      case 'lunge': lunges.set(f.id, { dx: f.dx, dy: f.dy, t: 0 }); sfx('hit'); pose(f.id, 'a'); break;
-      case 'flash': flashes.set(f.id, FLASH_T); if (f.id === 0) sfx('hurt'); break;
-      case 'die': shake = Math.max(shake, onDeath(run, f.kind, f.x, f.y)); sfx('kill'); break;
+      case 'num': {
+        const a = actorAt(f.x, f.y), v = parseInt(f.s, 10);
+        addNum(f.x, f.y, f.s, f.col, !!f.dot, a && v > 0 ? v / a.maxHp : 0);
+        if (f.s === 'missed') sfx('miss');
+        else if (/^\d+!$/.test(f.s)) {
+          // critical hit: short stop, flash, own sound, ring of sparks
+          hitstop(0.06); critFlash(); sfx('crit');
+          sparks.push({ x: f.x * TS + 8, y: f.y * TS + 7, col: '#ffcd75', big: true, t: 0 });
+          burstBits(f.x * TS + 8, f.y * TS + 7, Math.round(8 * fxScale()), ['#ffcd75', '#f4f4f4'], 40, 100, 30);
+          shake(3, hitDir);
+        }
+        break;
+      }
+      case 'shake': shake(f.n, hitDir); break;
+      case 'bolt': bolts.push({ ...f, t: 0 }); sfx('zap'); setDir(f.x1 - f.x0, f.y1 - f.y0); if (f.x0 === run.p.x && f.y0 === run.p.y) pose(0, 'a'); break;
+      case 'lunge': {
+        startLunge(f.id, f.dx, f.dy); setDir(f.dx, f.dy); pose(f.id, 'a');
+        const m = f.id ? run.mobs.find(o => o.id === f.id) : null;
+        sfx(m && (m.boss || MOBS[m.kind]?.hunter || m.kind === 'golem') ? 'heavy' : 'hit');
+        break;
+      }
+      case 'flash': {
+        hitActor(f.id, hitDir);
+        const a = f.id === 0 ? run.p : run.mobs.find(o => o.id === f.id);
+        if (f.id === 0) { sfx('hurt'); hurtFlash(); }
+        if (a && a.hp > 0) splat(f.id === 0 ? 'ratte' : a.kind, a.x, a.y, hitDir, f.id === 0 ? 4 : 3);
+        break;
+      }
+      case 'die': {
+        shake(onDeath(run, f.kind, f.x, f.y), hitDir); sfx('kill');
+        const big = !!(MOBS[f.kind]?.boss || MOBS[f.kind]?.hunter);
+        hitstop(big ? 0.12 : 0.07);
+        splat(f.kind, f.x, f.y, hitDir, big ? 14 : 7);
+        sparks.push({ x: f.x * TS + 8, y: f.y * TS + 7, col: '#f4f4f4', big: big, t: 0 });
+        const n = noteKill(time);
+        if (n >= 2) addNum(run.p.x, run.p.y - 1, `×${n}`, '#ffcd75', false, 0);
+        break;
+      }
       case 'loot': loot = { item: f.item, how: f.how, t: 0 }; sfx('pick'); break;
       case 'banner': banner = { title: f.title, sub: f.sub, col: f.col, t: 0 }; sfx(f.title === 'DONE!' ? 'solve' : 'level'); break;
       case 'boom': {
         booms.push({ x: f.x, y: f.y, r: f.r, t: 0 }); sfx('boom');
         const bx = f.x * TS + 8, by = f.y * TS + 8;
         if (!reducedFx()) smoke(bx, by - 2, 4 + f.r * 5, true);
-        burstBits(bx, by, 6 + f.r * 6, ['#ffcd75', '#ef7d57', '#f4f4f4'], 40, 120, 50);
+        burstBits(bx, by, Math.round((6 + f.r * 6) * Math.max(0.5, fxScale())), ['#ffcd75', '#ef7d57', '#f4f4f4'], 40, 120, 50);
         // Fass: Dauben und Reifen fliegen davon
         if (f.barrel) burstBits(bx, by, 14, ['#8a5a3a', '#5a3a28', '#1c0f14', '#4a4d58'], 50, 130, 70);
         break;
@@ -145,6 +208,7 @@ export function drawRun(ctx: CanvasRenderingContext2D, run: Run, dt: number, tim
         if (f.x0 === run.p.x && f.y0 === run.p.y) pose(0, f.k === 'fireball' ? 'c' : 'a', 0.26);
         else { const m = run.mobs.find(o => o.x === f.x0 && o.y === f.y0); if (m) pose(m.id, 'a', 0.26); }
         const fire = f.k === 'fireball', d = Math.hypot(f.x1 - f.x0, f.y1 - f.y0);
+        setDir(f.x1 - f.x0, f.y1 - f.y0);
         shots.push({ x0: f.x0, y0: f.y0, x1: f.x1, y1: f.y1, t: 0, col: fire ? '#ef7d57' : f.col, r: fire ? f.r : 0,
           kind: fire ? 'fire' : f.heavy ? 'heavy' : 'arrow', dur: Math.min(fire ? 0.3 : 0.18, (fire ? 0.06 : 0.03) + d * (fire ? 0.03 : 0.018)) });
         sfx('zap');
@@ -154,43 +218,51 @@ export function drawRun(ctx: CanvasRenderingContext2D, run: Run, dt: number, tim
         pose(0, 'c', 0.32);
         rings.push({ x: f.x, y: f.y, r: f.r, t: 0 });
         burstBits(f.x * TS + 8, f.y * TS + 8, 26, ['#73eff7', '#c9d4dc', '#f4f4f4', '#41a6f6'], 40, 110, 10, 40);
-        shake = Math.max(shake, 3); sfx('zap');
+        shake(3); sfx('zap');
         break;
       case 'bash':
-        bashes.push({ x: f.x, y: f.y, dx: f.dx, dy: f.dy, t: 0 });
+        bashes.push({ x: f.x, y: f.y, dx: f.dx, dy: f.dy, t: 0 }); setDir(f.dx, f.dy);
         burstBits(f.x * TS + 8 - f.dx * 6, f.y * TS + 10 - f.dy * 6, 10, ['#94b0c2', '#c9d4dc', '#566c86'], 20, 60, 25);
-        shake = Math.max(shake, 4);
+        shake(4, [f.dx, f.dy]);
         break;
       case 'swipe':
         swipes.push({ x: f.x, y: f.y, dx: f.dx, dy: f.dy, big: f.big, t: 0 });
-        if (f.big) shake = Math.max(shake, 6);
+        if (f.big) shake(6, [f.dx, f.dy]);
         break;
       case 'pdeath': {
         deathT = 0;
         burstBits(f.x * TS + 8, f.y * TS + 8, 18, ['#b13e53', '#7d2b45', '#ef7d57'], 30, 90, 40);
-        shake = Math.max(shake, 8);
+        shake(8);
+        break;
+      }
+      case 'break': {
+        // destroyed object: debris in its material, dust for stone, a puff of flame for oil
+        const bx = f.x * TS + 8, by = f.y * TS + 9;
+        sfx(MAT_SOUND[f.mat]);
+        const n0 = bits.length;
+        burstBits(bx, by, Math.round((f.mat === 'web' ? 6 : 12) * Math.max(0.5, fxScale())), MAT_COLS[f.mat], 25, f.mat === 'oil' ? 60 : 90, f.mat === 'oil' ? 40 : 45, f.mat === 'oil' ? -30 : undefined);
+        // splinters and shards stay on the floor for a while
+        if (f.mat === 'wood' || f.mat === 'clay' || f.mat === 'stone') for (let k = n0; k < bits.length; k++) bits[k].rl = 10;
+        if (!reducedFx() && (f.mat === 'stone' || f.mat === 'oil' || f.mat === 'fungus')) smoke(bx, by - 2, f.mat === 'oil' ? 6 : 3, f.mat === 'oil');
+        if (f.mat === 'stone' || f.mat === 'metal') shake(2);
         break;
       }
       case 'debris':
         sfx('crack');
         for (let k = 0; k < 14; k++) {
-          const ang = Math.random() * Math.PI * 2, v = 20 + Math.random() * 60;
-          bits.push({ x: f.x * TS + 8, y: f.y * TS + 8, vx: Math.cos(ang) * v, vy: Math.sin(ang) * v - 40, col: Math.random() < 0.5 ? '#94b0c2' : '#566c86', t: 0 });
+          const ang = Math.random() * Math.PI * 2, v = 20 + Math.random() * 60, y0 = f.y * TS + 8;
+          bits.push({ x: f.x * TS + 8, y: y0, vx: Math.cos(ang) * v, vy: Math.sin(ang) * v - 40, col: Math.random() < 0.5 ? '#94b0c2' : '#566c86', t: 0, fy: y0 + 2 + Math.random() * 9 });
         }
         break;
     }
   }
-  for (const [id, l] of lunges) { l.t += dt; if (l.t > LUNGE_T) lunges.delete(id); }
-  for (const [id, q] of poses) { q.t -= dt; if (q.t <= 0) poses.delete(id); }
-  for (const [id, t] of flashes) { if (t - dt <= 0) flashes.delete(id); else flashes.set(id, t - dt); }
 
   const p = run.p, pp = smooth(p, dt);
   // Held bleibt immer in der Bildmitte; jenseits des Kartenrands ist es einfach dunkel
   const tx = pp.x * TS + 8 - VW / 2, ty = pp.y * TS + 8 - VH / 2;
   if (Math.abs(tx - cam.x) > 220 || Math.abs(ty - cam.y) > 220) { cam.x = tx; cam.y = ty; }
   cam.x += (tx - cam.x) * Math.min(1, dt * 10); cam.y += (ty - cam.y) * Math.min(1, dt * 10);
-  shake = reducedFx() ? 0 : Math.max(0, shake - dt * 30);
-  const sx = shake ? Math.round((Math.random() - 0.5) * shake) : 0, sy = shake ? Math.round((Math.random() - 0.5) * shake) : 0;
+  const [sx, sy] = stepShake(dt);
   const ox = -Math.round(cam.x) + sx, oy = -Math.round(cam.y) + sy;
 
   view.ox = ox - sx; view.oy = oy - sy;
@@ -248,16 +320,14 @@ export function drawRun(ctx: CanvasRenderingContext2D, run: Run, dt: number, tim
         if (pr) drawProp(ctx, bio, pr, x, y, dx, dy, time, lights);
       }
     } else {
-      // Boden: Muster über 2×2 Felder, selten eine Sonderplatte; dazu eine weiche Helligkeitswelle
-      const hf = hash(x, y, 303);
-      ctx.drawImage(bio && hf % 9 === 0 ? ts.floorX[(hf >>> 4) % ts.floorX.length] : ts.floorM[hash(x >> 1, y >> 1, 404) % ts.floorM.length][(y & 1) * 2 + (x & 1)], dx, dy);
-      const tv = floorTint(x, y);
-      ctx.fillStyle = tv > 0 ? `rgba(255,255,255,${(tv * 0.045).toFixed(3)})` : `rgba(0,0,0,${(-tv * 0.11).toFixed(3)})`; ctx.fillRect(dx, dy, TS, TS);
+      // floor from the per-level bake: pattern and brightness wave run across tile borders
+      ctx.drawImage(floorOf(run, bio), x * TS, y * TS, TS, TS, dx, dy, TS, TS);
       // Ränder von Eis, Rasen und Brandfläche laufen gerastert in den Boden aus
       const edge = (k: number) => { let e = 0; [[0, -1, 1], [-1, 0, 2], [1, 0, 4], [0, 1, 8]].forEach(([ex, ey, bit]) => { const n = run.tiles[i + ey * W + ex]; if (n !== k && !wallLike(n)) e |= bit; }); return e; };
       if (t === T.ICE) ctx.drawImage(softEdged(sprites.ice, edge(T.ICE)), dx, dy);
       if (t === T.GRASS) ctx.drawImage(softEdged(ts.bed, edge(T.GRASS)), dx, dy);
       drawAO(ctx, run.tiles, x, y, dx, dy);
+      if (t >= T.OIL) drawWorldTile(ctx, run, t, i, x, y, dx, dy, time);
       if (t === T.FLOOR) {
         const pr = props[i];
         if (pr) drawProp(ctx, bio, pr, x, y, dx, dy, time, lights);
@@ -276,7 +346,11 @@ export function drawRun(ctx: CanvasRenderingContext2D, run: Run, dt: number, tim
     }
   }
   // Spuren am Boden liegen über dem Boden, aber unter Gegenständen, Fallen und Figuren
+  pruneFire(run.fire);
+  fireBlocks.clear();
   drawDecals(ctx, run, ox, oy, lights, time, dt);
+  drawSpots(ctx, run, ox, oy, dt);
+  drawGas(ctx, run, ox, oy, time);
   if (fx) drawFog(ctx, bio, run.tiles, run.vis, x0, y0, x1, y1, ox, oy, time, VW, VH);
   for (const i of floorTiles) {
     const x = i % W, y = (i / W) | 0, t = run.tiles[i], dx = x * TS + ox, dy = y * TS + oy;
@@ -324,9 +398,13 @@ export function drawRun(ctx: CanvasRenderingContext2D, run: Run, dt: number, tim
     }
     if (run.fire.has(i) && run.vis[i]) {
       // Flammen wachsen mit der Restdauer; frisches Feuer raucht und sprüht Funken
-      const k = Math.min(1, (run.fire.get(i) ?? 1) / 3);
-      drawFlames(ctx, dx, dy, x, y, k, time);
-      lights.push({ x, y, r: (2.2 + 1.4 * k) * flick(i), col: '#ef7d57' });
+      const k = Math.min(1, (run.fire.get(i) ?? 1) / 3), f = run.fire;
+      const nb = (f.has(i - W) ? 1 : 0) | (f.has(i - 1) ? 2 : 0) | (f.has(i + 1) ? 4 : 0) | (f.has(i + W) ? 8 : 0);
+      const kind = t === T.OIL ? 'oil' : t === T.GRASS ? 'grass' : 'plain';
+      drawFlames(ctx, dx, dy, x, y, k, time, nb, kind, fireAge(i, time), fx && fxLevel() >= 1);
+      // one light per 3×3 block (merged below): a large fire breathes as a whole and does not overexpose
+      const bk = ((y / 3) | 0) * 64 + ((x / 3) | 0), fb = fireBlocks.get(bk);
+      if (fb) { fb.x += x; fb.y += y; fb.n++; fb.k = Math.max(fb.k, k); } else fireBlocks.set(bk, { x, y, n: 1, k });
       if (fx && Math.random() < dt * (0.8 + 2.5 * k)) smoke(x * TS + 8, y * TS + 4 - 4 * k);
       if (fx && Math.random() < dt * 5 * k) bits.push({ x: x * TS + 3 + Math.random() * 10, y: y * TS + 6, vx: (Math.random() - 0.5) * 10, vy: -25 - Math.random() * 20, col: Math.random() < 0.5 ? '#ffcd75' : '#ef7d57', t: 0, g: -15 });
     }
@@ -374,6 +452,17 @@ export function drawRun(ctx: CanvasRenderingContext2D, run: Run, dt: number, tim
     ctx.fillStyle = 'rgba(90,58,40,0.55)';
     for (const i of run.mud) if (run.seen[i]) ctx.fillRect((i % W) * TS + ox, ((i / W) | 0) * TS + oy, TS, TS);
   }
+  // hunted: the stairs glow and pulse so the way out is clear
+  if (hunted(run)) {
+    const st = run.tiles.indexOf(T.STAIRS);
+    if (st >= 0 && run.seen[st]) {
+      const sxp = st % W, syp = (st / W) | 0, pu = 0.5 + 0.5 * Math.sin(time * 4);
+      lights.push({ x: sxp, y: syp, r: 2.4 + pu * 1.2, col: '#ffcd75', a: 0.9 });
+      if (Math.random() < dt * 8) bits.push({ x: sxp * TS + 3 + Math.random() * 10, y: syp * TS + 12, vx: 0, vy: -20 - Math.random() * 10, col: '#ffcd75', t: 0, g: -10 });
+    }
+  }
+  // merged fire lights: centroid of the burning tiles, a bit wider for bigger blocks, redder as the fire dies
+  for (const [bk, b] of fireBlocks) lights.push({ x: b.x / b.n, y: b.y / b.n, r: (2.2 + 1.4 * b.k) * (1 + 0.15 * Math.sqrt(b.n - 1)) * flick(bk), col: b.k <= 0.34 ? '#b13e53' : '#ef7d57' });
   drawDying(ctx, run, ox, oy, lights, dt);
 
   // Status auf dem Sprite: Betäubung, Brand, Gift, Spröde, Schutzwall
@@ -395,6 +484,25 @@ export function drawRun(ctx: CanvasRenderingContext2D, run: Run, dt: number, tim
       ctx.fillStyle = '#73eff7';
       ctx.fillRect(dx + 1, dy + 3, 1, 3); ctx.fillRect(dx, dy + 4, 3, 1);
       ctx.fillRect(dx + w - 2, dy + h - 6, 1, 3); ctx.fillRect(dx + w - 3, dy + h - 5, 3, 1);
+    }
+    if (mk.has('netz')) {
+      // web: grey threads over the actor
+      ctx.globalAlpha = 0.75; ctx.fillStyle = '#c9d4dc';
+      for (let k = 0; k < w; k += 3) { ctx.fillRect(dx + k, dy + h - 6 + ((k >> 1) & 1), 2, 1); ctx.fillRect(dx + k + 1, dy + h - 10 + ((k >> 2) & 1), 1, 1); }
+      ctx.fillRect(dx + 2, dy + h - 10, 1, 5); ctx.fillRect(dx + w - 3, dy + h - 9, 1, 4);
+      ctx.globalAlpha = 1;
+    }
+    if (mk.has('mark')) {
+      // marked: golden crosshair slowly tightening
+      const r = 9 + Math.round(Math.sin(time * 4) * 1.5), my = dy + h / 2;
+      ctx.fillStyle = '#ffcd75';
+      for (const [ax, ay] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) { const px = Math.round(cx + ax * r), py = Math.round(my + ay * r * 0.8); ctx.fillRect(px - (ax > 0 ? 2 : 0), py, 3, 1); ctx.fillRect(px, py - (ay > 0 ? 2 : 0), 1, 3); }
+    }
+    if (mk.has('schwach')) {
+      // weakened: small down arrow next to the head
+      const ax = dx + w - 2, ay = dy + 1 + (Math.floor(time * 3) % 2);
+      ctx.fillStyle = '#1a1c2c'; ctx.fillRect(ax - 2, ay - 1, 5, 6);
+      ctx.fillStyle = '#b13e53'; ctx.fillRect(ax, ay, 1, 3); ctx.fillRect(ax - 1, ay + 2, 3, 1); ctx.fillRect(ax, ay + 3, 1, 1);
     }
     if (mk.has('wall')) {
       ctx.globalAlpha = 0.45 + 0.2 * Math.sin(time * 6);
@@ -429,21 +537,26 @@ export function drawRun(ctx: CanvasRenderingContext2D, run: Run, dt: number, tim
     const moving = Math.abs(q.x - a.x) + Math.abs(q.y - a.y) > 0.04;
     const fr = moving ? [2, 0, 3, 0][Math.floor(time * 11) % 4] : Math.floor(time * 2.5 + a.id * 0.37) % 2;
     // Bosse zeigen ab halber Lebenskraft ihre verwundete Fassung (nur gelesen, keine Logik)
-    const base = a === p ? lookOf(p) : a.boss && a.hp * 2 < a.maxHp && sprites[`${a.kind}2:f0`] ? `${a.kind}2` : a.kind, ps = poses.get(a.id);
+    const base = a === p ? lookOf(p) : a.boss && a.hp * 2 < a.maxHp && sprites[`${a.kind}2:f0`] ? `${a.kind}2` : a.kind, an = peekAnim(a.id), ps = an?.pose;
     // Tod des Helden: einknicken, kippen, liegen bleiben; sonst Pose (Angriff/Zauber) vor Schrittbild
     let frame = `${base}:${v}${fr}`;
     if (a === p && deathT >= 0) frame = `${base}:${v}d${deathT < 0.14 ? 0 : deathT < 0.3 ? 1 : 2}`;
     else if (ps && sprites[`${base}:${v}${ps.k}`]) frame = `${base}:${v}${ps.k}`;
     const img = sprites[frame];
-    const l = lunges.get(a.id), k = l ? Math.sin((l.t / LUNGE_T) * Math.PI) * 6 : 0;
+    const l = an?.lunge, k = l ? Math.sin((l.t / LUNGE_T) * Math.PI) * 6 : 0;
+    // recoil: 2 px away from the attacker, decays over RECOIL_T; plus a short squash
+    const rc = an?.recoil, rk = rc ? (1 - rc.t / RECOIL_T) * 2 : 0, sq = an && an.hurt < 0.1 && fxLevel() > 0 ? 1 - an.hurt / 0.1 : 0;
     const glow = GLOW[base.split(':')[0]] ?? GLOW[a.kind];
     const jx = glow ? Math.round(Math.sin(time * 17 + a.id) * 0.6) : 0;
-    const bx = Math.round(q.x * TS + (l ? l.dx * k : 0)) + ox, by = Math.round(q.y * TS + (l ? l.dy * k : 0)) + oy;
+    const bx = Math.round(q.x * TS + (l ? l.dx * k : 0) + (rc ? rc.dx * rk : 0)) + ox, by = Math.round(q.y * TS + (l ? l.dy * k : 0) + (rc ? rc.dy * rk : 0)) + oy;
     const hunt = a !== p && isHunter(a);
     const dx = bx + 8 - img.width / 2 + jx, dy = by + 14 - img.height - Math.round(leapLift(a.id));
+    // squash on hit: wider and flatter, feet stay on the ground
+    const sw = sq ? Math.round(img.width * (1 + 0.15 * sq)) : img.width, sh = sq ? Math.round(img.height * (1 - 0.15 * sq)) : img.height;
+    const qx = dx - ((sw - img.width) >> 1), qy = dy + (img.height - sh);
     const blit = (c: HTMLCanvasElement) => {
-      if (!mirror) { ctx.drawImage(c, dx, dy); return; }
-      ctx.save(); ctx.translate(dx + c.width, dy); ctx.scale(-1, 1); ctx.drawImage(c, 0, 0); ctx.restore();
+      if (!mirror) { ctx.drawImage(c, qx, qy, sw, sh); return; }
+      ctx.save(); ctx.translate(qx + sw, qy); ctx.scale(-1, 1); ctx.drawImage(c, 0, 0, sw, sh); ctx.restore();
     };
     // Bodenschatten; Flieger werfen einen kleineren, atmenden Schatten
     const fly = FLY.has(a.kind), foot = by + 14;
@@ -481,7 +594,10 @@ export function drawRun(ctx: CanvasRenderingContext2D, run: Run, dt: number, tim
       ctx.fillRect(dx + 5, dy - 3, 1, 2); ctx.fillRect(dx + 8, dy - 4, 1, 3); ctx.fillRect(dx + 11, dy - 3, 1, 2); ctx.fillRect(dx + 5, dy - 1, 7, 1);
       lights.push({ x: q.x, y: q.y, r: 1.8, col: '#ffcd75', a: 0.6 });
     }
-    const fl = flashes.get(a.id);
+    // status tints the actor: poison green, burning orange, ice/brittle blue, web violet
+    const tint = a.st.gift ? '#38b764' : a.st.brand ? '#ef7d57' : a.st.sproede || a.st.eis ? '#73eff7' : a.st.netz ? '#9a4fc0' : null;
+    if (tint && masks[frame]) { ctx.globalAlpha = 0.22 + 0.08 * Math.sin(time * 6 + a.id); blit(tinted(masks[frame], tint)); ctx.globalAlpha = 1; }
+    const fl = an?.flash;
     if (fl) { ctx.globalAlpha = Math.min(1, fl / FLASH_T + 0.2); blit(masks[frame]); ctx.globalAlpha = 1; }
     statusFx(a, a === p, dx, dy, img.width, img.height, q);
     if (a !== p) warn(a, q, dx, dy, img.width);
@@ -513,12 +629,24 @@ export function drawRun(ctx: CanvasRenderingContext2D, run: Run, dt: number, tim
   if (fx) { stepAmbient(bio, run.tiles, run.vis, x0, y0, x1, y1, dt); drawAmbient(ctx, ox, oy, false); }
   drawSmoke(ctx, ox, oy, dt);
 
+  if (bits.length > BIT_MAX) bits.splice(0, bits.length - BIT_MAX);
   for (let i = bits.length - 1; i >= 0; i--) {
     const b = bits[i];
     b.t += dt;
-    if (b.t > 0.55) { bits.splice(i, 1); continue; }
+    // heavy particles land on the floor, rest briefly and fade
+    if (b.rest !== undefined) {
+      b.rest += dt;
+      const life = b.rl ?? REST_T;
+      if (b.rest > life) { bits.splice(i, 1); continue; }
+      ctx.globalAlpha = b.rest > life - 0.6 ? (life - b.rest) / 0.6 * 0.8 : 0.8;
+      ctx.fillStyle = b.col; ctx.fillRect(Math.round(b.x) + ox, Math.round(b.y) + oy, 1, 1);
+      continue;
+    }
+    if (b.t > BIT_T && b.fy === undefined) { bits.splice(i, 1); continue; }
+    if (b.t > 1.2) { bits.splice(i, 1); continue; }
     b.vy += (b.g ?? 220) * dt; b.x += b.vx * dt; b.y += b.vy * dt;
-    ctx.globalAlpha = 1 - b.t / 0.55;
+    if (b.fy !== undefined && b.vy > 0 && b.y >= b.fy) { b.y = b.fy; b.rest = 0; if (reducedFx()) { bits.splice(i, 1); continue; } }
+    ctx.globalAlpha = b.fy !== undefined ? 1 : 1 - b.t / BIT_T;
     ctx.fillStyle = b.col; ctx.fillRect(Math.round(b.x) + ox, Math.round(b.y) + oy, 2, 2);
   }
   ctx.globalAlpha = 1;
@@ -669,13 +797,9 @@ export function drawRun(ctx: CanvasRenderingContext2D, run: Run, dt: number, tim
   postFx(ctx, bio, VW, VH);
   // Lunten-Zähler über der Dunkelheit
   for (const f of fuseTags.splice(0)) text(ctx, String(f.n), f.x + ox, f.y + oy + (f.n === 1 ? Math.round(Math.sin(time * 30)) : 0), f.n === 1 ? '#b13e53' : '#ffcd75', 8, 'center');
-  // Schadenszahlen über der Dunkelheit, damit sie lesbar bleiben
-  for (let i = nums.length - 1; i >= 0; i--) {
-    const n = nums[i];
-    n.t += dt;
-    if (n.t > 0.8) { nums.splice(i, 1); continue; }
-    text(ctx, n.s, n.x + ox, n.y + oy - 6 - n.t * 22, n.col, 10, 'center');
-  }
+  // screen flashes below the numbers, then numbers above the darkness so they stay readable
+  drawScreenFlash(ctx, VW, VH, dt);
+  drawNums(ctx, ox, oy, dt);
   if (p.hp / p.maxHp < 0.3 && run.mode === 'play') {
     ctx.fillStyle = `rgba(177,62,83,${0.08 + 0.06 * Math.sin(time * 6)})`; ctx.fillRect(0, 0, VW, VH);
   }
@@ -711,7 +835,7 @@ export function drawRun(ctx: CanvasRenderingContext2D, run: Run, dt: number, tim
     g.addColorStop(0, 'rgba(13,14,23,0)'); g.addColorStop(1, `rgba(13,14,23,${0.85 * f})`);
     ctx.fillStyle = g; ctx.fillRect(0, 0, VW, VH);
   }
-  if (run.mode === 'win' || (run.mode === 'dead' && (deathT < 0 || deathT > DEATH_T))) endOverlay(ctx, run);
+  if (run.mode === 'win' || (run.mode === 'dead' && ((deathT < 0 && !busy()) || deathT > DEATH_T))) endOverlay(ctx, run);
 }
 
 // ---- Oberfläche ----
@@ -1140,6 +1264,8 @@ const TILE_NAMES: Record<number, string> = {
   [T.PLATE]: 'Pressure plate', [T.LEVER]: 'Lever – resets the crates', [T.ICE]: 'Ice – you slide', [T.TABLET]: 'Stone tablet', [T.GOAL]: 'Goal plate',
   [T.BRAZIER]: 'Brazier, unlit – a step toggles it and its neighbours', [T.BRAZIER_ON]: 'Brazier, lit – a step toggles it and its neighbours',
   [T.STATUE]: 'Dart statue – shoots across its row',
+  [T.POT]: 'Clay pot – smash it; something may be inside', [T.SPORE]: 'Spore cap – bursts into a poison cloud that hits everyone',
+  [T.OIL]: 'Oil puddle – burns all at once', [T.WATER]: 'Water – puts out burning, fire cannot cross', [T.WEB]: 'Cobweb – holds for a turn, burns',
 };
 
 function tooltip(ctx: CanvasRenderingContext2D, run: Run, ox: number, oy: number) {
@@ -1192,7 +1318,7 @@ function minimap(ctx: CanvasRenderingContext2D, run: Run, time: number) {
     if (t === T.WALL) {
       if (!big) continue;
       ctx.fillStyle = '#262b44';
-    } else ctx.fillStyle = t === T.STAIRS || t === T.GATE ? '#ffcd75' : t === T.CHEST || t === T.CURSED || t === T.MIMIC ? '#c98a3a' : t === T.FOUNTAIN ? '#73eff7' : t === T.TRADER ? '#38b764' : t === T.CRACKED ? '#b13e53'
+    } else ctx.fillStyle = t === T.STAIRS || t === T.GATE ? '#ffcd75' : t === T.CHEST || t === T.CURSED || t === T.MIMIC ? '#c98a3a' : t === T.FOUNTAIN ? '#73eff7' : t === T.TRADER ? '#38b764' : t === T.CRACKED ? '#b13e53' : t === T.POT ? '#c48a6a' : t === T.SPORE ? '#9a4fc0' : t === T.WATER ? '#3b5dc9' : t === T.OIL ? '#333c57'
       : ((t >= T.CRATE && t <= T.GOAL) || (t >= T.BRAZIER && t <= T.STATUE)) ? '#41a6f6' : run.fire.has(i) ? '#ef7d57' : run.vis[i] ? '#94b0c2' : '#566c86';
     ctx.fillRect(x0 + x * s, y0 + y * s, s, s);
   }

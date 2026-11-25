@@ -21,7 +21,7 @@ export function hex(col: string): [number, number, number] {
 }
 
 export interface TileSet {
-  floor: HTMLCanvasElement[]; floorX: HTMLCanvasElement[]; walls: HTMLCanvasElement[]; lava: HTMLCanvasElement[]; wall: HTMLCanvasElement; top: HTMLCanvasElement; cap: HTMLCanvasElement; hi: string; grass: HTMLCanvasElement[]; burnt: HTMLCanvasElement; decals: HTMLCanvasElement[][]; // Bodenspuren je Art, viele Spielarten
+  floor: HTMLCanvasElement[]; walls: HTMLCanvasElement[]; wall: HTMLCanvasElement; top: HTMLCanvasElement; hi: string; grass: HTMLCanvasElement[]; decals: HTMLCanvasElement[][]; // Bodenspuren je Art, viele Spielarten
   floorM: HTMLCanvasElement[][]; // Bodenmuster 2×2: Spielart → vier Viertel
   caps: HTMLCanvasElement[][]; capEdge: HTMLCanvasElement[]; // Mauerkrone: Spielart → je offene Seiten (Bit 1 oben, 2 links, 4 rechts); Kanten
   wallsX: HTMLCanvasElement[]; // Wandfront mit Riss, Abplatzer oder Biomstück (walls: schlichte Spielarten)
@@ -32,7 +32,7 @@ export interface TileSet {
 }
 export const tilesets: TileSet[] = [];
 
-const BIOMES = [
+export const BIOMES = [
   { floor: '#343a5c', speck: '#434a70', brick: '#6b82a0', hi: '#8ea4bf', mortar: '#333c5c', top: '#14172a', cap: '#4b5a7c', capHi: '#a9bdd6', g1: '#3f7a5c', g2: '#5fa06a' },
   { floor: '#22443f', speck: '#2f6a55', brick: '#2f8f85', hi: '#55b89c', mortar: '#174a4c', top: '#0d2222', cap: '#1e6a62', capHi: '#7fd6b4', g1: '#38b764', g2: '#a7f070' },
   { floor: '#40262b', speck: '#6a3530', brick: '#9a4a3c', hi: '#c96f45', mortar: '#47222b', top: '#1c0f14', cap: '#6e3a36', capHi: '#e08a55', g1: '#1f1418', g2: '#6b4a3a' },
@@ -73,7 +73,6 @@ function bakeActor(name: string, prefix: string, pal: Record<string, string> = P
   // Zusatzbilder: Angriff (a), Zauber (c), Tod (d0..d2)
   for (const [suf, rows] of Object.entries(poseFrames(name, views))) { const key = `${prefix}:${suf}`; sprites[key] = drawRows(rows, true, pal); makeMask(key); }
   sprites[prefix] = sprites[`${prefix}:f0`];
-  sprites[prefix + '_b'] = sprites[`${prefix}:f1`];
 }
 
 // Tauscht die Waffe einer Heldenansicht gegen eine andere Art aus
@@ -187,7 +186,7 @@ export function bake(): void {
     if (bi !== 1) { wg.fillStyle = b.capHi; wg.fillRect(0, 0, TS, 2); }
     plinth(wg, b);
     // Mauerkrone: von oben gesehene Wand, ruhige Fläche; Kanten je nach offenen Seiten (tiles.ts)
-    const capB = capBases(b, bi, rnd), cap = capB[0], capEdge = capEdges(b), caps = capB.map(cb => capTiles(b, cb, capEdge));
+    const capB = capBases(b, bi, rnd), capEdge = capEdges(b), caps = capB.map(cb => capTiles(b, cb, capEdge));
     // Felsinneres ohne angrenzenden Boden
     const [top, tg] = mk(TS, TS);
     tg.fillStyle = b.top; tg.fillRect(0, 0, TS, TS);
@@ -202,46 +201,12 @@ export function bake(): void {
       }
       grass.push(c);
     }
-    const [burnt, bg] = mk(TS, TS);
-    bg.fillStyle = 'rgba(0,0,0,0.45)'; bg.fillRect(0, 0, TS, TS);
-    bg.fillStyle = '#566c86';
-    for (let i = 0; i < 5; i++) bg.fillRect((rnd() * 15) | 0, (rnd() * 15) | 0, 1, 1);
     // Bodenspuren: Risse, Kiesel, Knochen, Flecken, Biomflecken – je viele Spielarten, gedreht und gespiegelt
     const decals = floorDecals(b, bi, rnd);
-    // Phase 2: Spielarten von Wand und Boden, Lava im Fels der Glutschmiede
-    const copy = (src: HTMLCanvasElement, f: (g: CanvasRenderingContext2D) => void) => { const [c, g] = mk(TS, TS); g.drawImage(src, 0, 0); f(g); return c; };
-    const px = (g: CanvasRenderingContext2D, col: string, pts: number[][]) => { g.fillStyle = col; for (const [x, y, w = 1, h = 1] of pts) g.fillRect(x, y, w, h); };
+    // Phase 2: Spielarten von Wand und Boden
     // Wandfront: schlichte Spielarten und besondere (Riss, Abplatzer, Biomstück) – alle zufällig erzeugt
     const { plain: walls, special: wallsX } = wallVariants(b, bi, wall, rnd);
-    const floorX = bi === 0
-      ? [ // Gruft: Steinplatten mit Fugen, gesprungene Platte
-        copy(floor[0], g => { px(g, b.mortar, [[0, 7, TS, 1], [7, 0, 1, 7], [11, 8, 1, 8]]); px(g, b.speck, [[0, 8, TS, 1]]); }),
-        copy(floor[1], g => { px(g, b.mortar, [[3, 2, 1, 3], [4, 5, 2, 1], [6, 6, 1, 3], [7, 9, 3, 1], [10, 10, 1, 3]]); }),
-      ]
-      : bi === 1
-        ? [ // Höhle: Moosflecken, Kiesel
-          copy(floor[0], g => { px(g, b.g1, [[2, 3, 4, 2], [3, 2, 2, 1], [10, 10, 3, 2]]); px(g, b.g2, [[3, 3, 1, 1], [11, 10, 1, 1]]); }),
-          copy(floor[2], g => { px(g, b.brick, [[4, 4, 2, 2], [9, 7, 2, 1], [6, 11, 3, 2]]); px(g, b.hi, [[4, 4, 1, 1], [6, 11, 1, 1]]); }),
-        ]
-        : [ // Schmiede: Ruß und glimmende Fugen
-          copy(floor[0], g => { px(g, '#1c0f14', [[3, 4, 5, 3], [4, 3, 3, 5]]); px(g, '#7d2b45', [[10, 9, 3, 1], [12, 10, 1, 2]]); }),
-          copy(floor[1], g => { px(g, '#7d2b45', [[2, 8, 5, 1], [6, 9, 1, 2], [7, 11, 4, 1]]); px(g, '#ef7d57', [[4, 8, 1, 1], [8, 11, 1, 1]]); }),
-        ];
-    // Lava: vier Bilder einer fließenden Ader in der Mauerkrone (nur Darstellung, nicht begehbar)
-    const lava: HTMLCanvasElement[] = [];
-    if (bi === 2) for (let f = 0; f < 4; f++) {
-      const [c, g] = mk(TS, TS);
-      g.drawImage(cap, 0, 0);
-      for (let x = 0; x < TS; x++) {
-        const yc = 7 + Math.round(Math.sin((x + f * 2) * 0.55) * 2);
-        g.fillStyle = '#7d2b45'; g.fillRect(x, yc - 2, 1, 5);
-        g.fillStyle = '#b13e53'; g.fillRect(x, yc - 1, 1, 3);
-        g.fillStyle = (x + f * 3) % 7 < 3 ? '#ffcd75' : '#ef7d57'; g.fillRect(x, yc, 1, 1);
-      }
-      g.fillStyle = '#ffcd75'; g.fillRect((f * 4 + 2) % TS, 7 + Math.round(Math.sin(((f * 4 + 2) % TS + f * 2) * 0.55) * 2), 2, 1);
-      lava.push(c);
-    }
-    tilesets.push({ floor, floorX, walls, lava, wall, top, cap, hi: b.capHi, grass, burnt, decals, floorM: floorMacro(b, bi, rnd), caps, capEdge, wallsX, wallCrack: wallCracks(rnd), veins: bi === 2 ? lavaVeins(rnd) : null, bed: grassBed(b), ...(({ scorch, core, char }) => ({ scorch, scorchCore: core, char }))(scorchTiles(rnd)) });
+    tilesets.push({ floor, walls, wall, top, hi: b.capHi, grass, decals, floorM: floorMacro(b, bi, rnd), caps, capEdge, wallsX, wallCrack: wallCracks(rnd), veins: bi === 2 ? lavaVeins(rnd) : null, bed: grassBed(b), ...(({ scorch, core, char }) => ({ scorch, scorchCore: core, char }))(scorchTiles(rnd)) });
   }
 }
 
@@ -283,7 +248,7 @@ function cols(h: string): number[] {
 
 const cache = new Map<string, HTMLCanvasElement>();
 
-function glyphs(s: string, col: string, size: number): HTMLCanvasElement {
+export function glyphs(s: string, col: string, size: number): HTMLCanvasElement {
   const key = `${size}|${col}|${s}`;
   let c = cache.get(key);
   if (c) return c;

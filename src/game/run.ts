@@ -2,7 +2,7 @@ import { RNG } from '../core/rng';
 import type { Meta } from '../core/save';
 import { W, H, T, Room, genDungeon, center, walkable, opaque, los, computeFov, distMap } from './dungeon';
 import { VS, CRATE_TEMPLATES, mirror, genIce, slide, iceStops, genLights, lightsPress, lightCell, LIGHTS_ALL, dartFires, DartLane } from './puzzles';
-import { CLASSES, ClassId, MOBS, PERKS, RELICS, Item, Offer, AFFIX, CONSUMABLES, UNIQUES, ULT, ULT_LEVEL, SKILL_UP, SYNERGIES, NEW_SKILLS, TUNE, treeNodes, treeNode, treePool, nodeText, MAGE_WHET, BOSS_BY_BIOME, BIOME_NAMES, FLOORS_PER_BIOME, LAST_FLOOR, biomeOf, spawnTable, FEATURES, HAZARD, EVENT, HUNTER, DIFF } from './content';
+import { CLASSES, ClassId, MOBS, PERKS, RELICS, Item, Offer, AFFIX, CONSUMABLES, UNIQUES, ULT, ULT_LEVEL, SKILL_UP, SYNERGIES, NEW_SKILLS, TUNE, treeNodes, treeNode, treePool, nodeText, MAGE_WHET, BOSS_BY_BIOME, BIOME_NAMES, FLOORS_PER_BIOME, LAST_FLOOR, biomeOf, spawnTable, FEATURES, HAZARD, EVENT, HUNTER, DIFF, DESTR } from './content';
 import { EVENTS, EVENT_BY_ID, NOTES } from './events';
 import type { EvState, EvPlan, EvApi, EvDef } from './events';
 
@@ -55,8 +55,15 @@ export const VAULT_NAMES: Record<PuzzleKind, string> = {
   crates: 'Crate chamber', runes: 'Rune chamber', ice: 'Ice hall', arena: 'Trial chamber', braziers: 'Brazier chamber', darts: 'Dart corridor',
 };
 
+// material of a destroyed object (rendering only)
+export type Mat = 'wood' | 'stone' | 'clay' | 'fungus' | 'web' | 'ice' | 'metal' | 'oil';
+
 export type Fx =
-  | { k: 'num'; x: number; y: number; s: string; col: string }
+  | { k: 'num'; x: number; y: number; s: string; col: string; dot?: boolean }
+  // beat: from here on the next enemy (id) or the world (id -1) acts; only used to sequence rendering
+  | { k: 'beat'; id: number }
+  // something broke or caught fire (rendering: debris of this material, sound)
+  | { k: 'break'; x: number; y: number; mat: Mat }
   | { k: 'shake'; n: number }
   | { k: 'lunge'; id: number; dx: number; dy: number }
   | { k: 'flash'; id: number }
@@ -100,6 +107,7 @@ export interface Run {
   fire: Map<number, number>;   // Feld -> verbleibende Züge
   fuses: Map<number, number>;  // Fass -> Züge bis zur Explosion
   cracks: Map<number, number>; // rissige Wand -> erhaltene Schläge
+  gas?: Map<number, number>;   // poison cloud: tile -> turns left (only with FEATURES.destruction)
   puzzle: Puzzle | null; willUsed: boolean;
   shop: Offer[]; target: number; daily: boolean;
   log: string[]; fx: Fx[];
@@ -125,6 +133,7 @@ export interface Run {
   hunt?: { next: number; n: number } | null; // nächster Jäger bei floorTurns = next; n schon erschienen
   entry?: [number, number];  // Eingang der Ebene
   mud?: number[];            // Schlamm eines Ereignisses: wer hineintritt, steckt einen Zug fest
+  huntKills?: number;        // hunters killed on this floor (reward decay, FEATURES.huntPressure)
   souls: number; kills: number; turn: number; nextId: number;
 }
 
@@ -799,6 +808,8 @@ function nextFloor(run: Run) {
   run.traps = [];
   run.hazards = [];
   run.fire = new Map(); run.fuses = new Map(); run.cracks = new Map();
+  if (run.gas) run.gas = undefined;
+  if (run.huntKills) run.huntKills = 0;
   run.puzzle = null; run.willUsed = false;
   if (run.runeUsed) run.runeUsed = false;
   run.p.keys = 0;
@@ -878,6 +889,7 @@ function nextFloor(run: Run) {
   if (FEATURES.events && !bossFloor) planEvents(run, rooms);
   else if (run.evQ?.length) run.evQ = [];
   if (FEATURES.hunters) { run.floorTurns = 0; run.entry = [run.p.x, run.p.y]; run.hunt = bossFloor ? null : { next: HUNTER.first, n: 0 }; }
+  if (FEATURES.destruction) placeWorld(run, rooms, bossFloor);
   computeFov(run.tiles, run.p.x, run.p.y, fovR(run), run.vis, run.seen);
   say(run, `Floor ${run.floor} – ${BIOME_NAMES[biome]}`);
   if (bossFloor) say(run, 'Something mighty lurks here ...');
@@ -1088,6 +1100,11 @@ function evApi(run: Run): EvApi {
       for (const i of hit) {
         const x = i % W, y = (i / W) | 0;
         if (kind === 'rock' || kind === 'hammer') run.fx.push({ k: 'debris', x, y });
+        if (kind === 'rock' && FEATURES.destruction && !inVault(run, x, y)) {
+          // falling rock leaves rubble and cracks weak walls further
+          if (run.tiles[i] === T.FLOOR) run.tiles[i] = T.RUBBLE;
+          for (const [ox, oy] of DIRS4) { const n = i + oy * W + ox; if (run.tiles[n] === T.CRACKED) hitTile(run, n, 'smash'); else if (SMASHABLE.has(run.tiles[n])) hitTile(run, n, 'smash'); }
+        }
         if (kind === 'fire') ignite(run, x, y, 3);
         const a = p.x === x && p.y === y ? p : mobAt(run, x, y);
         if (!a || a.hp <= 0) continue;
@@ -1251,6 +1268,18 @@ export function eventGoal(run: Run): { title: string; goal: string; col: string 
 // ---------- Jäger: wer zu lange auf einer Ebene bleibt, wird gejagt ----------
 
 const isHunter = (m: Actor) => !!MOBS[m.kind].hunter;
+// once the hero lingers (a second-stage hunter or Death is alive) the floor turns hostile:
+// no passive regen, fountains and altars refuse. A single first hunter keeps the old rules.
+export const hunted = (run: Run) => FEATURES.huntPressure && run.mobs.some(m => isHunter(m) && ((m.st.stage ?? 0) >= 1 || !!m.st.noReward));
+function huntReward(run: Run, m: Actor): number {
+  if (!FEATURES.huntPressure || !isHunter(m)) return 1;
+  if (m.st.noReward) return 0;
+  const k = run.huntKills ?? 0, d = HUNTER.rewardDecay;
+  run.huntKills = k + 1;
+  const f = d[Math.min(k, d.length - 1)];
+  if (f < 1) say(run, f > 0 ? 'The hunt hardly pays anymore ...' : 'This prey is worth nothing now. Time to leave!');
+  return f;
+}
 
 // Am Ende jedes Zugs (nur mit eingeschalteten Jägern)
 function hunterTick(run: Run) {
@@ -1261,18 +1290,27 @@ function hunterTick(run: Run) {
   if (t === HUNTER.first - HUNTER.warn) say(run, 'Something is following you ...');
   if (t < h.next) return;
   // aufgeschoben (nicht verloren): in der Rätselkammer, in einem versiegelten Ereignis, bei voller Zahl
-  if (inVault(run, run.p.x, run.p.y) || run.ev?.seal?.length || run.mobs.filter(isHunter).length >= HUNTER.cap) return;
+  if (inVault(run, run.p.x, run.p.y) || run.ev?.seal?.length) return;
+  // Death answers whoever stays too long – the cap does not hold it back
+  const death = FEATURES.huntPressure && h.n >= HUNTER.deathFrom;
+  if (!death && run.mobs.filter(isHunter).length >= HUNTER.cap) return;
   // jeder weitere Jäger kommt schneller: 30 → 25 → 20 → 15 Züge
-  if (spawnHunter(run, h.n)) { h.n++; h.next = t + Math.max(HUNTER.minInterval, HUNTER.interval - HUNTER.shrink * (h.n - 1)); }
+  if (spawnHunter(run, h.n)) {
+    h.n++;
+    // pressure: from the pairFrom-th hunter on they come in pairs (the second may exceed the cap)
+    if (FEATURES.huntPressure && h.n > HUNTER.pairFrom && h.n <= HUNTER.deathFrom && spawnHunter(run, h.n, true)) h.n++;
+    h.next = t + Math.max(HUNTER.minInterval, HUNTER.interval - HUNTER.shrink * (h.n - 1));
+  }
 }
 
-function spawnHunter(run: Run, stage = 0): boolean {
+function spawnHunter(run: Run, stage = 0, extra = false): boolean {
   const p = run.p, rng = run.rng;
   // nur Jäger, die auf dieser Tiefe schon vorkommen (auch erzwungene – sonst wartet der Jäger)
   const pool = HUNTER.pool.filter(([k, , f]) => run.floor >= f && (!FEATURES.hunterForce || k === FEATURES.hunterForce));
   if (!pool.length) return false;
-  let kind = pool[0][0];
-  if (pool.length > 1) {
+  const death = FEATURES.huntPressure && stage >= HUNTER.deathFrom;
+  let kind = death ? 'tod' : pool[0][0];
+  if (!death && pool.length > 1) {
     let r = rng.int(1, pool.reduce((a, [, w]) => a + w, 0));
     for (const [k, w] of pool) { if ((r -= w) <= 0) { kind = k; break; } }
   }
@@ -1290,24 +1328,48 @@ function spawnHunter(run: Run, stage = 0): boolean {
   m.awake = true; m.st.born = run.turn;
   if (run.floor < HUNTER.weakBelow) { m.maxHp = m.hp = Math.round(m.hp * HUNTER.weak); m.atk = Math.max(1, Math.round(m.atk * HUNTER.weak)); }
   // Wer bleibt, wird härter gejagt: jeder weitere Jäger dieser Ebene ist stärker
-  if (stage > 0) { m.maxHp = m.hp = Math.round(m.hp * (1 + HUNTER.growHp * stage)); m.atk += HUNTER.growAtk * Math.ceil(stage / 2); m.name = `${m.name} (stage ${stage + 1})`; }
+  if (stage > 0) {
+    const pr = FEATURES.huntPressure;
+    m.maxHp = m.hp = Math.round(m.hp * (1 + (pr ? HUNTER.growHp2 : HUNTER.growHp) * stage));
+    m.atk += pr ? HUNTER.growAtk2 * stage : HUNTER.growAtk * Math.ceil(stage / 2);
+    m.name = `${m.name} (stage ${stage + 1})`;
+    m.st.stage = stage;
+  }
+  if (death) { m.st.noReward = 1; tele(run, 'huntDeath'); }
   tele(run, `hunt_${kind}`);
-  say(run, `THE HUNTER IS HERE: ${m.name}!`);
-  run.fx.push({ k: 'banner', title: 'THE HUNTER IS HERE', sub: m.name, col: '#b13e53' }, { k: 'shake', n: 5 });
+  if (death) {
+    say(run, 'You stayed too long. DEATH IS COMING – it brings no reward.');
+    run.fx.push({ k: 'banner', title: 'DEATH IS COMING', sub: 'Descend while you still can!', col: '#b13e53' }, { k: 'shake', n: 7 });
+  } else if (extra) {
+    say(run, `A second hunter follows: ${m.name}!`);
+  } else {
+    say(run, `THE HUNTER IS HERE: ${m.name}!`);
+    run.fx.push({ k: 'banner', title: 'THE HUNTER IS HERE', sub: m.name, col: '#b13e53' }, { k: 'shake', n: 5 });
+  }
   return true;
 }
 
 // ein Schritt auf den Helden zu (über die Wegkarte); false, wenn es nicht weitergeht
 function stepToward(run: Run, m: Actor, dist: Int16Array): boolean {
   let best: number[] | null = null, bd = dist[m.y * W + m.x];
-  if (bd < 0) return false;
+  if (bd < 0) bd = -2; // cut off from the hero: only smashing through helps (below)
   for (const [ox, oy] of DIRS4) {
     const x = m.x + ox, y = m.y + oy;
+    if (bd < 0) break;
     if (!isFree(run, x, y)) continue;
     const v = dist[y * W + x];
     if (v >= 0 && v < bd) { bd = v; best = [x, y]; }
   }
-  if (!best) return false;
+  if (!best) {
+    // a blocked hunter smashes its way through cracked walls and objects toward the hero
+    if (FEATURES.huntPressure) for (const [ox, oy] of DIRS4) {
+      const i = (m.y + oy) * W + m.x + ox, t = run.tiles[i];
+      if (cheb({ x: m.x + ox, y: m.y + oy }, run.p) >= cheb(m, run.p) || inVault(run, m.x + ox, m.y + oy)) continue;
+      if (t === T.CRACKED) { breakWall(run, i); return false; }
+      if (SMASHABLE.has(t) && hitTile(run, i, 'smash')) return false;
+    }
+    return false;
+  }
   moveMob(run, m, best[0], best[1]);
   return m.hp > 0;
 }
@@ -1379,7 +1441,10 @@ function knock(run: Run, m: Actor, dx: number, dy: number, dmg = 2) {
   const p = run.p;
   if (p.hp <= 0) return;
   if (isFree(run, p.x + dx, p.y + dy)) { p.x += dx; p.y += dy; stepHazard(run, p); }
-  else { damage(run, p, dmg, '#b13e53'); run.fx.push({ k: 'num', x: p.x, y: p.y, s: 'Wall!', col: '#ef7d57' }); }
+  else {
+    damage(run, p, dmg, '#b13e53'); run.fx.push({ k: 'num', x: p.x, y: p.y, s: 'Wall!', col: '#ef7d57' });
+    hitTile(run, (p.y + dy) * W + p.x + dx, 'knock'); // the object behind takes the blow too
+  }
 }
 // Trefferwert eines Spezialangriffs: Rüstung zählt nur halb
 function special(run: Run, m: Actor, mul: number) {
@@ -1599,6 +1664,7 @@ function medusaHurt(run: Run, m: Actor) {
 export function hunterInfo(run: Run): { text: string; col: string } | null {
   if (!run.hunt) return null;
   const t = run.floorTurns ?? 0, h = run.hunt;
+  if (FEATURES.huntPressure && h.n >= HUNTER.deathFrom) return { text: 'Death hunts you – to the stairs!', col: '#b13e53' };
   if (h.n) return { text: `Next hunter: ${Math.max(0, h.next - t)} turns`, col: '#b13e53' };
   if (t >= HUNTER.first - 10) return { text: `The hunt begins soon ... ${Math.max(0, HUNTER.first - t)}`, col: '#b13e53' };
   if (t >= HUNTER.first - HUNTER.warn) return { text: 'Something is following you ...', col: '#ef7d57' };
@@ -1609,6 +1675,7 @@ function ignite(run: Run, x: number, y: number, turns = 3) {
   if (x < 0 || y < 0 || x >= W || y >= H) return;
   const i = y * W + x, t = run.tiles[i];
   if (t === T.BARREL) { if (!run.fuses.has(i)) run.fuses.set(i, 1); return; }
+  if (FEATURES.destruction && igniteWorld(run, i, t)) return;
   if (!walkable(t) || t === T.STAIRS) return;
   run.fire.set(i, Math.max(run.fire.get(i) ?? 0, t === T.GRASS ? turns + 1 : turns));
 }
@@ -1631,6 +1698,8 @@ export function explode(run: Run, x: number, y: number, r = 1, barrel = false) {
     blast.add(yy * W + xx);
   }
   const chain: number[] = [];
+  // with destruction: gas and ember traps in the blast go off instead of just breaking
+  const traps = FEATURES.destruction ? run.hazards.filter(h => blast.has(h.y * W + h.x) && (h.kind === 'gas' || h.kind === 'glut')) : [];
   if (run.hazards.length) run.hazards = run.hazards.filter(h => !blast.has(h.y * W + h.x)); // die Druckwelle zerstört Fallen
   for (const i of blast) {
     const xx = i % W, yy = (i / W) | 0, t = run.tiles[i];
@@ -1644,11 +1713,16 @@ export function explode(run: Run, x: number, y: number, r = 1, barrel = false) {
       if (ring(xx, yy) <= 1 || h % 10 < 6) run.tiles[i] = T.BURNT;
       if (ring(xx, yy) === 1 && h % 3 === 0) ignite(run, xx, yy, 2);
     }
+    else if (FEATURES.destruction) hitTile(run, i, 'blast');
   }
   const dmg = 6 + Math.round(2.5 * run.floor), at = (q: { x: number; y: number }) => blast.has(q.y * W + q.x);
   const dmgAt = (q: { x: number; y: number }) => (ring(q.x, q.y) <= 1 ? dmg : Math.round(dmg * 0.6));
   for (const m of run.mobs.filter(at)) damage(run, m, dmgAt(m), '#ef7d57');
   if (!has(p, 'pulverfass') && at(p)) damage(run, p, Math.ceil(dmgAt(p) * 0.3), '#b13e53');
+  for (const h of traps) {
+    if (h.kind === 'gas') poisonCloud(run, h.x, h.y);
+    else for (const [ox, oy] of [[0, 0], ...DIRS4]) ignite(run, h.x + ox, h.y + oy, 3);
+  }
   for (const i of chain) if (run.tiles[i] === T.BARREL) burst(run, i);
 }
 
@@ -1659,10 +1733,15 @@ function breakWall(run: Run, i: number) {
   say(run, 'The wall collapses!');
 }
 
+// Chain reactions: every barrel turns to BURNT before it explodes, so each one goes off once;
+// the depth guard bounds pathological chains.
+let boomDepth = 0;
 function burst(run: Run, i: number) {
   run.tiles[i] = T.BURNT;
   run.fuses.delete(i);
-  explode(run, i % W, (i / W) | 0, 2, true);
+  if (boomDepth >= 64) return;
+  boomDepth++;
+  try { explode(run, i % W, (i / W) | 0, 2, true); } finally { boomDepth--; }
 }
 
 // Eine Säule stürzt ein und begräbt, was direkt daneben steht.
@@ -1690,9 +1769,273 @@ function tickWorld(run: Run) {
       const n = (y + oy) * W + x + ox, nt = run.tiles[n];
       if (nt === T.BARREL) ignite(run, x + ox, y + oy);
       else if (nt === T.GRASS && !run.fire.has(n) && run.rng.chance(spread)) ignite(run, x + ox, y + oy);
+      // flammable world objects always catch (no random draw)
+      else if (FEATURES.destruction && FLAMMABLE.has(nt) && !run.fire.has(n) && !inVault(run, x + ox, y + oy)) ignite(run, x + ox, y + oy);
     }
-    if (t <= 1) { run.fire.delete(i); if (run.tiles[i] === T.GRASS || run.tiles[i] === T.FLOOR) run.tiles[i] = T.BURNT; }
+    if (t <= 1) { run.fire.delete(i); const ft = run.tiles[i]; if (ft === T.GRASS || ft === T.FLOOR || ft === T.OIL) run.tiles[i] = T.BURNT; }
     else run.fire.set(i, t - 1);
+  }
+  if (run.gas?.size) tickGas(run);
+}
+
+// ---------- Destructible world (FEATURES.destruction) ----------
+// Same rules for hero and monsters. Puzzle vaults are never touched. No run.rng is drawn here:
+// pot contents come from the tile hash, so the main random stream stays as it was.
+export type HitSrc = 'blast' | 'fire' | 'bump' | 'smash' | 'knock';
+const FLAMMABLE = new Set<number>([T.OIL, T.WEB, T.SPORE, T.CRATE]);
+const SMASHABLE = new Set<number>([T.POT, T.SPORE, T.CRATE, T.BARREL]);
+const brk = (run: Run, i: number, mat: Mat) => run.fx.push({ k: 'break', x: i % W, y: (i / W) | 0, mat });
+
+// Something hits tile i. Returns true if the tile reacted.
+export function hitTile(run: Run, i: number, src: HitSrc): boolean {
+  if (!FEATURES.destruction) return false;
+  const x = i % W, y = (i / W) | 0, t = run.tiles[i];
+  if (inVault(run, x, y)) return false;
+  switch (t) {
+    case T.POT:
+      if (src === 'fire') return false;
+      breakPot(run, i);
+      return true;
+    case T.SPORE:
+      run.tiles[i] = T.FLOOR; brk(run, i, 'fungus');
+      say(run, 'The spore cap bursts – a poison cloud!');
+      poisonCloud(run, x, y);
+      return true;
+    case T.WEB:
+      if (src === 'bump') return false;
+      run.tiles[i] = T.FLOOR; brk(run, i, 'web');
+      return true;
+    case T.OIL:
+      if (src !== 'fire' && src !== 'blast') return false;
+      igniteOil(run, i);
+      return true;
+    case T.CRATE: case T.CRATE_ON:
+      if (src === 'bump') return false;
+      run.tiles[i] = t === T.CRATE_ON ? T.PLATE : T.RUBBLE; brk(run, i, 'wood');
+      return true;
+    case T.STATUE: case T.BRAZIER: case T.BRAZIER_ON:
+      if (src !== 'blast' && src !== 'smash') return false;
+      run.tiles[i] = T.RUBBLE; brk(run, i, t === T.STATUE ? 'stone' : 'metal');
+      if (t === T.BRAZIER_ON) for (const [ox, oy] of DIRS4) ignite(run, x + ox, y + oy, 3);
+      return true;
+    case T.ICE:
+      if (src !== 'blast' && src !== 'fire') return false;
+      run.tiles[i] = T.WATER; brk(run, i, 'ice');
+      return true;
+    case T.FRAGILE:
+      if (src !== 'blast' && src !== 'smash') return false;
+      run.tiles[i] = T.FRAGILE2; run.fx.push({ k: 'debris', x, y });
+      return true;
+    case T.CRACKED: {
+      if (src === 'fire') return false;
+      const n = src === 'blast' ? 3 : (run.cracks.get(i) ?? 0) + 1;
+      if (n >= 3) breakWall(run, i); else { run.cracks.set(i, n); run.fx.push({ k: 'debris', x, y }); }
+      return true;
+    }
+    case T.PILLAR:
+      if (src !== 'blast') return false;
+      collapse(run, x, y);
+      return true;
+    case T.BARREL:
+      if (src === 'blast') { burst(run, i); return true; }
+      if (src === 'knock' || src === 'smash') { if (!run.fuses.has(i)) run.fuses.set(i, 2); say(run, 'The barrel catches fire!'); return true; }
+      return false;
+  }
+  return false;
+}
+
+// Area blow without damage to actors (meteor): every object in the square reacts
+function blastTiles(run: Run, cx: number, cy: number, r: number) {
+  for (let y = cy - r; y <= cy + r; y++) for (let x = cx - r; x <= cx + r; x++) {
+    if (x < 1 || y < 1 || x >= W - 1 || y >= H - 1) continue;
+    hitTile(run, y * W + x, 'blast');
+  }
+}
+
+// Fire meets a world tile. true: handled here (the caller sets no normal fire)
+function igniteWorld(run: Run, i: number, t: number): boolean {
+  if (inVault(run, i % W, (i / W) | 0)) return false;
+  switch (t) {
+    case T.WATER: return true; // water does not burn
+    case T.OIL: if (!run.fire.has(i)) igniteOil(run, i); return true;
+    case T.WEB: run.tiles[i] = T.FLOOR; brk(run, i, 'web'); run.fire.set(i, Math.max(run.fire.get(i) ?? 0, 1)); return true;
+    case T.SPORE: hitTile(run, i, 'fire'); return true;
+    case T.CRATE: run.tiles[i] = T.FLOOR; brk(run, i, 'wood'); run.fire.set(i, Math.max(run.fire.get(i) ?? 0, 2)); return true;
+    case T.ICE: run.tiles[i] = T.WATER; brk(run, i, 'ice'); return true;
+  }
+  return false;
+}
+
+// The whole connected oil puddle catches fire at once
+function igniteOil(run: Run, i0: number) {
+  const todo = [i0], seen = new Set([i0]);
+  while (todo.length) {
+    const i = todo.pop()!;
+    run.fire.set(i, Math.max(run.fire.get(i) ?? 0, DESTR.oilBurn));
+    for (const [ox, oy] of DIRS4) {
+      const n = i + oy * W + ox;
+      if (!seen.has(n) && run.tiles[n] === T.OIL && !inVault(run, n % W, (n / W) | 0)) { seen.add(n); todo.push(n); }
+    }
+  }
+  brk(run, i0, 'oil');
+  if (seen.size > 1) say(run, 'The oil bursts into flames!');
+}
+
+// Poison cloud 3×3: everyone inside is poisoned, now and for the next turns
+function poisonCloud(run: Run, x: number, y: number) {
+  const g = (run.gas ??= new Map());
+  for (let yy = y - 1; yy <= y + 1; yy++) for (let xx = x - 1; xx <= x + 1; xx++) {
+    const i = yy * W + xx;
+    if (xx < 1 || yy < 1 || xx >= W - 1 || yy >= H - 1 || !walkable(run.tiles[i])) continue;
+    g.set(i, Math.max(g.get(i) ?? 0, DESTR.gasTurns));
+  }
+  gasBite(run);
+}
+function gasBite(run: Run) {
+  const g = run.gas;
+  if (!g?.size) return;
+  for (const a of [run.p, ...run.mobs]) {
+    if (a.hp <= 0 || !g.has(a.y * W + a.x)) continue;
+    if (!a.st.gift) run.fx.push({ k: 'num', x: a.x, y: a.y, s: 'Poison', col: '#38b764' });
+    a.st.gift = Math.max(a.st.gift ?? 0, DESTR.gasPoison);
+  }
+}
+function tickGas(run: Run) {
+  gasBite(run);
+  for (const [i, t] of [...run.gas!]) if (t <= 1) run.gas!.delete(i); else run.gas!.set(i, t - 1);
+}
+
+// Clay pot: breaks on any blow; contents from the tile hash
+function breakPot(run: Run, i: number) {
+  const x = i % W, y = (i / W) | 0, p = run.p;
+  run.tiles[i] = T.FLOOR; brk(run, i, 'clay');
+  const r = (spot(x, y, run.seed + run.floor * 131) % 1000) / 1000;
+  if (r < DESTR.potGold) {
+    const g = Math.max(1, Math.round((1 + run.floor * 0.6) * (1 + (p.aff.gold ?? 0) / 100)));
+    p.gold += g; run.fx.push({ k: 'num', x, y, s: `+${g}`, col: '#ffcd75' });
+    say(run, `The pot holds ${g} gold.`);
+  } else if (r < DESTR.potGold + DESTR.potPotion) {
+    p.potions++; say(run, 'A healing potion is in the pot!');
+  } else if (r < DESTR.potGold + DESTR.potPotion + DESTR.potRat && !mobAt(run, x, y) && !(p.x === x && p.y === y)) {
+    spawnMob(run, 'ratte', x, y).awake = true; say(run, 'A rat leaps out of the pot!');
+  }
+}
+
+// A walker (hero or monster) steps onto a world tile
+function stepWorld(run: Run, a: Actor) {
+  const i = a.y * W + a.x, t = run.tiles[i], isP = a === run.p;
+  if (inVault(run, a.x, a.y)) return;
+  if (!isP && (FLYERS.has(a.kind) || isHunter(a))) return; // hunters tear through webs and do not fall
+  if (t === T.WEB) {
+    run.tiles[i] = T.FLOOR; brk(run, i, 'web');
+    a.st.netz = Math.max(a.st.netz ?? 0, 2);
+    run.fx.push({ k: 'num', x: a.x, y: a.y, s: 'caught', col: '#c9d4dc' });
+    if (isP) say(run, 'You get caught in a cobweb!');
+  } else if (!isP && t === T.FRAGILE) run.tiles[i] = T.FRAGILE2;
+  else if (!isP && t === T.FRAGILE2 && !a.boss && !a.elite && !MOBS[a.kind]?.hunter) {
+    // the floor gives way under the monster: it falls one floor down (gone, no loot)
+    a.hp = 0;
+    run.mobs = run.mobs.filter(o => o !== a);
+    run.fx.push({ k: 'die', x: a.x, y: a.y, kind: a.kind }, { k: 'debris', x: a.x, y: a.y });
+    if (run.target === a.id) run.target = 0;
+    say(run, `${a.name} falls through the floor!`);
+  }
+}
+
+// Placement (own RNG from seed + floor; only with the switch on)
+function placeWorld(run: Run, rooms: Room[], bossFloor: boolean) {
+  const rng = new RNG(spot(run.seed, run.floor, 0x5eed)), bio = biomeOf(run.floor), t = run.tiles, p = run.p;
+  const stairs = t.indexOf(T.STAIRS);
+  const ok = (x: number, y: number) => {
+    const i = y * W + x;
+    if (t[i] !== T.FLOOR || mobAt(run, x, y) || (p.x === x && p.y === y)) return false;
+    const z = run.puzzle;
+    if (z && x >= z.x - 1 && x <= z.x + VS && y >= z.y - 1 && y <= z.y + VS) return false;
+    if (stairs >= 0 && cheb({ x, y }, { x: stairs % W, y: (stairs / W) | 0 }) <= 1) return false;
+    return !run.hazards.some(h => h.x === x && h.y === y);
+  };
+  const walls = (x: number, y: number) => DIRS4.filter(([ox, oy]) => t[(y + oy) * W + x + ox] === T.WALL).length;
+  const edge = (r: Room): [number, number] => {
+    const side = rng.int(0, 3);
+    return side === 0 ? [rng.int(r.x, r.x + r.w - 1), r.y] : side === 1 ? [rng.int(r.x, r.x + r.w - 1), r.y + r.h - 1]
+      : side === 2 ? [r.x, rng.int(r.y, r.y + r.h - 1)] : [r.x + r.w - 1, rng.int(r.y, r.y + r.h - 1)];
+  };
+  // puddle: random walk from a start tile
+  const puddle = (r: Room, tile: number, n: number, sx: number, sy: number) => {
+    let x = sx, y = sy;
+    for (let k = 0; k < n * 3 && n > 0; k++) {
+      if (ok(x, y)) { t[y * W + x] = tile; n--; }
+      const [ox, oy] = rng.pick(DIRS4);
+      x = Math.max(r.x, Math.min(r.x + r.w - 1, x + ox)); y = Math.max(r.y, Math.min(r.y + r.h - 1, y + oy));
+    }
+  };
+  rooms.forEach((r, ri) => {
+    if (rng.chance(DESTR.pot[bio])) for (let k = rng.int(...DESTR.potN), tries = 0; k > 0 && tries < 12; tries++) {
+      const [x, y] = edge(r);
+      if (ok(x, y) && tryBlock(run, x, y, T.POT)) k--;
+    }
+    if (ri === 0) return; // the start room stays calm
+    if (DESTR.spore[bio] && rng.chance(DESTR.spore[bio])) for (let k = rng.int(...DESTR.sporeN), tries = 0; k > 0 && tries < 12; tries++) {
+      const x = rng.int(r.x, r.x + r.w - 1), y = rng.int(r.y, r.y + r.h - 1);
+      if (ok(x, y) && tryBlock(run, x, y, T.SPORE)) k--;
+    }
+    if (DESTR.oil[bio]) {
+      // oil gathers near barrels: more likely there, and it starts next to one
+      let bx = -1, by = -1;
+      for (let y = r.y; y < r.y + r.h && bx < 0; y++) for (let x = r.x; x < r.x + r.w; x++) if (t[y * W + x] === T.BARREL) { bx = x; by = y; break; }
+      if (rng.chance(bx >= 0 ? DESTR.oilBarrel : DESTR.oil[bio])) {
+        const [sx, sy] = bx >= 0 ? [Math.max(r.x, Math.min(r.x + r.w - 1, bx + rng.int(-1, 1))), Math.max(r.y, Math.min(r.y + r.h - 1, by + rng.int(-1, 1)))]
+          : [rng.int(r.x, r.x + r.w - 1), rng.int(r.y, r.y + r.h - 1)];
+        puddle(r, T.OIL, rng.int(...DESTR.oilN), sx, sy);
+      }
+    }
+    if (DESTR.water[bio] && rng.chance(DESTR.water[bio])) puddle(r, T.WATER, rng.int(...DESTR.waterN), rng.int(r.x, r.x + r.w - 1), rng.int(r.y, r.y + r.h - 1));
+    if (DESTR.web[bio] && rng.chance(DESTR.web[bio])) for (let k = rng.int(...DESTR.webN), tries = 0; k > 0 && tries < 14; tries++) {
+      const [x, y] = edge(r);
+      if (ok(x, y) && walls(x, y) >= 2) { t[y * W + x] = T.WEB; k--; } // webs hang in corners
+    }
+  });
+  if (!bossFloor) addPassages(run, rng);
+}
+
+// Hidden passages: a wall one or two tiles thick between two parts of the map that are far apart on foot.
+// Its tiles become cracked walls; breaking them (blows, a blast, a heavy monster) opens a real shortcut.
+export interface Passage { tiles: number[]; a: number; b: number }
+export function passageCandidates(run: Run): Passage[] {
+  const t = run.tiles, z = run.puzzle, out: Passage[] = [];
+  const plain = (i: number) => t[i] === T.FLOOR || t[i] === T.GRASS || t[i] === T.BURNT;
+  const d0 = distMap(t, run.p.x, run.p.y), stairs = t.indexOf(T.STAIRS);
+  const okWall = (i: number) => {
+    const x = i % W, y = (i / W) | 0;
+    if (t[i] !== T.WALL || x < 2 || y < 2 || x >= W - 2 || y >= H - 2) return false;
+    if (z && x >= z.x - 1 && x <= z.x + VS && y >= z.y - 1 && y <= z.y + VS) return false;
+    if (stairs >= 0 && cheb({ x, y }, { x: stairs % W, y: (stairs / W) | 0 }) <= 2) return false;
+    // no secret chamber or treasure gate next to it
+    for (let oy = -1; oy <= 1; oy++) for (let ox = -1; ox <= 1; ox++) { const n = t[i + oy * W + ox]; if (n === T.CRACKED || n === T.GATE) return false; }
+    return true;
+  };
+  for (let i = W * 2; i < W * (H - 2); i++) {
+    if (!plain(i) || d0[i] < 0) continue;
+    for (const st of [1, W]) for (const len of [1, 2]) {
+      const tiles = Array.from({ length: len }, (_, k) => i + st * (k + 1)), b = i + st * (len + 1), side = st === 1 ? W : 1;
+      if (!tiles.every(okWall) || !plain(b) || d0[b] < 0) continue;
+      // a straight wall: solid on both flanks, so the breach is a clean doorway
+      if (!tiles.every(w => t[w - side] === T.WALL && t[w + side] === T.WALL)) continue;
+      out.push({ tiles, a: i, b });
+    }
+  }
+  return out;
+}
+function addPassages(run: Run, rng: RNG) {
+  const cands = rng.shuffle(passageCandidates(run)), done: number[] = [];
+  let want = rng.int(...DESTR.secret);
+  for (let k = 0; k < cands.length && k < 120 && want > 0; k++) {
+    const c = cands[k], ci = c.tiles[0];
+    if (done.some(j => cheb({ x: j % W, y: (j / W) | 0 }, { x: ci % W, y: (ci / W) | 0 }) < 8)) continue;
+    if (distMap(run.tiles, c.a % W, (c.a / W) | 0)[c.b] < DESTR.secretMinGain + c.tiles.length) continue;
+    for (const w of c.tiles) run.tiles[w] = T.CRACKED;
+    done.push(ci);
+    want--;
   }
 }
 
@@ -1704,12 +2047,15 @@ function stun(run: Run, a: Actor, turns: number) {
   // betäubte Jäger brechen ihren angekündigten Angriff ab
   if (a.st.zt || a.zone) { delete a.st.zt; delete a.zone; delete a.zk; run.fx.push({ k: 'num', x: a.x, y: a.y, s: 'interrupted', col: '#73eff7' }); }
   // Jäger schütteln Betäubung schneller ab
-  a.st.stun = (a.boss ? 1 : MOBS[a.kind]?.hunter ? Math.min(turns, HUNTER.stunMax) : turns) + (has(run.p, 'frostkern') ? 1 : 0);
+  const hmax = FEATURES.huntPressure && (a.st.stage ?? 0) >= HUNTER.stun1From ? 1 : HUNTER.stunMax;
+  a.st.stun = (a.boss ? 1 : MOBS[a.kind]?.hunter ? Math.min(turns, hmax) : turns) + (has(run.p, 'frostkern') ? 1 : 0);
 }
 
 
 // true, solange die eigene Aktion des Spielers ausgeführt wird (für Kryomant)
 let playerActing = false;
+// true while poison/burn tick: damage numbers are drawn small (rendering only)
+let dotTick = false;
 
 function damage(run: Run, dst: Actor, amt: number, col = '#f4f4f4', crit = false) {
   const p = run.p;
@@ -1727,7 +2073,7 @@ function damage(run: Run, dst: Actor, amt: number, col = '#f4f4f4', crit = false
   if (dst !== p && playerActing && p.cls === 'magier' && hasNode(p, 'n1_5') && (dst.st.stun || dst.boss)) gain(p, TUNE.kryoMana);
   dst.hp -= amt;
   run.fx.push({ k: 'flash', id: dst.id });
-  run.fx.push({ k: 'num', x: dst.x, y: dst.y, s: crit ? `${amt}!` : `${amt}`, col: crit ? '#ffcd75' : col });
+  run.fx.push({ k: 'num', x: dst.x, y: dst.y, s: crit ? `${amt}!` : `${amt}`, col: crit ? '#ffcd75' : col, ...(dotTick ? { dot: true } : {}) });
   if (dst !== run.p && dst.hp <= 0) kill(run, dst);
   else if (dst.kind === 'medusa' && playerActing) medusaHurt(run, dst);
   // Schutzrune: einmal je Ebene ein Blinzeln, wenn das Leben knapp wird
@@ -1808,9 +2154,11 @@ function kill(run: Run, m: Actor) {
   run.mobs = run.mobs.filter(o => o !== m);
   run.fx.push({ k: 'die', x: m.x, y: m.y, kind: m.kind });
   run.kills++;
-  p.exp += m.xp;
-  run.souls += Math.max(1, Math.round((m.xp / 10) * p.soulMul));
-  p.gold += Math.ceil((m.xp / 6) * (1 + (p.aff.gold ?? 0) / 100));
+  // hunters stop paying out when farmed: the k-th kill on a floor gives less, Death called by staying gives nothing
+  const rm = huntReward(run, m);
+  p.exp += Math.round(m.xp * rm);
+  if (rm > 0) run.souls += Math.max(1, Math.round((m.xp / 10) * p.soulMul * rm));
+  p.gold += Math.ceil((m.xp / 6) * (1 + (p.aff.gold ?? 0) / 100) * rm);
   if (p.aff.ausdauer) gain(p, p.aff.ausdauer);
   if (p.aff.asche && !m.boss) {
     run.fx.push({ k: 'boom', x: m.x, y: m.y, r: 1 });
@@ -1851,7 +2199,7 @@ function kill(run: Run, m: Actor) {
     p.keys++;
     p.potions++;
     say(run, `${m.name} drops a key and a healing potion.`);
-  } else if (run.rng.chance(DIFF.dropPotion)) {
+  } else if (rm >= 1 && run.rng.chance(DIFF.dropPotion)) {
     p.potions++;
     say(run, `${m.name} drops a healing potion.`);
   }
@@ -2044,7 +2392,7 @@ function useSkill(run: Run, i: number): boolean {
         const dx = Math.sign(t.x - p.x), dy = Math.sign(t.y - p.y);
         let k = 0;
         while (k < 2 && isFree(run, t.x + dx, t.y + dy)) { moveMob(run, t, t.x + dx, t.y + dy); k++; if (t.hp <= 0) break; }
-        if (k < 2 && t.hp > 0) damage(run, t, 4 + p.lvl, '#ffcd75');
+        if (k < 2 && t.hp > 0) { damage(run, t, 4 + p.lvl, '#ffcd75'); hitTile(run, (t.y + dy) * W + t.x + dx, 'knock'); }
       }
       // Vergelter: betäubt alle Nachbarn
       if (hasNode(p, 'n0_5')) for (const o of around(1)) if (o !== t) stun(run, o, 2);
@@ -2289,6 +2637,7 @@ function useUlt(run: Run): boolean {
     if (!t) { say(run, 'No target in range.'); return false; }
     const c = { x: t.x, y: t.y };
     run.fx.push({ k: 'bolt', x0: p.x, y0: p.y - 6, x1: c.x, y1: c.y, col: '#ef7d57' }, { k: 'boom', x: c.x, y: c.y, r: 2 }, { k: 'shake', n: 8 });
+    if (FEATURES.destruction) blastTiles(run, c.x, c.y, 1); // the meteor smashes walls, pillars and objects
     for (let y = c.y - 1; y <= c.y + 1; y++) for (let x = c.x - 1; x <= c.x + 1; x++) ignite(run, x, y, 2);
     for (const m of run.mobs.filter(m => cheb(m, c) <= 2)) { m.st.brand = 3; damage(run, m, (14 + p.lvl * 1.5) * p.pow - m.def, '#ef7d57'); }
   } else {
@@ -2392,6 +2741,7 @@ export function act(run: Run, a: Action): void {
         used = true;
       } else if (t === T.MIMIC) { revealMimic(run, i, true); used = true; }
       else if (t === T.CHEST || t === T.CURSED) { openChest(run, i); used = true; }
+      else if (t === T.FOUNTAIN && hunted(run)) say(run, 'The water has turned black – not while something hunts you.');
       else if (t === T.FOUNTAIN) {
         const n = Math.ceil(p.maxHp * DIFF.fountainHeal);
         p.hp = Math.min(p.maxHp, p.hp + n);
@@ -2439,6 +2789,12 @@ export function act(run: Run, a: Action): void {
         if (!run.fuses.has(i)) { run.fuses.set(i, 3 + (spot(nx, ny, run.turn) % 2)); say(run, 'The fuse is lit – get away!'); }
         used = true;
       }
+      else if (FEATURES.destruction && (t === T.POT || t === T.SPORE) && !inVault(run, nx, ny)) {
+        run.fx.push({ k: 'lunge', id: 0, dx: a.dx, dy: a.dy });
+        hitTile(run, i, 'bump');
+        used = true;
+      }
+      else if (t === T.ALTAR && hunted(run)) say(run, 'The altar is silent while something hunts you.');
       else if (t === T.ALTAR) {
         const cost = Math.ceil(p.maxHp * 0.25);
         if (p.hp <= cost) say(run, 'You are too weak for the sacrifice.');
@@ -2460,7 +2816,7 @@ export function act(run: Run, a: Action): void {
           run.fx.push({ k: 'shake', n: 8 });
           used = false;
           fatal(run);
-        } else { afterStep(run); stepHazard(run, p); if (run.mud?.includes(i)) { p.st.netz = 2; say(run, 'You are stuck in the mud!'); } }
+        } else { afterStep(run); stepHazard(run, p); if (run.mud?.includes(i)) { p.st.netz = 2; say(run, 'You are stuck in the mud!'); } if (FEATURES.destruction) stepWorld(run, p); }
       }
       break;
     }
@@ -2543,7 +2899,7 @@ function hitPlayer(run: Run, m: Actor, melee: boolean) {
   const p = run.p, d = MOBS[m.kind];
   m.f = Math.abs(p.x - m.x) >= Math.abs(p.y - m.y) ? [Math.sign(p.x - m.x), 0] : [0, Math.sign(p.y - m.y)];
   if (melee) run.fx.push({ k: 'lunge', id: m.id, dx: Math.sign(p.x - m.x), dy: Math.sign(p.y - m.y) }, { k: 'swipe', x: p.x, y: p.y, dx: Math.sign(p.x - m.x), dy: Math.sign(p.y - m.y), big: !!m.boss });
-  if (melee && inSmoke(p) && run.rng.chance(0.5)) { run.fx.push({ k: 'num', x: p.x, y: p.y, s: 'missed', col: '#94b0c2' }); return; }
+  if (melee && inSmoke(p) && !isHunter(m) && run.rng.chance(0.5)) { run.fx.push({ k: 'num', x: p.x, y: p.y, s: 'missed', col: '#94b0c2' }); return; }
   if (p.st.dodge || (p.aff.flink && run.rng.chance(Math.min(40, p.aff.flink) / 100))) { run.fx.push({ k: 'num', x: p.x, y: p.y, s: 'missed', col: '#94b0c2' }); if (p.aff.konter) p.st.konter = 1; return; }
   const atk = Math.max(1, (melee ? m.atk : Math.round(m.atk * 0.7)) - (m.st.schwach ? 1 : 0)); // Fernschüsse treffen schwächer
   damage(run, p, Math.max(Math.ceil(atk * 0.3), atk - p.def - (p.st.wall ? 3 : 0) - (p.st.eis ? 2 : 0) - (p.st.sw ? 2 : 0)) - (has(p, 'steinhaut') ? 1 : 0), '#b13e53');
@@ -2564,6 +2920,7 @@ function moveMob(run: Run, m: Actor, x: number, y: number) {
   m.f = [Math.sign(x - m.x), Math.sign(y - m.y)];
   m.x = x; m.y = y;
   if (run.hazards.length) { stepHazard(run, m); if (m.hp <= 0) return; }
+  if (FEATURES.destruction) { stepWorld(run, m); if (m.hp <= 0) return; }
   const ti = run.traps.findIndex(t => t.x === x && t.y === y);
   if (ti >= 0) {
     run.traps.splice(ti, 1);
@@ -2629,7 +2986,9 @@ function mobAct(run: Run, m: Actor, dist: Int16Array) {
     // Schwere Gegner brechen rissige Wände auf dem Weg zum Spieler ein
     for (const [ox, oy] of dirs) {
       const i = (m.y + oy) * W + m.x + ox;
-      if (run.tiles[i] === T.CRACKED && Math.abs(p.x - m.x - ox) + Math.abs(p.y - m.y - oy) < man) { breakWall(run, i); break; }
+      if (Math.abs(p.x - m.x - ox) + Math.abs(p.y - m.y - oy) >= man) continue;
+      if (run.tiles[i] === T.CRACKED) { breakWall(run, i); break; }
+      if (FEATURES.destruction && SMASHABLE.has(run.tiles[i]) && hitTile(run, i, 'smash')) break;
     }
   }
 }
@@ -2656,6 +3015,10 @@ function fleeAct(run: Run, m: Actor, dist: Int16Array, wisp: boolean) {
 }
 
 function tickDots(run: Run, a: Actor) {
+  dotTick = true;
+  try { tickDots0(run, a); } finally { dotTick = false; }
+}
+function tickDots0(run: Run, a: Actor) {
   if (a.st.gift) { a.st.gift--; damage(run, a, 1, '#38b764'); }
   if (a.hp > 0 && a.st.brand) {
     a.st.brand--;
@@ -2669,11 +3032,15 @@ function endTurn(run: Run) {
   const p = run.p;
   if (run.mode === 'win') return;
   run.turn++;
+  run.fx.push({ k: 'beat', id: -1 });
   tickWorld(run);
   if (run.fire.has(p.y * W + p.x)) p.st.brand = Math.max(p.st.brand ?? 0, 2);
   for (const m of run.mobs) if (run.fire.has(m.y * W + m.x)) m.st.brand = Math.max(m.st.brand ?? 0, burnT(p, 2));
+  // standing in water puts out burning (hero and monsters alike)
+  if (FEATURES.destruction) for (const a of [p, ...run.mobs]) if (a.st.brand && run.tiles[a.y * W + a.x] === T.WATER) { delete a.st.brand; run.fx.push({ k: 'num', x: a.x, y: a.y, s: 'doused', col: '#41a6f6' }); }
   tickDots(run, p);
-  if (p.cls === 'magier' && run.turn % (hasNode(p, 'n1_5') ? Math.round(3 / TUNE.kryoRegen) : 3) === 0) gain(p, 1); // Kryomant: langsamere Erholung
+  const hostile = hunted(run);
+  if (!hostile && p.cls === 'magier' && run.turn % (hasNode(p, 'n1_5') ? Math.round(3 / TUNE.kryoRegen) : 3) === 0) gain(p, 1); // Kryomant: langsamere Erholung
   // Krieger: Wut wächst, solange ein sichtbarer Gegner direkt daneben steht
   if (p.cls === 'krieger' && run.mobs.some(m => cheb(m, p) <= 1 && run.vis[m.y * W + m.x])) gain(p, 1);
   const dist = distMap(run.tiles, p.x, p.y);
@@ -2691,7 +3058,10 @@ function endTurn(run: Run) {
     if (m.st.immun) m.st.immun--;
     if (m.st.sproede) m.st.sproede--;
     if (has(p, 'zeitsand') && run.rng.chance(0.12)) continue;
+    // beat only if the enemy visibly does something (step or effect) – otherwise no wait in rendering
+    const n0 = run.fx.length, x0 = m.x, y0 = m.y;
     mobAct(run, m, dist);
+    if ((run.fx.length > n0 || m.x !== x0 || m.y !== y0) && (run.vis[m.y * W + m.x] || run.vis[y0 * W + x0])) run.fx.splice(n0, 0, { k: 'beat', id: m.id });
     if (p.hp <= 0) break;
   }
   if (p.st.stark) p.st.stark--;
@@ -2704,7 +3074,7 @@ function endTurn(run: Run) {
   if (p.st.rauch && !--p.st.rauch) { delete p.st.rauch; delete p.st.rx; delete p.st.ry; }
   if (p.st.schild && !--p.st.schild) { delete p.st.schild; p.shield = 0; }
   if (p.ultCd) p.ultCd--;
-  if (p.aff.regen && run.turn % 6 === 0 && p.hp > 0 && p.hp < p.maxHp) p.hp = Math.min(p.maxHp, p.hp + p.aff.regen);
+  if (p.aff.regen && !hunted(run) && run.turn % 6 === 0 && p.hp > 0 && p.hp < p.maxHp) p.hp = Math.min(p.maxHp, p.hp + p.aff.regen);
   const z = run.puzzle;
   if (z && z.kind === 'darts' && z.entered && !z.solved && z.lanes && run.mode !== 'dead') {
     for (const l of z.lanes) if (dartFires(l, run.turn)) fireLane(run, z, l);
@@ -2733,7 +3103,7 @@ export function serialize(run: Run): string {
   return JSON.stringify({
     ...run, v: SAVE_VERSION, rng: run.rng.s, fx: [], invFocus: undefined, invNote: undefined,
     tiles: [...run.tiles], seen: [...run.seen], vis: [...run.vis],
-    fire: [...run.fire], fuses: [...run.fuses], cracks: [...run.cracks],
+    fire: [...run.fire], fuses: [...run.fuses], cracks: [...run.cracks], gas: run.gas?.size ? [...run.gas] : undefined,
   });
 }
 
@@ -2746,7 +3116,7 @@ export function deserialize(json: string): Run | null {
     return {
       ...o, rng: new RNG(o.rng), fx: [],
       tiles: Uint8Array.from(o.tiles), seen: Uint8Array.from(o.seen), vis: Uint8Array.from(o.vis),
-      fire: new Map(o.fire), fuses: new Map(o.fuses), cracks: new Map(o.cracks),
+      fire: new Map(o.fire), fuses: new Map(o.fuses), cracks: new Map(o.cracks), gas: o.gas ? new Map(o.gas) : undefined,
     } as Run;
   } catch {
     return null;

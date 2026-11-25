@@ -31,7 +31,7 @@ function search(run: Run, goal: (x: number, y: number, i: number) => boolean, av
       const nx = cx + ox, ny = cy + oy, n = ny * W + nx;
       if (nx < 0 || ny < 0 || nx >= W || ny >= H || from[n] !== -1) continue;
       const t = run.tiles[n];
-      const passable = walkable(t) && (brittle || t !== T.FRAGILE2) && !(avoidFire && (run.fire.has(n) || warned?.has(n))) && !(knownTraps && knownTraps.has(n));
+      const passable = walkable(t) && (brittle || t !== T.FRAGILE2) && !(avoidFire && (run.fire.has(n) || warned?.has(n) || run.gas?.has(n) || t === T.WEB)) && !(knownTraps && knownTraps.has(n));
       // Ziele dürfen auch nicht begehbar sein (Gegner, Truhen)
       if (!passable || run.mobs.some(m => m.x === nx && m.y === ny && run.vis[n])) { if (goal(nx, ny, n) && from[n] === -1) { from[n] = c; q.push(n); } continue; }
       from[n] = c;
@@ -67,6 +67,11 @@ const trail: number[] = [];
 let visitFloor = 0, wander = 0, loops = 0;
 // fehlgeschlagene neue Fähigkeit (kein Ziel, kein Weg): in diesem Zug nicht noch einmal
 let failTurn = -1, failSkill = -1, lastTurn = -1, lastSkill = -1;
+
+// Farming strategy (anti-farming checks): stay on each floor until floorTurns reaches `farm`, fighting what comes
+let farm = 0;
+export const setFarm = (n: number) => { farm = n; };
+const farming = (run: Run) => farm > 0 && (run.floorTurns ?? 0) < farm;
 
 export function botAction(run: Run): Action {
   if (run.mode === 'shop') shopped.add(run.floor);
@@ -232,7 +237,7 @@ function decide(run: Run): Action {
     if (s) return { t: 'move', dx: s[0], dy: s[1] };
     return { t: 'wait' };
   }
-  if (run.tiles[p.y * W + p.x] === T.STAIRS) return { t: 'descend' };
+  if (run.tiles[p.y * W + p.x] === T.STAIRS && !farming(run)) return { t: 'descend' };
   // Ereignisziel (Geist, leuchtende Truhe) steht auf der Karte – hinlaufen
   const marks = run.ev?.mark !== undefined ? [run.ev.mark] : run.ev?.marks ?? [];
   const toMark = marks.length ? stepTo(run, (_x, _y, i) => marks.includes(i)) : null;
@@ -240,7 +245,7 @@ function decide(run: Run): Action {
   // Truhen mitnehmen, dann Treppe, sonst erkunden
   const s =
     stepTo(run, (_x, _y, i) => run.seen[i] === 1 && (run.tiles[i] === T.CHEST || run.tiles[i] === T.MIMIC || (run.tiles[i] === T.TRADER && p.gold >= 25 && !shopped.has(run.floor)))) ??
-    stepTo(run, (_x, _y, i) => run.seen[i] === 1 && run.tiles[i] === T.STAIRS) ??
+    (farming(run) ? null : stepTo(run, (_x, _y, i) => run.seen[i] === 1 && run.tiles[i] === T.STAIRS)) ??
     stepTo(run, (_x, _y, i) => walkable(run.tiles[i]) && !run.seen[i]) ??
     stepTo(run, (_x, _y, i) => run.mobs.some(m => m.y * W + m.x === i), false) ??
     // eingesperrt: dann eben durch den brüchigen Boden

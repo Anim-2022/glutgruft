@@ -18,10 +18,10 @@ export const MAX_DECALS = 40;
 const DECAL_FADE = 0.6, EMBER_T = 3;
 
 // „Effekte verringern“ (Phase 3, Punkt 5): Blut wird zu dunklen Flecken, keine Spritzer, kein Wackeln
-let reduced = false;
-try { reduced = localStorage.getItem('glutgruft.wenigfx') === '1'; } catch { /* kein Speicher */ }
-export const reducedFx = () => reduced;
-export function setReducedFx(on: boolean) { reduced = on; try { localStorage.setItem('glutgruft.wenigfx', on ? '1' : '0'); } catch { /* egal */ } }
+import { reducedFx, onFxChange } from './fxopts';
+export { reducedFx };
+let reduced = reducedFx();
+onFxChange(() => { reduced = reducedFx(); });
 
 const KINDS = ['ratte', 'skelett', 'schuetze', 'fledermaus', 'sporling', 'golem', 'glutgeist', 'koenig', 'mutter', 'fuerst'];
 const DECAL_OF: Record<string, string> = {
@@ -214,5 +214,3 @@ export function drawDying(ctx: CanvasRenderingContext2D, run: Run, ox: number, o
   ctx.globalAlpha = 1;
 }
 
-// Für Vorschau und Tests: aktuelle Spuren (nur lesen)
-export const decalCount = () => decals.length;
