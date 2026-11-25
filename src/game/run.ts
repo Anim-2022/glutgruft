@@ -133,6 +133,7 @@ export interface Run {
   hunt?: { next: number; n: number } | null; // nächster Jäger bei floorTurns = next; n schon erschienen
   entry?: [number, number];  // Eingang der Ebene
   mud?: number[];            // Schlamm eines Ereignisses: wer hineintritt, steckt einen Zug fest
+  huntKills?: number;        // hunters killed on this floor (reward decay, FEATURES.huntPressure)
   souls: number; kills: number; turn: number; nextId: number;
 }
 
@@ -808,6 +809,7 @@ function nextFloor(run: Run) {
   run.hazards = [];
   run.fire = new Map(); run.fuses = new Map(); run.cracks = new Map();
   if (run.gas) run.gas = undefined;
+  if (run.huntKills) run.huntKills = 0;
   run.puzzle = null; run.willUsed = false;
   if (run.runeUsed) run.runeUsed = false;
   run.p.keys = 0;
@@ -1266,6 +1268,17 @@ export function eventGoal(run: Run): { title: string; goal: string; col: string 
 // ---------- Jäger: wer zu lange auf einer Ebene bleibt, wird gejagt ----------
 
 const isHunter = (m: Actor) => !!MOBS[m.kind].hunter;
+// while a hunter is alive the floor turns hostile (no passive regen, fountains and altars refuse)
+export const hunted = (run: Run) => FEATURES.huntPressure && run.mobs.some(isHunter);
+function huntReward(run: Run, m: Actor): number {
+  if (!FEATURES.huntPressure || !isHunter(m)) return 1;
+  if (m.st.noReward) return 0;
+  const k = run.huntKills ?? 0, d = HUNTER.rewardDecay;
+  run.huntKills = k + 1;
+  const f = d[Math.min(k, d.length - 1)];
+  if (f < 1) say(run, f > 0 ? 'Die Jagd zahlt sich kaum noch aus ...' : 'Diese Beute bringt nichts mehr. Zeit zu gehen!');
+  return f;
+}
 
 // Am Ende jedes Zugs (nur mit eingeschalteten Jägern)
 function hunterTick(run: Run) {
@@ -1276,18 +1289,27 @@ function hunterTick(run: Run) {
   if (t === HUNTER.first - HUNTER.warn) say(run, 'Etwas verfolgt dich ...');
   if (t < h.next) return;
   // aufgeschoben (nicht verloren): in der Rätselkammer, in einem versiegelten Ereignis, bei voller Zahl
-  if (inVault(run, run.p.x, run.p.y) || run.ev?.seal?.length || run.mobs.filter(isHunter).length >= HUNTER.cap) return;
+  if (inVault(run, run.p.x, run.p.y) || run.ev?.seal?.length) return;
+  // Death answers whoever stays too long – the cap does not hold it back
+  const death = FEATURES.huntPressure && h.n >= HUNTER.deathFrom;
+  if (!death && run.mobs.filter(isHunter).length >= HUNTER.cap) return;
   // jeder weitere Jäger kommt schneller: 30 → 25 → 20 → 15 Züge
-  if (spawnHunter(run, h.n)) { h.n++; h.next = t + Math.max(HUNTER.minInterval, HUNTER.interval - HUNTER.shrink * (h.n - 1)); }
+  if (spawnHunter(run, h.n)) {
+    h.n++;
+    // pressure: from the pairFrom-th hunter on they come in pairs (the second may exceed the cap)
+    if (FEATURES.huntPressure && h.n > HUNTER.pairFrom && h.n <= HUNTER.deathFrom && spawnHunter(run, h.n, true)) h.n++;
+    h.next = t + Math.max(HUNTER.minInterval, HUNTER.interval - HUNTER.shrink * (h.n - 1));
+  }
 }
 
-function spawnHunter(run: Run, stage = 0): boolean {
+function spawnHunter(run: Run, stage = 0, extra = false): boolean {
   const p = run.p, rng = run.rng;
   // nur Jäger, die auf dieser Tiefe schon vorkommen (auch erzwungene – sonst wartet der Jäger)
   const pool = HUNTER.pool.filter(([k, , f]) => run.floor >= f && (!FEATURES.hunterForce || k === FEATURES.hunterForce));
   if (!pool.length) return false;
-  let kind = pool[0][0];
-  if (pool.length > 1) {
+  const death = FEATURES.huntPressure && stage >= HUNTER.deathFrom;
+  let kind = death ? 'tod' : pool[0][0];
+  if (!death && pool.length > 1) {
     let r = rng.int(1, pool.reduce((a, [, w]) => a + w, 0));
     for (const [k, w] of pool) { if ((r -= w) <= 0) { kind = k; break; } }
   }
@@ -1305,24 +1327,48 @@ function spawnHunter(run: Run, stage = 0): boolean {
   m.awake = true; m.st.born = run.turn;
   if (run.floor < HUNTER.weakBelow) { m.maxHp = m.hp = Math.round(m.hp * HUNTER.weak); m.atk = Math.max(1, Math.round(m.atk * HUNTER.weak)); }
   // Wer bleibt, wird härter gejagt: jeder weitere Jäger dieser Ebene ist stärker
-  if (stage > 0) { m.maxHp = m.hp = Math.round(m.hp * (1 + HUNTER.growHp * stage)); m.atk += HUNTER.growAtk * Math.ceil(stage / 2); m.name = `${m.name} (Stufe ${stage + 1})`; }
+  if (stage > 0) {
+    const pr = FEATURES.huntPressure;
+    m.maxHp = m.hp = Math.round(m.hp * (1 + (pr ? HUNTER.growHp2 : HUNTER.growHp) * stage));
+    m.atk += pr ? HUNTER.growAtk2 * stage : HUNTER.growAtk * Math.ceil(stage / 2);
+    m.name = `${m.name} (Stufe ${stage + 1})`;
+    m.st.stage = stage;
+  }
+  if (death) { m.st.noReward = 1; tele(run, 'huntDeath'); }
   tele(run, `hunt_${kind}`);
-  say(run, `DER JÄGER IST DA: ${m.name}!`);
-  run.fx.push({ k: 'banner', title: 'DER JÄGER IST DA', sub: m.name, col: '#b13e53' }, { k: 'shake', n: 5 });
+  if (death) {
+    say(run, 'Du bist zu lange geblieben. DER TOD KOMMT – für ihn gibt es keinen Lohn.');
+    run.fx.push({ k: 'banner', title: 'DER TOD KOMMT', sub: 'Steig hinab, solange du kannst!', col: '#b13e53' }, { k: 'shake', n: 7 });
+  } else if (extra) {
+    say(run, `Ein zweiter Jäger folgt: ${m.name}!`);
+  } else {
+    say(run, `DER JÄGER IST DA: ${m.name}!`);
+    run.fx.push({ k: 'banner', title: 'DER JÄGER IST DA', sub: m.name, col: '#b13e53' }, { k: 'shake', n: 5 });
+  }
   return true;
 }
 
 // ein Schritt auf den Helden zu (über die Wegkarte); false, wenn es nicht weitergeht
 function stepToward(run: Run, m: Actor, dist: Int16Array): boolean {
   let best: number[] | null = null, bd = dist[m.y * W + m.x];
-  if (bd < 0) return false;
+  if (bd < 0) bd = -2; // cut off from the hero: only smashing through helps (below)
   for (const [ox, oy] of DIRS4) {
     const x = m.x + ox, y = m.y + oy;
+    if (bd < 0) break;
     if (!isFree(run, x, y)) continue;
     const v = dist[y * W + x];
     if (v >= 0 && v < bd) { bd = v; best = [x, y]; }
   }
-  if (!best) return false;
+  if (!best) {
+    // a blocked hunter smashes its way through cracked walls and objects toward the hero
+    if (FEATURES.huntPressure) for (const [ox, oy] of DIRS4) {
+      const i = (m.y + oy) * W + m.x + ox, t = run.tiles[i];
+      if (cheb({ x: m.x + ox, y: m.y + oy }, run.p) >= cheb(m, run.p) || inVault(run, m.x + ox, m.y + oy)) continue;
+      if (t === T.CRACKED) { breakWall(run, i); return false; }
+      if (SMASHABLE.has(t) && hitTile(run, i, 'smash')) return false;
+    }
+    return false;
+  }
   moveMob(run, m, best[0], best[1]);
   return m.hp > 0;
 }
@@ -1617,6 +1663,7 @@ function medusaHurt(run: Run, m: Actor) {
 export function hunterInfo(run: Run): { text: string; col: string } | null {
   if (!run.hunt) return null;
   const t = run.floorTurns ?? 0, h = run.hunt;
+  if (FEATURES.huntPressure && h.n >= HUNTER.deathFrom) return { text: 'Der Tod jagt dich – zur Treppe!', col: '#b13e53' };
   if (h.n) return { text: `Nächster Jäger: ${Math.max(0, h.next - t)} Züge`, col: '#b13e53' };
   if (t >= HUNTER.first - 10) return { text: `Die Jagd beginnt bald ... ${Math.max(0, HUNTER.first - t)}`, col: '#b13e53' };
   if (t >= HUNTER.first - HUNTER.warn) return { text: 'Etwas verfolgt dich ...', col: '#ef7d57' };
@@ -1877,7 +1924,7 @@ function breakPot(run: Run, i: number) {
 function stepWorld(run: Run, a: Actor) {
   const i = a.y * W + a.x, t = run.tiles[i], isP = a === run.p;
   if (inVault(run, a.x, a.y)) return;
-  if (!isP && FLYERS.has(a.kind)) return;
+  if (!isP && (FLYERS.has(a.kind) || isHunter(a))) return; // hunters tear through webs and do not fall
   if (t === T.WEB) {
     run.tiles[i] = T.FLOOR; brk(run, i, 'web');
     a.st.netz = Math.max(a.st.netz ?? 0, 2);
@@ -1999,7 +2046,8 @@ function stun(run: Run, a: Actor, turns: number) {
   // betäubte Jäger brechen ihren angekündigten Angriff ab
   if (a.st.zt || a.zone) { delete a.st.zt; delete a.zone; delete a.zk; run.fx.push({ k: 'num', x: a.x, y: a.y, s: 'unterbrochen', col: '#73eff7' }); }
   // Jäger schütteln Betäubung schneller ab
-  a.st.stun = (a.boss ? 1 : MOBS[a.kind]?.hunter ? Math.min(turns, HUNTER.stunMax) : turns) + (has(run.p, 'frostkern') ? 1 : 0);
+  const hmax = FEATURES.huntPressure && (a.st.stage ?? 0) >= HUNTER.stun1From ? 1 : HUNTER.stunMax;
+  a.st.stun = (a.boss ? 1 : MOBS[a.kind]?.hunter ? Math.min(turns, hmax) : turns) + (has(run.p, 'frostkern') ? 1 : 0);
 }
 
 
@@ -2105,9 +2153,11 @@ function kill(run: Run, m: Actor) {
   run.mobs = run.mobs.filter(o => o !== m);
   run.fx.push({ k: 'die', x: m.x, y: m.y, kind: m.kind });
   run.kills++;
-  p.exp += m.xp;
-  run.souls += Math.max(1, Math.round((m.xp / 10) * p.soulMul));
-  p.gold += Math.ceil((m.xp / 6) * (1 + (p.aff.gold ?? 0) / 100));
+  // hunters stop paying out when farmed: the k-th kill on a floor gives less, Death called by staying gives nothing
+  const rm = huntReward(run, m);
+  p.exp += Math.round(m.xp * rm);
+  if (rm > 0) run.souls += Math.max(1, Math.round((m.xp / 10) * p.soulMul * rm));
+  p.gold += Math.ceil((m.xp / 6) * (1 + (p.aff.gold ?? 0) / 100) * rm);
   if (p.aff.ausdauer) gain(p, p.aff.ausdauer);
   if (p.aff.asche && !m.boss) {
     run.fx.push({ k: 'boom', x: m.x, y: m.y, r: 1 });
@@ -2148,7 +2198,7 @@ function kill(run: Run, m: Actor) {
     p.keys++;
     p.potions++;
     say(run, `${m.name} lässt einen Schlüssel und einen Heiltrank fallen.`);
-  } else if (run.rng.chance(DIFF.dropPotion)) {
+  } else if (rm >= 1 && run.rng.chance(DIFF.dropPotion)) {
     p.potions++;
     say(run, `${m.name} lässt einen Heiltrank fallen.`);
   }
@@ -2690,6 +2740,7 @@ export function act(run: Run, a: Action): void {
         used = true;
       } else if (t === T.MIMIC) { revealMimic(run, i, true); used = true; }
       else if (t === T.CHEST || t === T.CURSED) { openChest(run, i); used = true; }
+      else if (t === T.FOUNTAIN && hunted(run)) say(run, 'Das Wasser ist schwarz geworden – nicht, solange dich etwas jagt.');
       else if (t === T.FOUNTAIN) {
         const n = Math.ceil(p.maxHp * DIFF.fountainHeal);
         p.hp = Math.min(p.maxHp, p.hp + n);
@@ -2742,6 +2793,7 @@ export function act(run: Run, a: Action): void {
         hitTile(run, i, 'bump');
         used = true;
       }
+      else if (t === T.ALTAR && hunted(run)) say(run, 'Der Altar schweigt, solange dich etwas jagt.');
       else if (t === T.ALTAR) {
         const cost = Math.ceil(p.maxHp * 0.25);
         if (p.hp <= cost) say(run, 'Du bist zu schwach für das Opfer.');
@@ -2846,7 +2898,7 @@ function hitPlayer(run: Run, m: Actor, melee: boolean) {
   const p = run.p, d = MOBS[m.kind];
   m.f = Math.abs(p.x - m.x) >= Math.abs(p.y - m.y) ? [Math.sign(p.x - m.x), 0] : [0, Math.sign(p.y - m.y)];
   if (melee) run.fx.push({ k: 'lunge', id: m.id, dx: Math.sign(p.x - m.x), dy: Math.sign(p.y - m.y) }, { k: 'swipe', x: p.x, y: p.y, dx: Math.sign(p.x - m.x), dy: Math.sign(p.y - m.y), big: !!m.boss });
-  if (melee && inSmoke(p) && run.rng.chance(0.5)) { run.fx.push({ k: 'num', x: p.x, y: p.y, s: 'verfehlt', col: '#94b0c2' }); return; }
+  if (melee && inSmoke(p) && !isHunter(m) && run.rng.chance(0.5)) { run.fx.push({ k: 'num', x: p.x, y: p.y, s: 'verfehlt', col: '#94b0c2' }); return; }
   if (p.st.dodge || (p.aff.flink && run.rng.chance(Math.min(40, p.aff.flink) / 100))) { run.fx.push({ k: 'num', x: p.x, y: p.y, s: 'verfehlt', col: '#94b0c2' }); if (p.aff.konter) p.st.konter = 1; return; }
   const atk = Math.max(1, (melee ? m.atk : Math.round(m.atk * 0.7)) - (m.st.schwach ? 1 : 0)); // Fernschüsse treffen schwächer
   damage(run, p, Math.max(Math.ceil(atk * 0.3), atk - p.def - (p.st.wall ? 3 : 0) - (p.st.eis ? 2 : 0) - (p.st.sw ? 2 : 0)) - (has(p, 'steinhaut') ? 1 : 0), '#b13e53');
@@ -2986,7 +3038,8 @@ function endTurn(run: Run) {
   // standing in water puts out burning (hero and monsters alike)
   if (FEATURES.destruction) for (const a of [p, ...run.mobs]) if (a.st.brand && run.tiles[a.y * W + a.x] === T.WATER) { delete a.st.brand; run.fx.push({ k: 'num', x: a.x, y: a.y, s: 'gelöscht', col: '#41a6f6' }); }
   tickDots(run, p);
-  if (p.cls === 'magier' && run.turn % (hasNode(p, 'n1_5') ? Math.round(3 / TUNE.kryoRegen) : 3) === 0) gain(p, 1); // Kryomant: langsamere Erholung
+  const hostile = hunted(run);
+  if (!hostile && p.cls === 'magier' && run.turn % (hasNode(p, 'n1_5') ? Math.round(3 / TUNE.kryoRegen) : 3) === 0) gain(p, 1); // Kryomant: langsamere Erholung
   // Krieger: Wut wächst, solange ein sichtbarer Gegner direkt daneben steht
   if (p.cls === 'krieger' && run.mobs.some(m => cheb(m, p) <= 1 && run.vis[m.y * W + m.x])) gain(p, 1);
   const dist = distMap(run.tiles, p.x, p.y);
@@ -3020,7 +3073,7 @@ function endTurn(run: Run) {
   if (p.st.rauch && !--p.st.rauch) { delete p.st.rauch; delete p.st.rx; delete p.st.ry; }
   if (p.st.schild && !--p.st.schild) { delete p.st.schild; p.shield = 0; }
   if (p.ultCd) p.ultCd--;
-  if (p.aff.regen && run.turn % 6 === 0 && p.hp > 0 && p.hp < p.maxHp) p.hp = Math.min(p.maxHp, p.hp + p.aff.regen);
+  if (p.aff.regen && !hunted(run) && run.turn % 6 === 0 && p.hp > 0 && p.hp < p.maxHp) p.hp = Math.min(p.maxHp, p.hp + p.aff.regen);
   const z = run.puzzle;
   if (z && z.kind === 'darts' && z.entered && !z.solved && z.lanes && run.mode !== 'dead') {
     for (const l of z.lanes) if (dartFires(l, run.turn)) fireLane(run, z, l);

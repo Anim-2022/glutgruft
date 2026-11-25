@@ -53,6 +53,7 @@ describe('Jäger', () => {
   });
 
   it('nie mehr als HUNTER.cap zugleich; der Rest wartet, statt zu verfallen', () => {
+    FEATURES.huntPressure = false; // legacy rules; with pressure Death ignores the cap (hunt-pressure.test.ts)
     const r = arena();
     FEATURES.hunterForce = 'echse';
     r.hunt!.next = 1;
@@ -91,6 +92,7 @@ describe('Jäger', () => {
   });
 
   it('wer bleibt, wird härter gejagt: jeder weitere Jäger stärker, Abstände 30, 25, 20, 15, 15', () => {
+    FEATURES.huntPressure = false; // legacy rules; pairs and Death are covered in hunt-pressure.test.ts
     FEATURES.hunterForce = 'echse';
     const r = arena(7);
     r.p.hp = r.p.maxHp = 100000;

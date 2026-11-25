@@ -22,7 +22,7 @@ import { fxScale, fxLevel } from './fxopts';
 import { drawWorldTile, drawGas, MAT_COLS, MAT_SOUND } from './world';
 import { hunterFx, resetHunterFx, isHunter, leaping, leapLift, drawHunterAura, hunterGlow, drawHunterBar, drawHunterMarks, stepHunterFx, stoneOverlay } from './hunters';
 import { tr } from '../core/i18n';
-import { Run, Actor, xpNeed, skillCost, skillReady, spellAt, itemText, itemValue, itemScore, perkInfo, skillModName, shotRange, RANKS, SORT_NAMES, BAG_MAX, RUNE_NAMES, availableNodes, puzzleGoal, eventGoal, hunterWarn, hunterInfo, dartWarn, inVault, VAULT_NAMES, HAZARD_NAMES } from '../game/run';
+import { Run, Actor, xpNeed, skillCost, skillReady, spellAt, itemText, itemValue, itemScore, perkInfo, skillModName, shotRange, RANKS, SORT_NAMES, BAG_MAX, RUNE_NAMES, availableNodes, puzzleGoal, eventGoal, hunterWarn, hunterInfo, hunted, dartWarn, inVault, VAULT_NAMES, HAZARD_NAMES } from '../game/run';
 import { ClassId, treeNodes, NEW_SKILLS, TUNE, BRANCH_NAMES, SKILL_UP, treeNode, nodeText, CLASSES, MOBS, PERKS, RELICS, RARITY, RARITY_COL, BIOME_NAMES, biomeOf, Item, AFFIX, CONSUMABLES, SLOT_NAMES, ULT, ULT_LEVEL, USE_ORDER, SYNERGIES } from '../game/content';
 
 const pos = new Map<number, { x: number; y: number }>();
@@ -452,6 +452,15 @@ export function drawRun(ctx: CanvasRenderingContext2D, run: Run, dt: number, tim
   if (run.mud?.length) {
     ctx.fillStyle = 'rgba(90,58,40,0.55)';
     for (const i of run.mud) if (run.seen[i]) ctx.fillRect((i % W) * TS + ox, ((i / W) | 0) * TS + oy, TS, TS);
+  }
+  // hunted: the stairs glow and pulse so the way out is clear
+  if (hunted(run)) {
+    const st = run.tiles.indexOf(T.STAIRS);
+    if (st >= 0 && run.seen[st]) {
+      const sxp = st % W, syp = (st / W) | 0, pu = 0.5 + 0.5 * Math.sin(time * 4);
+      lights.push({ x: sxp, y: syp, r: 2.4 + pu * 1.2, col: '#ffcd75', a: 0.9 });
+      if (Math.random() < dt * 8) bits.push({ x: sxp * TS + 3 + Math.random() * 10, y: syp * TS + 12, vx: 0, vy: -20 - Math.random() * 10, col: '#ffcd75', t: 0, g: -10 });
+    }
   }
   // merged fire lights: centroid of the burning tiles, a bit wider for bigger blocks, redder as the fire dies
   for (const [bk, b] of fireBlocks) lights.push({ x: b.x / b.n, y: b.y / b.n, r: (2.2 + 1.4 * b.k) * (1 + 0.15 * Math.sqrt(b.n - 1)) * flick(bk), col: b.k <= 0.34 ? '#b13e53' : '#ef7d57' });

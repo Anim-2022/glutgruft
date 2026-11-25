@@ -29,6 +29,7 @@ FEATURES.mimics = ENV.MIMICS !== 'off';
 FEATURES.events = ENV.EVENTS !== 'off';
 FEATURES.hunters = ENV.HUNTERS !== 'off';
 FEATURES.destruction = ENV.DESTRUCTION !== 'off'; // DESTRUCTION=off: world without pots, oil, webs, passages
+FEATURES.huntPressure = ENV.HUNT_PRESSURE !== 'off'; // HUNT_PRESSURE=off: hunters pay in full forever (old rules)
 FEATURES.hunterForce = ENV.HUNTER_FORCE ?? '';
 if (ENV.HUNTER_INTERVAL) HUNTER.interval = +ENV.HUNTER_INTERVAL;
 if (ENV.HUNTER_FIRST) HUNTER.first = +ENV.HUNTER_FIRST;
