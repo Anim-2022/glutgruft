@@ -191,8 +191,8 @@ export const FEATURES = { hunters: true, hunterForce: '', hazards: true, mimics:
 // stream (monsters, loot, events) is unchanged; with the switch off nothing is placed and no rule applies.
 // Per room: chance of a group and its size; per biome [crypt, cave, forge]. Pots: share of gold / potion / rat.
 export const DESTR = {
-  pot: [0.45, 0.35, 0.4], potN: [1, 3] as [number, number], potGold: 0.3, potPotion: 0.06, potRat: 0.1,
-  oil: [0.18, 0, 0.3], oilBarrel: 0.55, oilN: [3, 7] as [number, number],
+  pot: [0.45, 0.35, 0.4], potN: [1, 3] as [number, number], potGold: 0.2, potPotion: 0.03, potRat: 0.15,
+  oil: [0.12, 0, 0.2], oilBarrel: 0.4, oilN: [3, 6] as [number, number],
   water: [0, 0.3, 0], waterN: [3, 7] as [number, number],
   web: [0.3, 0.25, 0], webN: [1, 3] as [number, number],
   spore: [0, 0.35, 0], sporeN: [1, 2] as [number, number],
