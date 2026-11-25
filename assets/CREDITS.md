@@ -1,27 +1,27 @@
-# Herkunft der Grafiken
+# Graphics credits
 
-Alle Sprites stehen als Zeichenmatrizen im Code (`src/render/sprites.ts`, `src/render/poses.ts`, `src/render/gfx.ts`).
-KI-Referenzen werden hier je Sprite eingetragen (Format siehe `docs/asset-pipeline.md`); PNG-Referenzen werden nicht eingecheckt.
+All sprites are character matrices in code (`src/render/sprites.ts`, `src/render/poses.ts`, `src/render/gfx.ts`).
+AI references are recorded here per sprite (format: see `docs/asset-pipeline.md`); PNG references are not checked in.
 
-## Knochenschütze (`schuetze`, `src/render/sprites.ts`)
+## Bone Archer (`schuetze`, `src/render/sprites.ts`)
 
-- Von Hand gezeichnet, ohne KI-Referenz (2026-11-17). Die erste Fassung wurde entfernt.
+- Hand-drawn, without an AI reference (2026-11-17). The first version was removed.
 
-## Von Hand gezeichnet (Phase 2)
+## Hand-drawn (phase 2)
 
-- Angriffs-, Zauber- und Todesbilder der Helden (`src/render/poses.ts`, aus den vorhandenen Matrizen abgeleitet)
-- Angriffsbilder der sieben Gegner und der drei Bosse; zweite Bossfassung `koenig2`, `mutter2`, `fuerst2` (`ATTACK`, `SPR` in `src/render/sprites.ts`)
-- 64 Symbole 9×9 (`ICONS` in `src/render/sprites.ts`)
-- Wand- und Bodenspielarten, Lava der Glutschmiede (`src/render/gfx.ts`, im Code gezeichnet)
-- Palettenergänzung R, i, m, u (`PAL`)
+- Hero attack, spell and death frames (`src/render/poses.ts`, derived from the existing matrices)
+- Attack frames of the seven enemies and three bosses; second boss versions `koenig2`, `mutter2`, `fuerst2` (`ATTACK`, `SPR` in `src/render/sprites.ts`)
+- 64 icons 9×9 (`ICONS` in `src/render/sprites.ts`)
+- Wall and floor variants, lava of the Ember Forge (`src/render/gfx.ts`, drawn in code)
+- Palette additions R, i, m, u (`PAL`)
 
-Keine dieser Grafiken beruht auf einer KI-Referenz.
+None of these graphics is based on an AI reference.
 
-## Visual Pass 2 (Licht, Schatten, Texturen, Orte)
+## Visual Pass 2 (light, shadows, textures, places)
 
-- Bodenmuster, Mauerkronen, Wandsockel, Übergänge (`src/render/tiles.ts`)
-- Dekor je Biom: Ketten, Spinnweben, Banner, Wurzeln, Tropfsteine, Haken, Glutgitter, Kerzen, Knochen,
-  Kristalle, Leuchtpilze, Barren, Kohle, Grabplatte, Pfütze, Glutrost (`src/render/props.ts`)
-- Schatten, Licht, Teilchen, Nebel, Vignette (`src/render/shade.ts`, `light.ts`, `ambient.ts`)
+- Floor patterns, wall tops, wall bases, transitions (`src/render/tiles.ts`)
+- Decor per biome: chains, cobwebs, banners, roots, stalactites, hooks, ember grates, candles, bones,
+  crystals, glowing mushrooms, ingots, coal, grave slab, puddle, ember grate (`src/render/props.ts`)
+- Shadows, light, particles, fog, vignette (`src/render/shade.ts`, `light.ts`, `ambient.ts`)
 
-Alles im Code gezeichnet, nur Farben aus `PAL`, ohne KI-Referenz.
+Everything drawn in code, only colors from `PAL`, no AI reference.

@@ -21,15 +21,14 @@ import { addNum, drawNums, addShake, stepShake, critFlash, hurtFlash, drawScreen
 import { fxScale, fxLevel } from './fxopts';
 import { drawWorldTile, drawGas, MAT_COLS, MAT_SOUND } from './world';
 import { hunterFx, resetHunterFx, isHunter, leaping, leapLift, drawHunterAura, hunterGlow, drawHunterBar, drawHunterMarks, stepHunterFx, stoneOverlay } from './hunters';
-import { tr } from '../core/i18n';
 import { Run, Actor, xpNeed, skillCost, skillReady, spellAt, itemText, itemValue, itemScore, perkInfo, skillModName, shotRange, RANKS, SORT_NAMES, BAG_MAX, RUNE_NAMES, availableNodes, puzzleGoal, eventGoal, hunterWarn, hunterInfo, hunted, dartWarn, inVault, VAULT_NAMES, HAZARD_NAMES } from '../game/run';
 import { ClassId, treeNodes, NEW_SKILLS, TUNE, BRANCH_NAMES, SKILL_UP, treeNode, nodeText, CLASSES, MOBS, PERKS, RELICS, RARITY, RARITY_COL, BIOME_NAMES, biomeOf, Item, AFFIX, CONSUMABLES, SLOT_NAMES, ULT, ULT_LEVEL, USE_ORDER, SYNERGIES } from '../game/content';
 
 const pos = new Map<number, { x: number; y: number }>();
 const bolts: { x0: number; y0: number; x1: number; y1: number; col: string; t: number }[] = [];
 const booms: { x: number; y: number; r: number; t: number }[] = [];
-const fuseTags: { x: number; y: number; n: number }[] = [];
-const fireBlocks = new Map<number, { x: number; y: number; n: number; k: number }>(); // fire lights merged per 3×3 block // Zähler über brennenden Lunten (nach dem Licht gezeichnet)
+const fuseTags: { x: number; y: number; n: number }[] = []; // counters over burning fuses (drawn after the light)
+const fireBlocks = new Map<number, { x: number; y: number; n: number; k: number }>(); // fire lights merged per 3×3 block
 // Particles; fy: floor height where heavy particles come to rest (then fade slowly)
 const bits: { x: number; y: number; vx: number; vy: number; col: string; t: number; g?: number; fy?: number; rest?: number; rl?: number }[] = [];
 const BIT_MAX = 400, BIT_T = 0.55, REST_T = 1.5;
@@ -74,10 +73,10 @@ export function drawCard(ctx: CanvasRenderingContext2D, card: { title: string; l
   const lines = card.lines.flatMap(l => wrapText(l, 66)), w = 420, h = 52 + lines.length * 12, x = (VW - w) >> 1, y = (VH - h) >> 1;
   ctx.fillStyle = 'rgba(13,14,23,0.7)'; ctx.fillRect(0, 0, VW, VH);
   panel(ctx, x, y, w, h, '#73eff7');
-  text(ctx, 'LEHRGANG', x + 10, y + 8, '#566c86', 8);
+  text(ctx, 'TUTORIAL', x + 10, y + 8, '#566c86', 8);
   text(ctx, card.title, VW / 2, y + 8, '#73eff7', 10, 'center');
   lines.forEach((l, k) => text(ctx, l, x + 14, y + 28 + k * 12, '#f4f4f4', 8));
-  text(ctx, '[ENTER] weiter', VW / 2, y + h - 14, '#ffcd75', 8, 'center');
+  text(ctx, '[ENTER] continue', VW / 2, y + h - 14, '#ffcd75', 8, 'center');
 }
 
 // ---- Fackeln: Positionen werden einmal pro Ebene bestimmt ----
@@ -158,7 +157,7 @@ export function drawRun(ctx: CanvasRenderingContext2D, run: Run, dt: number, tim
       case 'num': {
         const a = actorAt(f.x, f.y), v = parseInt(f.s, 10);
         addNum(f.x, f.y, f.s, f.col, !!f.dot, a && v > 0 ? v / a.maxHp : 0);
-        if (f.s === 'verfehlt') sfx('miss');
+        if (f.s === 'missed') sfx('miss');
         else if (/^\d+!$/.test(f.s)) {
           // critical hit: short stop, flash, own sound, ring of sparks
           hitstop(0.06); critFlash(); sfx('crit');
@@ -194,7 +193,7 @@ export function drawRun(ctx: CanvasRenderingContext2D, run: Run, dt: number, tim
         break;
       }
       case 'loot': loot = { item: f.item, how: f.how, t: 0 }; sfx('pick'); break;
-      case 'banner': banner = { title: f.title, sub: f.sub, col: f.col, t: 0 }; sfx(f.title === 'GESCHAFFT!' ? 'solve' : 'level'); break;
+      case 'banner': banner = { title: f.title, sub: f.sub, col: f.col, t: 0 }; sfx(f.title === 'DONE!' ? 'solve' : 'level'); break;
       case 'boom': {
         booms.push({ x: f.x, y: f.y, r: f.r, t: 0 }); sfx('boom');
         const bx = f.x * TS + 8, by = f.y * TS + 8;
@@ -812,7 +811,7 @@ export function drawRun(ctx: CanvasRenderingContext2D, run: Run, dt: number, tim
     banner.t += dt;
     if (banner.t > 3.2) banner = null;
     else {
-      const a = Math.min(1, banner.t * 5, (3.2 - banner.t) * 2), sub = tr(banner.sub), w = Math.max(tr(banner.title).length * 12, sub.length * 6) + 28;
+      const a = Math.min(1, banner.t * 5, (3.2 - banner.t) * 2), sub = banner.sub, w = Math.max(banner.title.length * 12, sub.length * 6) + 28;
       ctx.globalAlpha = a;
       panel(ctx, VW / 2 - w / 2, 78, w, 44, banner.col);
       text(ctx, banner.title, VW / 2, 84, banner.col, 16, 'center');
@@ -849,18 +848,18 @@ interface Slot { key: string; icon: string; name: string; desc: string; cost: st
 
 function slots(run: Run): Slot[] {
   const p = run.p, c = CLASSES[p.cls], out: Slot[] = [];
-  if (c.range) out.push({ key: 'F', icon: `i_${p.cls}_shot`, name: c.shot, desc: `Fernangriff, ${shotRange(p)} Felder. Kostet nichts.`, cost: '', count: '', ok: true });
-  c.skills.forEach((s, k) => out.push({ key: `${k + 1}`, icon: `i_${p.cls}${k}`, name: p.skillLvl[k] ? `${s.name} ${RANKS[p.skillLvl[k]]}` : s.name, desc: `${s.desc}.${skillModName(p, k) ? ` ${tr(skillModName(p, k))}.` : ''} Kostet ${skillCost(p, k)} ${c.resName}.`, cost: `${skillCost(p, k)}`, count: '', ok: skillReady(p, k) }));
-  (p.spells ?? []).forEach((id, k) => { const sp = NEW_SKILLS[id], i = 3 + k; out.push({ key: `${4 + k}`, icon: `i_${p.cls}${sp.branch}`, name: sp.name, desc: `${sp.desc}. Kostet ${skillCost(p, i)} ${c.resName}.`, cost: `${skillCost(p, i)}`, count: '', ok: skillReady(p, i) }); });
-  if (p.lvl >= ULT_LEVEL) out.push({ key: 'U', gap: 5, icon: 'ult', name: ULT[p.cls].name, desc: `${ULT[p.cls].desc}. Danach ${ULT[p.cls].cost} Züge Pause.`, cost: '', count: p.ultCd ? `${p.ultCd}` : '', ok: !p.ultCd });
-  out.push({ key: 'Q', gap: 5, icon: 'potion', name: 'Heiltrank', desc: 'Heilt einen großen Teil deines Lebens, löscht Gift und Brand.', cost: '', count: `${p.potions}`, ok: p.potions > 0 });
-  out.push({ key: 'B', gap: 5, icon: 'bomb', name: 'Bombe', desc: 'Sprengt Gegner, rissige Wände und Säulen. Halte Abstand.', cost: '', count: `${p.bombs}`, ok: p.bombs > 0 });
+  if (c.range) out.push({ key: 'F', icon: `i_${p.cls}_shot`, name: c.shot, desc: `Ranged attack, ${shotRange(p)} tiles. Costs nothing.`, cost: '', count: '', ok: true });
+  c.skills.forEach((s, k) => out.push({ key: `${k + 1}`, icon: `i_${p.cls}${k}`, name: p.skillLvl[k] ? `${s.name} ${RANKS[p.skillLvl[k]]}` : s.name, desc: `${s.desc}.${skillModName(p, k) ? ` ${skillModName(p, k)}.` : ''} Costs ${skillCost(p, k)} ${c.resName}.`, cost: `${skillCost(p, k)}`, count: '', ok: skillReady(p, k) }));
+  (p.spells ?? []).forEach((id, k) => { const sp = NEW_SKILLS[id], i = 3 + k; out.push({ key: `${4 + k}`, icon: `i_${p.cls}${sp.branch}`, name: sp.name, desc: `${sp.desc}. Costs ${skillCost(p, i)} ${c.resName}.`, cost: `${skillCost(p, i)}`, count: '', ok: skillReady(p, i) }); });
+  if (p.lvl >= ULT_LEVEL) out.push({ key: 'U', gap: 5, icon: 'ult', name: ULT[p.cls].name, desc: `${ULT[p.cls].desc}. Then ${ULT[p.cls].cost} turns of cooldown.`, cost: '', count: p.ultCd ? `${p.ultCd}` : '', ok: !p.ultCd });
+  out.push({ key: 'Q', gap: 5, icon: 'potion', name: 'Healing Potion', desc: 'Restores a large part of your health and cures poison and burning.', cost: '', count: `${p.potions}`, ok: p.potions > 0 });
+  out.push({ key: 'B', gap: 5, icon: 'bomb', name: 'Bomb', desc: 'Blasts enemies, cracked walls and pillars. Keep your distance.', cost: '', count: `${p.bombs}`, ok: p.bombs > 0 });
   // Verbrauchsgegenstände erscheinen nur, solange man welche trägt
   USE_ORDER.forEach((id, k) => { const n = p.bag.filter(it => it.use === id).length; if (n) out.push({ key: `${(k + 7) % 10}`, gap: 10, icon: `i_${id}`, name: CONSUMABLES[id].name, desc: `${CONSUMABLES[id].desc}.`, cost: '', count: `${n}`, ok: true }); });
   return out;
 }
 
-const STATUS: [string, string, string][] = [['netz', 'Netz', '#c9d4dc'], ['brand', 'Brand', '#ef7d57'], ['gift', 'Gift', '#38b764'], ['stark', 'Kriegsschrei', '#b13e53'], ['wall', 'Bollwerk', '#41a6f6'], ['dodge', 'Ausweichen', '#94b0c2'], ['konter', 'Konter', '#ffcd75']];
+const STATUS: [string, string, string][] = [['netz', 'Net', '#c9d4dc'], ['brand', 'Burn', '#ef7d57'], ['gift', 'Poison', '#38b764'], ['stark', 'War Cry', '#b13e53'], ['wall', 'Bulwark', '#41a6f6'], ['dodge', 'Dodging', '#94b0c2'], ['konter', 'Riposte', '#ffcd75']];
 
 let logSeen = '', logAt = 0;
 
@@ -876,10 +875,10 @@ function hud(ctx: CanvasRenderingContext2D, run: Run, time: number) {
   bar(ctx, 109, 4, 62, 9, p.res / p.resMax, c.resCol);
   text(ctx, `${p.res}/${p.resMax}`, 140, 5, '#f4f4f4', 8, 'center');
   bar(ctx, 23, 16, 148, 2, p.exp / xpNeed(p.lvl), '#ffcd75');
-  text(ctx, `St.${p.lvl}`, 201, 7, '#ffcd75', 8, 'right');
+  text(ctx, `Lv.${p.lvl}`, 201, 7, '#ffcd75', 8, 'right');
   ctx.globalAlpha = 1;
   if (p.pts > 0 && run.mode === 'play') {
-    const label = tr(`[K] ${p.pts} Fertigkeitspunkt${p.pts > 1 ? 'e' : ''}`), w = label.length * 6 + 10;
+    const label = `[K] ${p.pts} skill point${p.pts > 1 ? 'e' : ''}`, w = label.length * 6 + 10;
     panel(ctx, 208, 2, w, 18, '#a7f070', `rgba(13,14,23,${0.75 + 0.2 * Math.sin(time * 4)})`);
     text(ctx, label, 213, 7, '#a7f070', 8);
   }
@@ -887,7 +886,7 @@ function hud(ctx: CanvasRenderingContext2D, run: Run, time: number) {
   let sx = 3;
   for (const [id, name, col] of STATUS) {
     if (!p.st[id]) continue;
-    const label = tr(`${name} ${p.st[id]}`), w = label.length * 6 + 8;
+    const label = `${name} ${p.st[id]}`, w = label.length * 6 + 8;
     panel(ctx, sx, 24, w, 13, col);
     text(ctx, label, sx + 4, 27, col, 8);
     sx += w + 3;
@@ -895,14 +894,14 @@ function hud(ctx: CanvasRenderingContext2D, run: Run, time: number) {
   // Ziel der Rätselkammer, solange man darin steht (und die laufende Prüfung)
   const goal = puzzleGoal(run);
   if (goal) {
-    const z = run.puzzle!, col = z.solved ? '#a7f070' : z.dead ? '#566c86' : z.kind === 'arena' && z.started ? '#b13e53' : '#73eff7', gw = tr(goal).length * 6 + 12;
+    const z = run.puzzle!, col = z.solved ? '#a7f070' : z.dead ? '#566c86' : z.kind === 'arena' && z.started ? '#b13e53' : '#73eff7', gw = goal.length * 6 + 12;
     ctx.fillStyle = 'rgba(8,9,15,0.7)'; ctx.fillRect(VW / 2 - gw / 2, 56, gw, 14);
     text(ctx, goal, VW / 2, 59, col, 8, 'center');
   } else {
     // Ziel des laufenden Ereignisses
     const ev = eventGoal(run);
     if (ev) {
-      const s = `${ev.title} – ${ev.goal}`, gw = tr(s).length * 6 + 12;
+      const s = `${ev.title} – ${ev.goal}`, gw = s.length * 6 + 12;
       ctx.fillStyle = 'rgba(8,9,15,0.7)'; ctx.fillRect(VW / 2 - gw / 2, 56, gw, 14);
       text(ctx, s, VW / 2, 59, ev.col, 8, 'center');
     }
@@ -915,8 +914,8 @@ function hud(ctx: CanvasRenderingContext2D, run: Run, time: number) {
   // Ebene und Vorräte: eine Zeile oben rechts
   const parts: [string | null, string, string][] = [[null, `[I] ${p.bag.length}/${BAG_MAX}`, p.bag.length >= BAG_MAX ? '#ef7d57' : p.bag.length ? '#ffcd75' : '#566c86']];
   if (p.keys) parts.push(['key', `${p.keys}`, '#ffcd75']);
-  parts.push(['coin', `${p.gold}`, '#ffcd75'], ['soul', `${run.souls}`, '#73eff7'], [null, `Ebene ${run.floor}/15`, '#f4f4f4']);
-  const widths = parts.map(([ic, s]) => (ic ? 13 : 0) + tr(s).length * 6), total = widths.reduce((a, b) => a + b + 9, 0);
+  parts.push(['coin', `${p.gold}`, '#ffcd75'], ['soul', `${run.souls}`, '#73eff7'], [null, `Floor ${run.floor}/15`, '#f4f4f4']);
+  const widths = parts.map(([ic, s]) => (ic ? 13 : 0) + s.length * 6), total = widths.reduce((a, b) => a + b + 9, 0);
   ctx.globalAlpha = under(VW - total - 4, 0, total + 4, 20) ? 0.25 : 1;
   ctx.fillStyle = 'rgba(8,9,15,0.6)'; ctx.fillRect(VW - total - 2, 2, total, 15);
   let rx = VW - 6;
@@ -950,7 +949,7 @@ function hud(ctx: CanvasRenderingContext2D, run: Run, time: number) {
     }
   });
   if (hover) {
-    const h = hover as Slot, lines = wrapText(h.desc, 44), w = Math.max(tr(h.name).length * 6, ...lines.map(l => l.length * 6)) + 14, hh = 20 + lines.length * 10;
+    const h = hover as Slot, lines = wrapText(h.desc, 44), w = Math.max(h.name.length * 6, ...lines.map(l => l.length * 6)) + 14, hh = 20 + lines.length * 10;
     const x = Math.max(4, Math.min(VW - w - 4, mouse.x - w / 2));
     panel(ctx, x, y0 - hh - 4, w, hh, '#ffcd75');
     text(ctx, h.name, x + 6, y0 - hh + 1, '#ffcd75');
@@ -960,7 +959,7 @@ function hud(ctx: CanvasRenderingContext2D, run: Run, time: number) {
   // Meldungen: ganze Sätze mit Umbruch, über der Schnellleiste; lange bleiben länger stehen
   const msgs = run.log.slice(-3), last = msgs[msgs.length - 1] ?? '', sig = `${run.log.length}:${last}`;
   if (sig !== logSeen) { logSeen = sig; logAt = time; }
-  const hold = 4 + tr(last).length * 0.05, age = time - logAt, la = age < hold ? 1 : Math.max(0, 1 - (age - hold));
+  const hold = 4 + last.length * 0.05, age = time - logAt, la = age < hold ? 1 : Math.max(0, 1 - (age - hold));
   if (msgs.length && la > 0) {
     let rows: [string, boolean][] = [];
     msgs.forEach((m, k) => { for (const l of wrapText(m, 56)) rows.push([l, k === msgs.length - 1]); });
@@ -978,13 +977,13 @@ function hud(ctx: CanvasRenderingContext2D, run: Run, time: number) {
   if (tutorial && run.mode === 'play') {
     if (tutStep) {
       // Lehrgang: Fortschritt und Aufgabe, [T] überspringt
-      const head = tr(`Lehrgang ${tutStep.k}/${tutStep.n}`), body = tr(tutStep.text), w = Math.max(head.length + 18, body.length) * 6 + 20;
+      const head = `Tutorial ${tutStep.k}/${tutStep.n}`, body = tutStep.text, w = Math.max(head.length + 18, body.length) * 6 + 20;
       panel(ctx, (VW - w) >> 1, 36, w, 28, '#73eff7', 'rgba(13,14,23,0.85)');
       text(ctx, head, (VW - w) / 2 + 8, 40, '#73eff7', 8);
-      text(ctx, '[T] überspringen', (VW + w) / 2 - 8, 40, '#566c86', 8, 'right');
+      text(ctx, '[T] skip', (VW + w) / 2 - 8, 40, '#566c86', 8, 'right');
       text(ctx, body, VW / 2, 52, '#ffcd75', 8, 'center');
     } else {
-      const h0 = hint(run), h = h0 && tr(h0);
+      const h0 = hint(run), h = h0 && h0;
       if (h) { const w = h.length * 6 + 16; panel(ctx, (VW - w) >> 1, 38, w, 16, '#ffcd75'); text(ctx, h, VW / 2, 43, '#ffcd75', 8, 'center'); }
     }
   }
@@ -1026,15 +1025,15 @@ const verdict = (run: Run, it: Item) => {
   return d > 0.4 ? 1 : d < -0.4 ? -1 : 0;
 };
 const STATS: ['atk' | 'def' | 'hp' | 'crit', string, string][] = [
-  ['atk', 'Angriff', 'Mehr Schaden bei jedem Treffer.'], ['def', 'Vert.', 'Jeder Treffer gegen dich schadet weniger.'],
-  ['hp', 'Leben', 'Erhöht dein maximales Leben.'], ['crit', 'Krit', 'Chance auf doppelten Schaden.'],
+  ['atk', 'Attack', 'More damage with every hit.'], ['def', 'Defense', 'Every hit against you hurts less.'],
+  ['hp', 'Health', 'Raises your maximum health.'], ['crit', 'Crit', 'Chance to deal double damage.'],
 ];
 // Zeichnet Name, Art und alle Werte; "worn" ist das Vergleichsstück (null: Platz frei, undefined: kein Vergleich).
 function itemDetail(ctx: CanvasRenderingContext2D, it: Item, x: number, y: number, chars: number, worn: Item | null | undefined, dry = false): number {
   const put = (s: string, px: number, py: number, col: string, al: 'left' | 'right' = 'left') => { if (!dry) text(ctx, s, px, py, col, 8, al); };
   let yy = y;
   put(it.name, x, yy, RARITY_COL[it.rar]); yy += 10;
-  put(`${SLOT_NAMES[it.slot]} · ${it.uniq ? 'Einzigartig' : it.use ? 'einmalig' : RARITY[it.rar]}${it.cursed ? ' · verflucht' : ''}`, x, yy, '#566c86'); yy += 13;
+  put(`${SLOT_NAMES[it.slot]} · ${it.uniq ? 'Unique' : it.use ? 'single use' : RARITY[it.rar]}${it.cursed ? ' · cursed' : ''}`, x, yy, '#566c86'); yy += 13;
   if (it.use) { for (const l of wrapText(CONSUMABLES[it.use].desc, chars)) { put(l, x, yy, '#f4f4f4'); yy += 10; } return yy - y; }
   for (const [k, label] of STATS) {
     const v = it[k], o = worn ? worn[k] : 0;
@@ -1051,7 +1050,7 @@ function itemDetail(ctx: CanvasRenderingContext2D, it: Item, x: number, y: numbe
   for (const [id, v] of it.aff ?? []) for (const l of wrapText(AFFIX[id](v), chars - 2)) { put(l, x, yy, '#73eff7'); yy += 10; }
   if (worn) for (const [id, v] of worn.aff ?? []) {
     if (it.aff?.some(a => a[0] === id)) continue;
-    for (const l of wrapText(`Verliert: ${tr(AFFIX[id](v))}`, chars)) { put(l, x, yy, '#b13e53'); yy += 10; }
+    for (const l of wrapText(`Loses: ${AFFIX[id](v)}`, chars)) { put(l, x, yy, '#b13e53'); yy += 10; }
   }
   return yy - y;
 }
@@ -1064,11 +1063,11 @@ function lootCard(ctx: CanvasRenderingContext2D, run: Run) {
   ctx.globalAlpha = (L.t > 6 ? 7 - L.t : Math.min(1, L.t * 6)) * (under(x, y, w, h) ? 0.3 : 1);
   panel(ctx, x, y, w, h, RARITY_COL[it.rar], 'rgba(13,14,23,0.88)');
   if (it.use) ctx.drawImage(sprites[`i_${it.use}`], x + 4, y + 3); else drawItemIcon(ctx, it, p.cls, x + 6, y + 5, RARITY_COL[it.rar]);
-  text(ctx, 'FUND', x + 20, y + 6, '#94b0c2', 8);
+  text(ctx, 'LOOT', x + 20, y + 6, '#94b0c2', 8);
   const v = L.how === 'bag' ? verdict(run, it) : 0;
-  if (v) { arrow(ctx, x + w - 12, y + 7, v > 0); text(ctx, v > 0 ? 'besser' : 'schlechter', x + w - 16, y + 6, v > 0 ? '#a7f070' : '#b13e53', 8, 'right'); }
+  if (v) { arrow(ctx, x + w - 12, y + 7, v > 0); text(ctx, v > 0 ? 'better' : 'worse', x + w - 16, y + 6, v > 0 ? '#a7f070' : '#b13e53', 8, 'right'); }
   const dh = itemDetail(ctx, it, x + 7, y + 19, chars, worn);
-  const foot = L.how === 'worn' ? 'Angelegt' : L.how === 'sold' ? 'Rucksack voll – verkauft' : it.use ? '[I] Rucksack: benutzen' : '[R] anlegen · [I] Rucksack';
+  const foot = L.how === 'worn' ? 'Equipped' : L.how === 'sold' ? 'Backpack full – sold' : it.use ? '[I] backpack: use' : '[R] equip · [I] backpack';
   text(ctx, foot, x + 7, y + 22 + dh, L.how === 'worn' ? '#a7f070' : L.how === 'sold' ? '#b13e53' : '#ffcd75', 8);
   ctx.globalAlpha = 1;
 }
@@ -1112,41 +1111,41 @@ export function invClick(run: Run, mx: number, my: number): import('../game/run'
   return null;
 }
 const lookOf = (p: Run['p']) => heroLook(p.cls, p.gear[0]?.rar ?? 0, p.gear[1]?.rar ?? -1, p.gear[0]?.wk ?? -1);
-const cut = (s: string, n: number) => { s = tr(s); return s.length > n ? s.slice(0, n - 2) + '..' : s; };
+const cut = (s: string, n: number) => { return s.length > n ? s.slice(0, n - 2) + '..' : s; };
 
 function invSheet(ctx: CanvasRenderingContext2D, run: Run, time: number) {
   const p = run.p, { x, y } = INV_BOX, w = VW - 2 * x, h = VH - 2 * y;
   invMove(run, 0, 0);
   ctx.fillStyle = 'rgba(13,14,23,0.8)'; ctx.fillRect(0, 0, VW, VH);
   panel(ctx, x, y, w, h, '#ffcd75');
-  text(ctx, 'RUCKSACK', x + 14, y + 10, '#ffcd75', 16);
+  text(ctx, 'BACKPACK', x + 14, y + 10, '#ffcd75', 16);
   ctx.drawImage(sprites.coin, x + w - 80, y + 11);
-  text(ctx, `${p.gold} Gold`, x + w - 14, y + 14, '#ffcd75', 8, 'right');
+  text(ctx, `${p.gold} gold`, x + w - 14, y + 14, '#ffcd75', 8, 'right');
   // Figur zeigt die angelegte Ausrüstung
   panel(ctx, x + 14, y + 34, 84, 84, '#333c57', '#1c2033');
   figure(ctx, `${lookOf(p)}:${['f', 's', 'b', 's'][Math.floor(time * 0.7) % 4]}${Math.floor(time * 3) % 2}`, x + 16, y + 36, 80, 80);
-  const stats: [string, string, string][] = [['Leben', `${p.hp} / ${p.maxHp}`, '#b13e53'], ['Angriff', `${p.atk}`, '#f4f4f4'], ['Verteidigung', `${p.def}`, '#f4f4f4'], ['Kritisch', `${Math.round(p.crit * 100)} %`, '#f4f4f4'], ['Fähigkeiten', `${Math.round(p.pow * 100)} %`, '#f4f4f4']];
+  const stats: [string, string, string][] = [['Health', `${p.hp} / ${p.maxHp}`, '#b13e53'], ['Attack', `${p.atk}`, '#f4f4f4'], ['Defense', `${p.def}`, '#f4f4f4'], ['Critical', `${Math.round(p.crit * 100)} %`, '#f4f4f4'], ['Skills', `${Math.round(p.pow * 100)} %`, '#f4f4f4']];
   stats.forEach(([k, v, col], i) => { text(ctx, k, x + 106, y + 38 + i * 12, '#94b0c2', 8); text(ctx, v, x + 212, y + 38 + i * 12, col, 8, 'right'); });
-  text(ctx, 'ANGELEGT', x + 14, y + 127, '#94b0c2', 8);
+  text(ctx, 'EQUIPPED', x + 14, y + 127, '#94b0c2', 8);
   for (let i = 0; i < 4; i++) {
     const it = p.gear[i], gy = y + 139 + i * 25, sel = inv.col === 0 && inv.row === i, col = it ? RARITY_COL[it.rar] : '#566c86';
     panel(ctx, x + 14, gy, 200, 22, sel ? '#ffcd75' : it ? col : '#333c57', sel ? 'rgba(60,50,40,0.9)' : 'rgba(13,14,23,0.9)');
     if (it) drawItemIcon(ctx, it, p.cls, x + 20, gy + 6, col); else slotIcon(ctx, i, x + 20, gy + 6, col);
     text(ctx, it ? cut(it.name, 20) : SLOT_NAMES[i], x + 34, gy + 3, col, 8);
-    text(ctx, it ? cut(itemText(it), 29) : 'leer', x + 34, gy + 12, it ? '#94b0c2' : '#333c57', 8);
+    text(ctx, it ? cut(itemText(it), 29) : 'empty', x + 34, gy + 12, it ? '#94b0c2' : '#333c57', 8);
   }
   // Rucksack
   const bx = x + 226, bw = 172;
-  text(ctx, `Im Rucksack: ${p.bag.length} / ${BAG_MAX}`, bx, y + 34, '#94b0c2', 8);
-  text(ctx, `[O] ${tr(SORT_NAMES[p.sort])}`, bx + bw, y + 34, '#566c86', 8, 'right');
-  if (!p.bag.length) wrapText('Leer. Truhen und Händler füllen ihn.', 26).forEach((l, k) => text(ctx, l, bx, y + 50 + k * 10, '#566c86', 8));
+  text(ctx, `In backpack: ${p.bag.length} / ${BAG_MAX}`, bx, y + 34, '#94b0c2', 8);
+  text(ctx, `[O] ${SORT_NAMES[p.sort]}`, bx + bw, y + 34, '#566c86', 8, 'right');
+  if (!p.bag.length) wrapText('Empty. Chests and traders fill it.', 26).forEach((l, k) => text(ctx, l, bx, y + 50 + k * 10, '#566c86', 8));
   p.bag.forEach((it, i) => {
     const gy = y + 46 + i * 19, sel = inv.col === 1 && inv.row === i, v = verdict(run, it);
     panel(ctx, bx, gy, bw, 16, sel ? '#ffcd75' : '#333c57', sel ? 'rgba(60,50,40,0.9)' : 'rgba(13,14,23,0.9)');
     if (it.use) ctx.drawImage(sprites[`i_${it.use}`], bx + 3, gy + 2); else drawItemIcon(ctx, it, p.cls, bx + 5, gy + 4, RARITY_COL[it.rar]);
     text(ctx, cut(it.name, it.neu ? 19 : 23), bx + 19, gy + 4, RARITY_COL[it.rar], 8);
     if (v) arrow(ctx, bx + bw - 10, gy + 5, v > 0);
-    if (it.neu) text(ctx, 'NEU', bx + bw - (v ? 14 : 5), gy + 4, '#ffcd75', 8, 'right');
+    if (it.neu) text(ctx, 'NEW', bx + bw - (v ? 14 : 5), gy + 4, '#ffcd75', 8, 'right');
   });
   // Auswahl im Detail, mit Vergleich zum angelegten Stück
   const dx = x + 410, dw = w - 424, chars = Math.floor((dw - 14) / 6);
@@ -1155,21 +1154,21 @@ function invSheet(ctx: CanvasRenderingContext2D, run: Run, time: number) {
   if (cur) {
     const worn = inv.col === 1 && !cur.use ? p.gear[cur.slot] ?? null : undefined;
     let yy = y + 42 + itemDetail(ctx, cur, dx + 7, y + 42, chars, worn) + 6;
-    if (worn) { text(ctx, `Ersetzt: ${tr(worn.name)}`, dx + 7, yy, '#94b0c2', 8); yy += 14; }
-    else if (worn === null) { text(ctx, 'Dieser Platz ist noch frei.', dx + 7, yy, '#a7f070', 8); yy += 14; }
+    if (worn) { text(ctx, `Replaces: ${worn.name}`, dx + 7, yy, '#94b0c2', 8); yy += 14; }
+    else if (worn === null) { text(ctx, 'This slot is still free.', dx + 7, yy, '#a7f070', 8); yy += 14; }
     // Was bedeuten die Werte?
     for (const [k, label, help] of STATS) {
       if (!cur[k] || yy > y + h - 70) continue;
-      for (const l of wrapText(`${tr(label)}: ${tr(help)}`, chars)) { text(ctx, l, dx + 7, yy, '#566c86', 8); yy += 9; }
+      for (const l of wrapText(`${label}: ${help}`, chars)) { text(ctx, l, dx + 7, yy, '#566c86', 8); yy += 9; }
       yy += 2;
     }
-  } else text(ctx, inv.col ? '' : 'leer', dx + 7, y + 42, '#566c86', 8);
-  const keys = !cur ? '' : inv.col === 0 ? '[ENTER] ablegen' : `[ENTER] ${cur.use ? 'benutzen' : 'anlegen'} · [X] verkaufen (${itemValue(cur)} Gold) · [ENTF] wegwerfen`;
+  } else text(ctx, inv.col ? '' : 'empty', dx + 7, y + 42, '#566c86', 8);
+  const keys = !cur ? '' : inv.col === 0 ? '[ENTER] unequip' : `[ENTER] ${cur.use ? 'use' : 'equip'} · [X] sell (${itemValue(cur)} gold) · [DEL] discard`;
   text(ctx, keys, x + 14, y + h - 28, '#ffcd75', 8);
   // Ergebnis der letzten Handlung – das Protokoll liegt hinter dem Rucksack
   if (run.invNote) text(ctx, cut(run.invNote, 34), x + 14, y + h - 44, /Kein Platz|Fluch|nicht/.test(run.invNote) ? '#ef7d57' : '#a7f070', 8);
-  { arrow(ctx, x + 14, y + h - 14, true); text(ctx, 'besser als angelegt', x + 22, y + h - 15, '#566c86', 8); arrow(ctx, x + 150, y + h - 14, false); text(ctx, 'schlechter', x + 158, y + h - 15, '#566c86', 8); }
-  text(ctx, 'Pfeile oder Klick: wählen · [I] oder [ESC] schließen', x + w - 14, y + h - 15, '#566c86', 8, 'right');
+  { arrow(ctx, x + 14, y + h - 14, true); text(ctx, 'better than equipped', x + 22, y + h - 15, '#566c86', 8); arrow(ctx, x + 150, y + h - 14, false); text(ctx, 'worse', x + 158, y + h - 15, '#566c86', 8); }
+  text(ctx, 'Arrows or click: select · [I] or [ESC] close', x + w - 14, y + h - 15, '#566c86', 8, 'right');
 }
 
 function charSheet(ctx: CanvasRenderingContext2D, run: Run) {
@@ -1179,10 +1178,10 @@ function charSheet(ctx: CanvasRenderingContext2D, run: Run) {
   panel(ctx, x + 12, y + 12, 68, 68, '#333c57', '#1c2033');
   figure(ctx, lookOf(p), x + 14, y + 14, 64, 64);
   text(ctx, c.name, x + 90, y + 14, '#ffcd75', 16);
-  text(ctx, `Stufe ${p.lvl}   Ebene ${run.floor} ${BIOME_NAMES[biomeOf(run.floor)]}   Zug ${run.turn}`, x + 90, y + 34, '#94b0c2', 8);
+  text(ctx, `Level ${p.lvl}   Floor ${run.floor} ${BIOME_NAMES[biomeOf(run.floor)]}   Turn ${run.turn}`, x + 90, y + 34, '#94b0c2', 8);
   const stats: [string, string, string][] = [
-    ['Leben', `${p.hp} / ${p.maxHp}`, '#b13e53'], [c.resName, `${p.res} / ${p.resMax}`, c.resCol], ['Angriff', `${p.atk}`, '#f4f4f4'], ['Verteidigung', `${p.def}`, '#f4f4f4'],
-    ['Kritisch', `${Math.round(p.crit * 100)} %`, '#f4f4f4'], ['Fähigkeiten', `${Math.round(p.pow * 100)} %`, '#f4f4f4'], ['Besiegt', `${run.kills}`, '#94b0c2'], ['Seelensplitter', `${run.souls}`, '#73eff7'],
+    ['Health', `${p.hp} / ${p.maxHp}`, '#b13e53'], [c.resName, `${p.res} / ${p.resMax}`, c.resCol], ['Attack', `${p.atk}`, '#f4f4f4'], ['Defense', `${p.def}`, '#f4f4f4'],
+    ['Critical', `${Math.round(p.crit * 100)} %`, '#f4f4f4'], ['Skills', `${Math.round(p.pow * 100)} %`, '#f4f4f4'], ['Kills', `${run.kills}`, '#94b0c2'], ['Soul shards', `${run.souls}`, '#73eff7'],
   ];
   stats.forEach(([k, v, col], i) => {
     const sx = x + 90 + (i % 2) * 120, sy = y + 48 + ((i / 2) | 0) * 11;
@@ -1191,41 +1190,41 @@ function charSheet(ctx: CanvasRenderingContext2D, run: Run) {
   });
   // Ausrüstung
   const gx = x + 350;
-  text(ctx, 'AUSRÜSTUNG', gx, y + 14, '#94b0c2', 8);
+  text(ctx, 'EQUIPMENT', gx, y + 14, '#94b0c2', 8);
   SLOT_NAMES.slice(0, 4).forEach((slot, i) => {
     const it = p.gear[i], gy = y + 25 + i * 20;
     panel(ctx, gx, gy, w - 362, 18, it ? RARITY_COL[it.rar] : '#333c57');
     text(ctx, it ? it.name : slot, gx + 6, gy + 1, it ? RARITY_COL[it.rar] : '#566c86', 8);
-    text(ctx, it ? cut(itemText(it), 28) : 'leer', gx + 6, gy + 9, it ? '#94b0c2' : '#333c57', 8);
+    text(ctx, it ? cut(itemText(it), 28) : 'empty', gx + 6, gy + 9, it ? '#94b0c2' : '#333c57', 8);
   });
   // Reliquien und Gaben
   const ly = y + 108;
-  text(ctx, 'RELIQUIEN', x + 14, ly, '#73eff7', 8);
-  if (!p.relics.length) text(ctx, 'Noch keine – löse Rätselkammern.', x + 14, ly + 12, '#566c86', 8);
+  text(ctx, 'RELICS', x + 14, ly, '#73eff7', 8);
+  if (!p.relics.length) text(ctx, 'None yet – solve puzzle chambers.', x + 14, ly + 12, '#566c86', 8);
   p.relics.slice(0, 7).forEach((id, i) => {
     text(ctx, RELICS[id].name, x + 14, ly + 12 + i * 20, '#f4f4f4', 8);
     text(ctx, RELICS[id].desc, x + 20, ly + 21 + i * 20, '#94b0c2', 8);
   });
   const px = x + 290;
-  text(ctx, 'GABEN', px, ly, '#ffcd75', 8);
+  text(ctx, 'BOONS', px, ly, '#ffcd75', 8);
   const counts = new Map<string, number>();
   for (const id of p.perks) counts.set(id, (counts.get(id) ?? 0) + 1);
-  if (!counts.size) text(ctx, 'Noch keine – steige eine Stufe auf.', px, ly + 12, '#566c86', 8);
+  if (!counts.size) text(ctx, 'None yet – gain a level.', px, ly + 12, '#566c86', 8);
   [...counts].slice(0, 13).forEach(([id, n], i) => {
     text(ctx, `${PERKS[id].name}${n > 1 ? ` x${n}` : ''}`, px, ly + 12 + i * 11, '#f4f4f4', 8);
     text(ctx, PERKS[id].desc, px + 104, ly + 12 + i * 11, '#94b0c2', 8);
   });
   if (p.syn.length) {
-    const names = p.syn.map(id => tr(SYNERGIES.find(q => q.id === id)!.name)).join(', ');
-    text(ctx, `Synergien: ${names}`, x + 14, y + h - 26, '#a7f070', 8);
+    const names = p.syn.map(id => SYNERGIES.find(q => q.id === id)!.name).join(', ');
+    text(ctx, `Synergies: ${names}`, x + 14, y + h - 26, '#a7f070', 8);
   }
-  text(ctx, '[C] oder [ESC] schließen', VW / 2, y + h - 13, '#566c86', 8, 'center');
+  text(ctx, '[C] or [ESC] close', VW / 2, y + h - 13, '#566c86', 8, 'center');
 }
 
 const HELP: [string, string][] = [
-  ['Pfeile / WASD', 'bewegen, in Gegner laufen greift an'], ['Leertaste', 'einen Zug warten'], ['1 bis 6', 'Fähigkeiten (4–6: neue aus dem Baum)'], ['U', 'Ultimative Fähigkeit ab Stufe 5'], ['7 8 9 0', 'Rollen und Tränke benutzen'], ['R', 'letzten Fund anlegen'], ['K', 'Fertigkeitsbaum: Punkt vergeben'], ['T', 'Lehrgang: Schritt überspringen'], ['F', 'Fernangriff (Magier, Waldläufer)'],
-  ['Q', 'Heiltrank trinken'], ['B', 'Bombe werfen'], ['E', 'Treppe hinabsteigen'], ['Klick / Tab', 'Ziel wählen'], ['Maus', 'über etwas halten zeigt Details'],
-  ['I', 'Rucksack: anlegen, benutzen, verkaufen'], ['C', 'Charakter, Reliquien, Gaben'], ['N', 'Karte: klein, groß, aus'], ['M', 'Ton ein/aus'], ['V · L', 'Vollbild · Sprache (DE/EN)'], ['J', 'Journal: alle Meldungen nachlesen'], ['H', 'diese Hilfe'],
+  ['Arrows / WASD', 'move; walk into enemies to attack'], ['Space', 'wait one turn'], ['1 to 6', 'Skills (4–6: new ones from the tree)'], ['U', 'Ultimate skill from level 5'], ['7 8 9 0', 'use scrolls and potions'], ['R', 'equip the latest find'], ['K', 'Skill tree: spend a point'], ['T', 'Tutorial: skip step'], ['F', 'ranged attack (Mage, Ranger)'],
+  ['Q', 'drink a healing potion'], ['B', 'throw a bomb'], ['E', 'descend the stairs'], ['Click / Tab', 'choose a target'], ['Mouse', 'hover over things for details'],
+  ['I', 'Backpack: equip, use, sell'], ['C', 'character, relics, boons'], ['N', 'map: small, large, off'], ['M', 'toggle sound'], ['V', 'Fullscreen'], ['J', 'Journal: read all messages'], ['H', 'this help'],
 ];
 
 // Journal: die letzten Meldungen in voller Länge
@@ -1238,35 +1237,35 @@ function logSheet(ctx: CanvasRenderingContext2D, run: Run) {
   run.log.forEach((m, k) => wrapText(m, chars).forEach((l, j) => rows.push([(j ? '  ' : '') + l, k === run.log.length - 1])));
   rows = rows.slice(-maxRows);
   rows.forEach(([l, cur], k) => text(ctx, l, x + 14, y + 36 + k * 10, cur ? '#f4f4f4' : '#94b0c2', 8));
-  if (!rows.length) text(ctx, 'Noch nichts geschehen.', x + 14, y + 36, '#566c86', 8);
-  text(ctx, '[J] oder [ESC] schließen', VW / 2, y + h - 13, '#566c86', 8, 'center');
+  if (!rows.length) text(ctx, 'Nothing has happened yet.', x + 14, y + 36, '#566c86', 8);
+  text(ctx, '[J] or [ESC] close', VW / 2, y + h - 13, '#566c86', 8, 'center');
 }
 
 function helpSheet(ctx: CanvasRenderingContext2D) {
   const w = 380, h = 56 + HELP.length * 13, x = (VW - w) >> 1, y = (VH - h) >> 1;
   ctx.fillStyle = 'rgba(13,14,23,0.8)'; ctx.fillRect(0, 0, VW, VH);
   panel(ctx, x, y, w, h, '#ffcd75');
-  text(ctx, 'STEUERUNG', VW / 2, y + 12, '#ffcd75', 16, 'center');
+  text(ctx, 'CONTROLS', VW / 2, y + 12, '#ffcd75', 16, 'center');
   HELP.forEach(([k, v], i) => {
     text(ctx, k, x + 110, y + 38 + i * 13, '#ffcd75', 8, 'right');
     text(ctx, v, x + 124, y + 38 + i * 13, '#f4f4f4', 8);
   });
-  text(ctx, '[H] oder [ESC] schließen', VW / 2, y + h - 13, '#566c86', 8, 'center');
+  text(ctx, '[H] or [ESC] close', VW / 2, y + h - 13, '#566c86', 8, 'center');
 }
 
 const HAZARD_HELP: Record<string, string> = {
-  stachel: 'Stacheln beim Betreten', pfeil: 'Pfeil aus der Wand beim Betreten', gas: 'Giftgas ringsum beim Betreten (einmal)', glut: 'Feuer ringsum beim Betreten',
+  stachel: 'Spikes when stepped on', pfeil: 'Dart from the wall when stepped on', gas: 'Poison gas around it when stepped on (once)', glut: 'Fire around it when stepped on',
 };
 const TILE_NAMES: Record<number, string> = {
-  [T.STAIRS]: 'Treppe nach unten [E]', [T.CHEST]: 'Truhe', [T.MIMIC]: 'Truhe', [T.CURSED]: 'Verfluchte Truhe – stark, aber kostet Leben', [T.TRADER]: 'Händler – hineinlaufen zum Handeln',
-  [T.FOUNTAIN]: 'Brunnen – heilt einmal', [T.FOUNTAIN_DRY]: 'Versiegter Brunnen', [T.GATE]: 'Gitter – der Schlüssel liegt bei einem Elitegegner', [T.ALTAR]: 'Altar: Leben gegen eine Gabe', [T.CRACKED]: 'Rissige Wand – 3 Schläge oder Bombe',
-  [T.BARREL]: 'Fass – anstoßen zündet die Lunte', [T.PILLAR]: 'Säule – stürzt bei Explosion ein', [T.GRASS]: 'Bewuchs – brennbar',
-  [T.FRAGILE]: 'Brüchiger Boden', [T.FRAGILE2]: 'Brüchiger Boden – bricht beim nächsten Tritt', [T.CRATE]: 'Kiste – schiebbar', [T.CRATE_ON]: 'Kiste auf Platte',
-  [T.PLATE]: 'Druckplatte', [T.LEVER]: 'Hebel – setzt die Kisten zurück', [T.ICE]: 'Eis – du rutschst', [T.TABLET]: 'Steintafel', [T.GOAL]: 'Zielplatte',
-  [T.BRAZIER]: 'Glutschale, erloschen – Tritt schaltet sie und die Nachbarn um', [T.BRAZIER_ON]: 'Glutschale, brennt – Tritt schaltet sie und die Nachbarn um',
-  [T.STATUE]: 'Pfeilstatue – schießt quer durch ihre Reihe',
-  [T.POT]: 'Tonkrug – zerschlagen; vielleicht steckt etwas darin', [T.SPORE]: 'Sporenpilz – platzt zu einer Giftwolke, die alle trifft',
-  [T.OIL]: 'Öllache – brennt sofort als Ganzes', [T.WATER]: 'Wasser – löscht Brand, Feuer kommt nicht hinüber', [T.WEB]: 'Spinnennetz – hält einen Zug fest, brennt',
+  [T.STAIRS]: 'Stairs down [E]', [T.CHEST]: 'Chest', [T.MIMIC]: 'Chest', [T.CURSED]: 'Cursed chest – strong, but costs health', [T.TRADER]: 'Trader – walk into him to trade',
+  [T.FOUNTAIN]: 'Fountain – heals once', [T.FOUNTAIN_DRY]: 'Dry fountain', [T.GATE]: 'Gate – an elite enemy holds the key', [T.ALTAR]: 'Altar: health for a boon', [T.CRACKED]: 'Cracked wall – 3 blows or a bomb',
+  [T.BARREL]: 'Barrel – bump it to light the fuse', [T.PILLAR]: 'Pillar – collapses when blasted', [T.GRASS]: 'Overgrowth – flammable',
+  [T.FRAGILE]: 'Brittle floor', [T.FRAGILE2]: 'Brittle floor – breaks on the next step', [T.CRATE]: 'Crate – pushable', [T.CRATE_ON]: 'Crate on plate',
+  [T.PLATE]: 'Pressure plate', [T.LEVER]: 'Lever – resets the crates', [T.ICE]: 'Ice – you slide', [T.TABLET]: 'Stone tablet', [T.GOAL]: 'Goal plate',
+  [T.BRAZIER]: 'Brazier, unlit – a step toggles it and its neighbours', [T.BRAZIER_ON]: 'Brazier, lit – a step toggles it and its neighbours',
+  [T.STATUE]: 'Dart statue – shoots across its row',
+  [T.POT]: 'Clay pot – smash it; something may be inside', [T.SPORE]: 'Spore cap – bursts into a poison cloud that hits everyone',
+  [T.OIL]: 'Oil puddle – burns all at once', [T.WATER]: 'Water – puts out burning, fire cannot cross', [T.WEB]: 'Cobweb – holds for a turn, burns',
 };
 
 function tooltip(ctx: CanvasRenderingContext2D, run: Run, ox: number, oy: number) {
@@ -1277,25 +1276,25 @@ function tooltip(ctx: CanvasRenderingContext2D, run: Run, ox: number, oy: number
   const lines: string[] = [];
   if (m) {
     const d = MOBS[m.kind];
-    lines.push(m.name, `Leben ${m.hp}/${m.maxHp}   Angriff ${m.atk}   Vert. ${m.def}`);
-    const tags = [d.range ? `Fernkampf ${d.range}` : '', d.poison ? 'giftig' : '', d.burn ? 'entzündet' : '', d.ai === 'slow' ? 'langsam' : '', d.ai === 'erratic' ? 'unberechenbar' : '',
-      m.st.stun ? 'betäubt' : '', m.st.brand ? 'brennt' : '', m.st.gift ? 'vergiftet' : '', !m.awake ? 'schläft' : ''].filter(Boolean);
+    lines.push(m.name, `Health ${m.hp}/${m.maxHp}   attack ${m.atk}   def. ${m.def}`);
+    const tags = [d.range ? `Ranged ${d.range}` : '', d.poison ? 'poisonous' : '', d.burn ? 'ignites' : '', d.ai === 'slow' ? 'slow' : '', d.ai === 'erratic' ? 'erratic' : '',
+      m.st.stun ? 'stunned' : '', m.st.brand ? 'burning' : '', m.st.gift ? 'poisoned' : '', !m.awake ? 'asleep' : ''].filter(Boolean);
     if (tags.length) lines.push(tags.join(' · '));
   } else {
     const t = run.tiles[i];
     const z = run.puzzle;
     if (t === T.RUNE && z) lines.push(`Rune: ${RUNE_NAMES[z.runes[i]]}`);
     else if (TILE_NAMES[t]) lines.push(TILE_NAMES[t]);
-    if (t === T.ICE && z?.gems?.includes(i)) lines.push('Eiskristall – darauf anhalten');
+    if (t === T.ICE && z?.gems?.includes(i)) lines.push('Ice crystal – stop on it');
     const hz = run.hazards.find(h => h.seen && h.x === tx && h.y === ty);
-    if (hz) lines.push(HAZARD_NAMES[hz.kind], HAZARD_HELP[hz.kind], 'Auch Gegner lösen sie aus.');
+    if (hz) lines.push(HAZARD_NAMES[hz.kind], HAZARD_HELP[hz.kind], 'Enemies trigger it too.');
     // Rätselkammer schon von der Tür aus erkennbar: Name und Lohn
-    if (z && (inVault(run, tx, ty) || (tx === z.x + 3 && ty === z.y + 7))) lines.push(`${VAULT_NAMES[z.kind]} – ${z.solved ? 'gelöst' : z.dead ? 'verloren' : 'Lohn: Reliquie'}`);
-    if (run.fire.has(i)) lines.push('Feuer');
+    if (z && (inVault(run, tx, ty) || (tx === z.x + 3 && ty === z.y + 7))) lines.push(`${VAULT_NAMES[z.kind]} – ${z.solved ? 'solved' : z.dead ? 'lost' : 'reward: relic'}`);
+    if (run.fire.has(i)) lines.push('Fire');
   }
   if (!lines.length) return;
   ctx.strokeStyle = '#ffcd75'; ctx.lineWidth = 1; ctx.strokeRect(tx * TS + ox + 0.5, ty * TS + oy + 0.5, TS - 1, TS - 1);
-  const w = Math.max(...lines.map(l => tr(l).length)) * 6 + 12, h = lines.length * 10 + 8;
+  const w = Math.max(...lines.map(l => l.length)) * 6 + 12, h = lines.length * 10 + 8;
   const x = Math.min(VW - w - 4, mouse.x + 10), y = Math.max(4, Math.min(VH - h - 32, mouse.y + 10));
   panel(ctx, x, y, w, h, '#ffcd75');
   lines.forEach((l, k) => text(ctx, l, x + 6, y + 5 + k * 10, k ? '#94b0c2' : '#f4f4f4', 8));
@@ -1307,8 +1306,8 @@ function minimap(ctx: CanvasRenderingContext2D, run: Run, time: number) {
   if (big) {
     ctx.fillStyle = 'rgba(5,6,12,0.72)'; ctx.fillRect(0, 0, VW, VH);
     panel(ctx, x0 - 4, y0 - 16, W * s + 8, H * s + 36, '#566c86', 'rgba(13,14,23,0.9)');
-    text(ctx, `Ebene ${run.floor} / 15 - ${BIOME_NAMES[biomeOf(run.floor)]}`, x0, y0 - 12, '#ffcd75', 8);
-    text(ctx, '[N] schließen', x0 + W * s, y0 - 12, '#566c86', 8, 'right');
+    text(ctx, `Floor ${run.floor} / 15 - ${BIOME_NAMES[biomeOf(run.floor)]}`, x0, y0 - 12, '#ffcd75', 8);
+    text(ctx, '[N] close', x0 + W * s, y0 - 12, '#566c86', 8, 'right');
   } else {
     ctx.globalAlpha = under(x0 - 2, y0 - 2, W + 4, H + 4) ? 0.25 : 1;
     ctx.fillStyle = 'rgba(8,9,15,0.55)'; ctx.fillRect(x0 - 1, y0 - 1, W + 2, H + 2);
@@ -1337,7 +1336,7 @@ function minimap(ctx: CanvasRenderingContext2D, run: Run, time: number) {
   }
   ctx.globalAlpha = 1;
   if (big) {
-    const leg: [string, string][] = [['#f4f4f4', 'Du'], ['#ffcd75', 'Treppe'], ['#c98a3a', 'Truhe'], ['#38b764', 'Händler'], ['#73eff7', 'Brunnen'], ['#41a6f6', 'Rätsel'], ['#b13e53', 'Gegner']];
+    const leg: [string, string][] = [['#f4f4f4', 'You'], ['#ffcd75', 'Stairs'], ['#c98a3a', 'Chest'], ['#38b764', 'Trader'], ['#73eff7', 'Fountain'], ['#41a6f6', 'Puzzle'], ['#b13e53', 'Enemies']];
     let lx = x0;
     for (const [col, name] of leg) {
       ctx.fillStyle = col; ctx.fillRect(lx, y0 + H * s + 7, 5, 5);
@@ -1352,22 +1351,21 @@ const under = (x: number, y: number, w: number, h: number) => mouse.x >= x && mo
 // Einsteigerhinweise im ersten Lauf
 function hint(run: Run): string | null {
   const p = run.p, c = CLASSES[p.cls];
-  if (run.turn < 4) return 'Pfeiltasten oder WASD: bewegen';
-  if (run.tiles[p.y * W + p.x] === T.STAIRS) return '[E] steigt die Treppe hinab';
-  if (p.hp < p.maxHp * 0.5 && p.potions > 0) return '[Q] trinkt einen Heiltrank';
-  if (run.mobs.some(m => run.vis[m.y * W + m.x])) return c.range ? '[F] schießt auf den nächsten Gegner · [1]–[3] Fähigkeiten' : 'In einen Gegner laufen greift an · [1]–[3] Fähigkeiten';
+  if (run.turn < 4) return 'Arrow keys or WASD: move';
+  if (run.tiles[p.y * W + p.x] === T.STAIRS) return '[E] descends the stairs';
+  if (p.hp < p.maxHp * 0.5 && p.potions > 0) return '[Q] drinks a healing potion';
+  if (run.mobs.some(m => run.vis[m.y * W + m.x])) return c.range ? '[F] shoots the nearest enemy · [1]–[3] skills' : 'Walk into an enemy to attack · [1]–[3] skills';
   for (let y = p.y - 4; y <= p.y + 4; y++) for (let x = p.x - 4; x <= p.x + 4; x++) {
     const i = y * W + x;
     if (!run.vis[i]) continue;
-    if (run.tiles[i] === T.CRACKED) return 'Rissige Wand: dreimal dagegenlaufen oder [B] Bombe';
-    if (run.tiles[i] === T.BARREL) return 'Fass: anstoßen zündet die Lunte – dann Abstand halten';
-    if (run.tiles[i] === T.CHEST) return 'Truhe: hineinlaufen öffnet sie';
+    if (run.tiles[i] === T.CRACKED) return 'Cracked wall: walk into it three times or [B] bomb';
+    if (run.tiles[i] === T.BARREL) return 'Barrel: bump it to light the fuse – then keep away';
+    if (run.tiles[i] === T.CHEST) return 'Chest: walk into it to open';
   }
-  return run.floor === 1 ? 'Finde die Treppe · Maus über etwas halten zeigt Details' : null;
+  return run.floor === 1 ? 'Find the stairs · hover over things for details' : null;
 }
 
 function wrapText(s: string, n: number): string[] {
-  s = tr(s);
   const out: string[] = [];
   let line = '';
   for (const w of s.split(' ')) {
@@ -1378,12 +1376,12 @@ function wrapText(s: string, n: number): string[] {
 }
 
 const KIND_COL = { perk: '#ffcd75', relic: '#73eff7', skill: '#a7f070' };
-const KIND_NAME = { perk: 'Gabe', relic: 'Reliquie', skill: 'Fähigkeit' };
+const KIND_NAME = { perk: 'Boon', relic: 'Relic', skill: 'Skill' };
 
 function perkOverlay(ctx: CanvasRenderingContext2D, run: Run) {
   const ids = run.perkChoices, relic = !!RELICS[ids[0]], col = relic ? '#73eff7' : '#ffcd75';
   ctx.fillStyle = 'rgba(13,14,23,0.75)'; ctx.fillRect(0, 0, VW, VH);
-  text(ctx, relic ? 'WÄHLE EINE RELIQUIE' : 'WÄHLE EINE GABE', VW / 2, 78, col, 24, 'center');
+  text(ctx, relic ? 'CHOOSE A RELIC' : 'CHOOSE A BOON', VW / 2, 78, col, 24, 'center');
   const cw = ids.length > 3 ? 146 : 154, x0 = VW / 2 - (ids.length * (cw + 8) - 8) / 2;
   ids.forEach((id, i) => {
     const x = x0 + i * (cw + 8), y = 126, pk = perkInfo(run.p, id), kc = KIND_COL[pk.kind];
@@ -1395,10 +1393,10 @@ function perkOverlay(ctx: CanvasRenderingContext2D, run: Run) {
     wrapText(pk.name, 22).forEach((l, k) => text(ctx, l, x + cw / 2, y + 38 + k * 11, '#f4f4f4', 8, 'center'));
     wrapText(pk.desc, 22).forEach((l, k) => text(ctx, l, x + cw / 2, y + 62 + k * 10, '#94b0c2', 8, 'center'));
     const have = run.p.perks.filter(q => q === id).length;
-    if (pk.syn) text(ctx, `Synergie: ${tr(pk.syn)}`, x + cw / 2, y + 92, '#a7f070', 8, 'center');
-    else if (have) text(ctx, `schon ${have}x`, x + cw / 2, y + 92, '#566c86', 8, 'center');
+    if (pk.syn) text(ctx, `Synergy: ${pk.syn}`, x + cw / 2, y + 92, '#a7f070', 8, 'center');
+    else if (have) text(ctx, `owned ${have}x`, x + cw / 2, y + 92, '#566c86', 8, 'center');
   });
-  text(ctx, `Taste 1 bis ${ids.length}`, VW / 2, 244, '#94b0c2', 8, 'center');
+  text(ctx, `Key 1 to ${ids.length}`, VW / 2, 244, '#94b0c2', 8, 'center');
 }
 
 // Symbole der Händlerware ohne eigenen Gegenstand
@@ -1413,8 +1411,8 @@ function shopOverlay(ctx: CanvasRenderingContext2D, run: Run, time: number) {
   ctx.fillStyle = gl; ctx.fillRect(x + 1, y + 1, 90, 56);
   panel(ctx, x + 8, y + 7, 44, 44, '#c98a3a', 'rgba(26,28,44,0.95)');
   ctx.drawImage(sprites[Math.floor(time * 1.6) % 2 ? 'trader_b' : 'trader'], x + 14, y + 13, 32, 32);
-  text(ctx, 'HÄNDLER', x + 62, y + 12, '#ffcd75', 16);
-  text(ctx, 'Was darf es sein?', x + 62, y + 34, '#94b0c2', 8);
+  text(ctx, 'TRADER', x + 62, y + 12, '#ffcd75', 16);
+  text(ctx, 'What will it be?', x + 62, y + 34, '#94b0c2', 8);
   const gw = text(ctx, `${p.gold}`, x + w - 14, y + 16, '#ffcd75', 10, 'right');
   drawIcon(ctx, ['coin'], x + w - 28 - gw, y + 15, '#ffcd75');
   ctx.fillStyle = '#566c86'; ctx.fillRect(x + 8, y + 57, w - 16, 1);
@@ -1432,24 +1430,24 @@ function shopOverlay(ctx: CanvasRenderingContext2D, run: Run, time: number) {
     const nw = text(ctx, o.name, x + 54, oy, o.item ? RARITY_COL[o.item.rar] : '#f4f4f4');
     if (o.left !== undefined && !o.sold) text(ctx, `×${o.left}`, x + 58 + nw, oy, '#566c86');
     text(ctx, cut(o.desc, 44), x + 54, oy + 11, '#94b0c2', 8);
-    if (o.sold) text(ctx, 'VERKAUFT', x + w - 14, oy + 5, '#94b0c2', 8, 'right');
+    if (o.sold) text(ctx, 'SOLD', x + w - 14, oy + 5, '#94b0c2', 8, 'right');
     else { const pw = text(ctx, `${o.price}`, x + w - 14, oy + 4, ok ? '#ffcd75' : '#b13e53', 10, 'right'); drawIcon(ctx, ['coin'], x + w - 26 - pw, oy + 3, ok ? '#ffcd75' : '#b13e53'); }
     ctx.globalAlpha = 1;
   });
   ctx.fillStyle = '#333c57'; ctx.fillRect(x + 8, y + h - 22, w - 16, 1);
-  text(ctx, '[LEERTASTE] weiterziehen', VW / 2, y + h - 15, '#94b0c2', 8, 'center');
+  text(ctx, '[SPACE] move on', VW / 2, y + h - 15, '#94b0c2', 8, 'center');
 }
 
 function endOverlay(ctx: CanvasRenderingContext2D, run: Run) {
   const win = run.mode === 'win', x = VW / 2 - 130, y = VH / 2 - 78;
   ctx.fillStyle = 'rgba(13,14,23,0.8)'; ctx.fillRect(0, 0, VW, VH);
   panel(ctx, x, y, 260, 156, win ? '#ffcd75' : '#b13e53');
-  text(ctx, win ? 'SIEG!' : 'GEFALLEN', VW / 2, y + 14, win ? '#ffcd75' : '#b13e53', 24, 'center');
-  text(ctx, win ? 'Die Glutgruft ist bezwungen.' : `Ebene ${run.floor} – ${BIOME_NAMES[biomeOf(run.floor)]}`, VW / 2, y + 52, '#f4f4f4', 10, 'center');
-  text(ctx, `Besiegte Gegner: ${run.kills}`, VW / 2, y + 72, '#94b0c2', 10, 'center');
-  text(ctx, `Stufe: ${run.p.lvl}`, VW / 2, y + 86, '#94b0c2', 10, 'center');
-  text(ctx, `+${run.souls} Seelensplitter`, VW / 2, y + 106, '#73eff7', 10, 'center');
-  text(ctx, '[LEERTASTE] zurück zum Lager', VW / 2, y + 132, '#ffcd75', 8, 'center');
+  text(ctx, win ? 'VICTORY!' : 'FALLEN', VW / 2, y + 14, win ? '#ffcd75' : '#b13e53', 24, 'center');
+  text(ctx, win ? 'The Ember Crypt is conquered.' : `Floor ${run.floor} – ${BIOME_NAMES[biomeOf(run.floor)]}`, VW / 2, y + 52, '#f4f4f4', 10, 'center');
+  text(ctx, `Enemies defeated: ${run.kills}`, VW / 2, y + 72, '#94b0c2', 10, 'center');
+  text(ctx, `Level: ${run.p.lvl}`, VW / 2, y + 86, '#94b0c2', 10, 'center');
+  text(ctx, `+${run.souls} Soul shards`, VW / 2, y + 106, '#73eff7', 10, 'center');
+  text(ctx, '[SPACE] back to camp', VW / 2, y + 132, '#ffcd75', 8, 'center');
 }
 
 // ---- Fertigkeitsbaum (Lager und Lauf) ----
@@ -1503,7 +1501,7 @@ export function drawTree(ctx: CanvasRenderingContext2D, cls: ClassId, title: str
     const cx = x0 + b * (colW + gap), mid = cx + colW / 2;
     panel(ctx, cx, 36, colW, 206, '#333c57', 'rgba(20,22,36,0.9)');
     ctx.drawImage(sprites[`i_${cls}${b}`], cx + 8, 42);
-    text(ctx, tr(BRANCH_NAMES[cls][b]).toUpperCase(), mid, 45, '#94b0c2', 10, 'center');
+    text(ctx, BRANCH_NAMES[cls][b].toUpperCase(), mid, 45, '#94b0c2', 10, 'center');
     ctx.fillStyle = '#566c86';
     ctx.fillRect(mid, top + rowH, 1, (rows.length - 1) * step - rowH);
     rows.forEach((row, r) => {
@@ -1515,7 +1513,7 @@ export function drawTree(ctx: CanvasRenderingContext2D, cls: ClassId, title: str
         treeRects.push({ id, x, y, w, h: rowH });
         panel(ctx, x, y, w, rowH, sel ? '#f4f4f4' : col, sel ? 'rgba(60,50,40,0.95)' : st === 'locked' ? 'rgba(13,14,23,0.9)' : 'rgba(28,32,51,0.95)');
         const mark = (st === 'learned' ? '+' : '') + (node.key ? '*' : '');
-        text(ctx, cut(`${mark}${mark ? ' ' : ''}${tr(shortName(cls, id))}`, Math.floor((w - 6) / 6)), x + w / 2, y + 5, st === 'locked' ? '#566c86' : '#f4f4f4', 8, 'center');
+        text(ctx, cut(`${mark}${mark ? ' ' : ''}${shortName(cls, id)}`, Math.floor((w - 6) / 6)), x + w / 2, y + 5, st === 'locked' ? '#566c86' : '#f4f4f4', 8, 'center');
         const tg = tag(id);
         if (tg === '#free') freeMark(ctx, x + w / 2 - 4, y + 16, col);
         else if (tg) text(ctx, cut(tg, Math.floor((w - 6) / 6)), x + w / 2, y + 15, col, 8, 'center');
@@ -1524,9 +1522,9 @@ export function drawTree(ctx: CanvasRenderingContext2D, cls: ClassId, title: str
   }
   // Beschreibung des gewählten Knotens
   const nt = nodeText(cls, treeSel), node = treeNode(cls, treeSel)!, bun = bundledOf(cls, treeSel);
-  const lines = [...wrapText(nt.desc, 90), ...(bun ? wrapText(`Dazu ${nodeText(cls, bun.id).name}: ${nodeText(cls, bun.id).desc}`, 90) : [])];
+  const lines = [...wrapText(nt.desc, 90), ...(bun ? wrapText(`Also ${nodeText(cls, bun.id).name}: ${nodeText(cls, bun.id).desc}`, 90) : [])];
   panel(ctx, x0, 248, 3 * colW + 2 * gap, 74, '#566c86');
-  text(ctx, `${nt.name}${node.key ? ' – Schlüsselknoten' : ''}`, x0 + 10, 256, '#ffcd75', 10);
+  text(ctx, `${nt.name}${node.key ? ' – key node' : ''}`, x0 + 10, 256, '#ffcd75', 10);
   lines.forEach((l, k) => text(ctx, l, x0 + 10, 272 + k * 10, '#f4f4f4', 8));
   text(ctx, status(treeSel), x0 + 10, 308, TREE_COL[stateOf(treeSel)], 8);
   text(ctx, foot, VW / 2, 334, '#94b0c2', 8, 'center');
@@ -1535,16 +1533,16 @@ export function drawTree(ctx: CanvasRenderingContext2D, cls: ClassId, title: str
 function treeOverlay(ctx: CanvasRenderingContext2D, run: Run) {
   const p = run.p, av = availableNodes(run);
   const stateOf = (id: string): TreeState => p.tree.includes(id) ? 'learned' : av.includes(id) ? 'open' : 'locked';
-  drawTree(ctx, p.cls, `STUFE ${p.lvl} – FERTIGKEITSPUNKT (${p.pts} frei)`, stateOf,
-    id => ({ learned: 'gelernt', open: 'wählbar', locked: run.pool.includes(id) ? 'gesperrt' : 'erst im Lager' } as Record<string, string>)[stateOf(id)],
-    `Punkte: ${p.ptsGot ?? 0}/${TUNE.treePtsMax} · Pfeile: wählen · ENTER: lernen · K: später`,
+  drawTree(ctx, p.cls, `LEVEL ${p.lvl} – SKILL POINT (${p.pts} free)`, stateOf,
+    id => ({ learned: 'learned', open: 'available', locked: run.pool.includes(id) ? 'locked' : 'camp first' } as Record<string, string>)[stateOf(id)],
+    `Points: ${p.ptsGot ?? 0}/${TUNE.treePtsMax} · Arrows: select · ENTER: learn · K: later`,
     id => {
       const st = stateOf(id), n = treeNode(p.cls, id)!;
-      if (st !== 'locked') return st === 'learned' ? 'Schon gelernt.' : 'Kann jetzt gelernt werden.';
-      if (!run.pool.includes(id)) return 'Im Lager noch nicht freigeschaltet.';
-      if (n.excl && p.tree.includes(n.excl)) return 'Die andere Ausprägung ist schon gewählt.';
-      if (n.parent && !p.tree.includes(n.parent)) return 'Erst Rang II lernen.';
-      if (n.needAny && !n.needAny.some(q => p.tree.includes(q))) return 'Braucht Rang III und 4 Punkte im Zweig.';
-      return `Braucht ${n.minPts} Punkte im Zweig.`;
+      if (st !== 'locked') return st === 'learned' ? 'Already learned.' : 'Can be learned now.';
+      if (!run.pool.includes(id)) return 'Not unlocked in camp yet.';
+      if (n.excl && p.tree.includes(n.excl)) return 'The other variant is already chosen.';
+      if (n.parent && !p.tree.includes(n.parent)) return 'Learn rank II first.';
+      if (n.needAny && !n.needAny.some(q => p.tree.includes(q))) return 'Needs rank III and 4 points in the branch.';
+      return `Needs ${n.minPts} points in the branch.`;
     });
 }

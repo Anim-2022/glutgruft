@@ -25,7 +25,7 @@ const scene = (seed: number, cls: string, floor: number, kind: string, dx: numbe
   for (let y = r.p.y - 3; y <= r.p.y + 3; y++) for (let x = r.p.x - 6; x <= r.p.x + 6; x++) { r.tiles[y * W + x] = 1; r.seen[y * W + x] = 1; }
   r.floorTurns = 700; r.hunt = { next: 730, n: 1 };
   const d = { echse: [30, 6, 2, 22], krake: [32, 7, 1, 24], drache: [46, 8, 3, 36], medusa: [34, 6, 2, 28], tod: [55, 7, 3, 45] }[kind]!;
-  r.mobs.push({ id: 900, kind, name: { echse: 'Riesenechse', krake: 'Landkrake', drache: 'Drache', medusa: 'Medusa', tod: 'Der Tod' }[kind], x: r.p.x + dx, y: r.p.y, hp: d[0] * 3, maxHp: d[0] * 3, atk: 0, def: d[2], st: {}, xp: d[3], cd: 0, awake: true });
+  r.mobs.push({ id: 900, kind, name: { echse: 'Giant lizard', krake: 'Land kraken', drache: 'Dragon', medusa: 'Medusa', tod: 'Death' }[kind], x: r.p.x + dx, y: r.p.y, hp: d[0] * 3, maxHp: d[0] * 3, atk: 0, def: d[2], st: {}, xp: d[3], cd: 0, awake: true });
   for (let k = 0; k < turns; k++) g.act({ t: 'wait' });
   return [r.mobs.map((m: any) => [m.kind, m.x - r.p.x, m.st]), r.log.slice(-2)];
 }, [seed, cls, floor, kind, dx, turns] as [number, string, number, string, number, number]);

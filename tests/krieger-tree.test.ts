@@ -4,7 +4,7 @@ import { defaultMeta } from '../src/core/save';
 import { newRun, act, availableNodes, skillReady, Run, Actor } from '../src/game/run';
 import { W, H, T, computeFov } from '../src/game/dungeon';
 import { MOBS, treeNodes, treePool, NODE_TEXT, NEW_SKILLS } from '../src/game/content';
-import { tr, setLang } from '../src/core/i18n';
+const GERMAN = /[äöüÄÖÜß]/;
 
 function arena(meta = defaultMeta()): Run {
   const r = newRun(77, 'krieger', meta);
@@ -158,9 +158,7 @@ describe('Krieger-Baum', () => {
   });
 
   it('Texte: Deutsch und Englisch', () => {
-    setLang('en');
-    for (const [name, desc] of Object.values(NODE_TEXT.krieger!)) { expect(tr(name), name).not.toBe(name); expect(tr(desc), desc).not.toBe(desc); }
-    for (const id of ['schildwurf', 'sturmangriff', 'herausforderung']) expect(tr(NEW_SKILLS[id].desc)).not.toBe(NEW_SKILLS[id].desc);
-    setLang('de');
+    for (const [name, desc] of Object.values(NODE_TEXT.krieger!)) { expect(name).not.toMatch(GERMAN); expect(desc).not.toMatch(GERMAN); }
+    for (const id of ['schildwurf', 'sturmangriff', 'herausforderung']) expect(NEW_SKILLS[id].desc).not.toMatch(GERMAN);
   });
 });

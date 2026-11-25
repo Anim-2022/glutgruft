@@ -13,7 +13,7 @@ const NUM_LIFE: Record<NumKind, number> = { dmg: 0.8, crit: 1.05, dot: 0.7, miss
 
 // frac: share of the target's max HP (for size), 0 if unknown
 export function addNum(tx: number, ty: number, s: string, col: string, dot: boolean, frac: number) {
-  const kind: NumKind = s === 'verfehlt' ? 'miss' : s.startsWith('×') ? 'multi' : s.endsWith('!') && /^\d/.test(s) ? 'crit' : dot ? 'dot'
+  const kind: NumKind = s === 'missed' ? 'miss' : s.startsWith('×') ? 'multi' : s.endsWith('!') && /^\d/.test(s) ? 'crit' : dot ? 'dot'
     : s.startsWith('+') ? 'heal' : /^\d+$/.test(s) ? 'dmg' : 'text';
   const big = kind === 'crit' || kind === 'multi' || (kind === 'dmg' && frac >= 0.45);
   const size = kind === 'dot' || kind === 'miss' ? 8 : big ? 16 : 10;

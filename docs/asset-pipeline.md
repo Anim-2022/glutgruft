@@ -1,71 +1,71 @@
-# Asset-Pipeline: KI-Bild → Sprite
+# Asset pipeline: AI image → sprite
 
-Kurzfassung: **16×16 = Autokonvertierung als Entwurf, danach von Hand säubern. 24×24 (Bosse) = Bild nur als Referenz, Matrix von Hand zeichnen.**
+Summary: **16×16 = auto-conversion as a draft, then clean up by hand. 24×24 (bosses) = image only as a reference, draw the matrix by hand.**
 
-## 1. Bild erzeugen (Z-Image-Turbo)
+## 1. Generate the image (Z-Image-Turbo)
 
-Space `mcp-tools/Z-Image-Turbo`, Auflösung `1024x1024 ( 1:1 )`, `random_seed: false`, Seed notieren.
+Space `mcp-tools/Z-Image-Turbo`, resolution `1024x1024 ( 1:1 )`, `random_seed: false`, note the seed.
 
-Prompt-Vorlage:
+Prompt template:
 
 ```
-16x16 pixel art sprite of {Gegnerbeschreibung} with a {Erkennungsfarbe}, chunky large pixels, big head,
+16x16 pixel art sprite of {enemy description} with a {signature color}, chunky large pixels, big head,
 front view, no outline, flat solid black background, centered, retro game, very low resolution,
 each pixel clearly visible, limited 8-color palette
 ```
 
-Beispiel: `{Gegnerbeschreibung}` = `a skeleton archer`, `{Erkennungsfarbe}` = `red hood`.
+Example: `{enemy description}` = `a skeleton archer`, `{signature color}` = `red hood`.
 
-- Erscheint statt des Bildes eine Tafel „maybe not safe“ (Safety-Filter): **anderen Seed** nehmen. Derselbe Seed liefert immer wieder die Tafel.
-- Das Modell hält sich nicht an „16x16“: die Figur ist im Bild ~45–55 „Pixel“ breit. Deshalb gibt es immer Verluste beim Verkleinern.
+- If a "maybe not safe" panel appears instead of the image (safety filter): use **another seed**. The same seed keeps returning the panel.
+- The model ignores "16x16": the figure is ~45–55 "pixels" wide in the image, so downscaling always loses detail.
 
-## 2. Konvertieren
+## 2. Convert
 
-WebP aus dem Tool erst verlustfrei als PNG speichern, dann:
+Save the tool's WebP losslessly as PNG first, then:
 
 ```bash
-node scripts/img2sprite.ts assets/_hf_test/<bild>.png --size 16 --name <sprite_name>
+node scripts/img2sprite.ts assets/_hf_test/<image>.png --size 16 --name <sprite_name>
 ```
 
 ```bash
-node scripts/img2sprite.ts assets/_hf_test/<bild>.png --size 16 --grid --name <sprite_name>
+node scripts/img2sprite.ts assets/_hf_test/<image>.png --size 16 --grid --name <sprite_name>
 ```
 
-Empfohlen: beide Modi laufen lassen und die bessere Vorschau als Startpunkt nehmen. Standardwerte reichen meist.
+Recommended: run both modes and start from the better preview. Defaults are usually enough.
 
-| Flag | Standard | Wann ändern |
+| Flag | Default | When to change |
 |---|---|---|
-| `--size` | 16 | 24 für Bosse (nur zum Vergleich, siehe oben) |
-| `--tol` | 12 | Hintergrund bleibt stehen → erhöhen; Figur wird angefressen → senken |
-| `--empty` | 0.5 | dünne Linien fehlen → erhöhen (z. B. 0.65) |
-| `--kweight` | 0.3 | Umriss der Vorlage frisst Details → senken |
-| `--grid` | aus | Pixelraster der Vorlage erkennen; ohne Treffer automatisch normaler Modus |
-| `--global` | aus | Hintergrundfarbe auch innerhalb der Figur entfernen |
+| `--size` | 16 | 24 for bosses (comparison only, see above) |
+| `--tol` | 12 | background remains → raise; figure gets eaten → lower |
+| `--empty` | 0.5 | thin lines missing → raise (e.g. 0.65) |
+| `--kweight` | 0.3 | the source outline eats details → lower |
+| `--grid` | off | detect the source's pixel grid; falls back to normal mode if none is found |
+| `--global` | off | remove the background color inside the figure as well |
 
-Ausgabe: Matrix im Format von `src/render/sprites.ts` (stdout) und Vorschau ×8 `<out>/<bild>[_grid]_preview.png`.
-`assets/_hf_test/` ist in `.gitignore` – Test-Bilder werden nicht eingecheckt.
+Output: matrix in the format of `src/render/sprites.ts` (stdout) and a ×8 preview `<out>/<image>[_grid]_preview.png`.
+`assets/_hf_test/` is in `.gitignore` – test images are not checked in.
 
-## 3. Von Hand säubern (Pflicht vor dem Einbau)
+## 3. Clean up by hand (required before adding)
 
-- **Großer Kopf**: Schädel/Kopf mind. 6–8 px breit, Augen bzw. Augenhöhlen deutlich (2×2).
-- **Kein schwarzer Umriss**: `k` nur für Augen, Nase, Schlitze. Den Umriss zeichnet das Spiel selbst (`NO_OUTLINE` beachten).
-- **Nur `PAL`**: keine neuen Zeichen ohne Eintrag in `PAL`.
-- **Ansicht von vorn**, Waffe wie bei den bestehenden Figuren rechts; Rück- und Seitenansicht (`VIEWS`) von Hand ergänzen.
-- Erkennungsfarbe deutlich (z. B. Kapuze `e`/`r` beim Knochenschützen), Einzelpixel-Rauschen entfernen.
-- Fertige Matrix gegen die bestehenden Sprites im selben Maßstab prüfen.
+- **Big head**: skull/head at least 6–8 px wide, eyes or eye sockets clear (2×2).
+- **No black outline**: `k` only for eyes, nose, slits. The game draws the outline itself (mind `NO_OUTLINE`).
+- **Only `PAL`**: no new characters without an entry in `PAL`.
+- **Front view**, weapon on the right like the existing figures; add back and side views (`VIEWS`) by hand.
+- Make the signature color clear (e.g. hood `e`/`r` on the Bone Archer), remove single-pixel noise.
+- Check the finished matrix against the existing sprites at the same scale.
 
-## 4. Quellen und Lizenzen
+## 4. Sources and licenses
 
-- **Z-Image-Turbo** (`Tongyi-MAI/Z-Image-Turbo`): Apache-2.0 – verwenden.
-- **lm555/game-asset-generator**: nicht verwenden. Liefert nur `Error!`, Lizenz nicht angegeben.
+- **Z-Image-Turbo** (`Tongyi-MAI/Z-Image-Turbo`): Apache-2.0 – use it.
+- **lm555/game-asset-generator**: do not use. Returns only `Error!`, license not stated.
 
-Jedes übernommene Sprite in `assets/CREDITS.md` eintragen:
+Record every adopted sprite in `assets/CREDITS.md`:
 
 ```markdown
 ## <sprite_name> (src/render/sprites.ts)
-- Modell: Tongyi-MAI/Z-Image-Turbo (Space mcp-tools/Z-Image-Turbo), Lizenz Apache-2.0
-- Prompt: "<vollständiger Prompt>"
-- Seed: <seed>, Auflösung 1024x1024
-- Konvertierung: img2sprite --size 16 [--grid], danach von Hand überarbeitet
-- Datum: <JJJJ-MM-TT>
+- Model: Tongyi-MAI/Z-Image-Turbo (Space mcp-tools/Z-Image-Turbo), license Apache-2.0
+- Prompt: "<full prompt>"
+- Seed: <seed>, resolution 1024x1024
+- Conversion: img2sprite --size 16 [--grid], then reworked by hand
+- Date: <YYYY-MM-DD>
 ```

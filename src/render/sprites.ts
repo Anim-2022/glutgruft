@@ -788,8 +788,8 @@ export const VIEWS: Record<string, { b: string[]; s: string[]; alt?: string[] }>
   },
 };
 
-// ---------- Knochenschütze (Phase 2) ----------
-// Von Hand gezeichnet (Kapuze R/r, Knochenschatten u); ersetzt die erste Fassung.
+// ---------- Bone Archer (phase 2) ----------
+// Hand-drawn (hood R/r, bone shadow u); replaces the first version.
 const SCHUETZE_HAND = {
   f: [
     '.....eeeeee.....',

@@ -1,31 +1,33 @@
 # Glutgruft
 
-Rundenbasiertes Pixel-Roguelike für den Browser. Keine Installation, kein Konto, Spielstand im Browser.
+Turn-based pixel roguelike for the browser. No install, no account, progress is saved in the browser.
 
-## Entwicklung
+## Development
 
 ```bash
 npm install
-npm run dev      # lokaler Server
-npm test         # Logiktests
-npm run build    # Ausgabe in dist/
+npm run dev      # local server
+npm test         # logic tests
+npm run build    # output in dist/
 ```
 
 ## Deployment (Vercel)
 
-Build-Befehl `npm run build`, Ausgabeverzeichnis `dist`.
+Build command `npm run build`, output directory `dist`.
 
-## Steuerung
+## Controls
 
-Pfeile/WASD bewegen und angreifen · Leertaste warten · 1–6 Fähigkeiten (4–6: neue aus dem Baum) · U Ultimative · 7–0 Rollen und Tränke · K Fertigkeitsbaum · F Fernangriff · Q Heiltrank · B Bombe · E Treppe
-Klick oder Tab wählt ein Ziel · I Rucksack · C Charakter · H Hilfe · N Minikarte · M Ton · V Vollbild · L Sprache (DE/EN)
+Arrows/WASD move and attack · Space wait · 1–6 skills (4–6: new ones from the tree) · U ultimate · 7–0 scrolls and potions · K skill tree · F ranged attack · Q healing potion · B bomb · E stairs
+Click or Tab selects a target · I backpack · C character · H help · N minimap · M sound · V fullscreen
 
-## Inhalt
+## Content
 
-- 15 Ebenen in drei Biomen, Boss auf jeder fünften Ebene, drei Klassen
-- zerstörbare Umgebung: rissige Wände, Fässer, Säulen, brüchiger Boden, Feuer
-- Rätselkammern (Kisten, Runen, Eishalle, Kampfprüfung) mit Reliquien als Lohn
-- Händler, Gold, Ausrüstung in vier Seltenheiten, verfluchte Truhen
-- dauerhafte Verbesserungen im Lager, Tageslauf, automatisches Speichern
+- 15 floors in three biomes, a boss every fifth floor, three classes
+- destructible environment: cracked walls, barrels, pillars, brittle floor, fire
+- puzzle chambers (crates, runes, ice hall, combat trial) with relics as rewards
+- traders, gold, gear in four rarities, cursed chests
+- permanent upgrades in camp, daily run, autosave
 
-`tests/bot.ts` enthält einen Autospieler; `npm test` gibt aus, wie weit er je Klasse kommt.
+The game is English only.
+
+`tests/bot.ts` contains an autoplayer; `npm test` reports how far it gets per class.

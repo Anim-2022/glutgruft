@@ -28,7 +28,7 @@
 | UI лагеря (класс + улучшения) | `src/main.ts:30, 120-131, 303-350` |
 | Горячие клавиши: навыки 1–3, выбор 1–4 | `src/main.ts:143, 161` |
 | Доход душ | `run.ts:448, 578, 801, 813, 935`; зачисление `main.ts:65` |
-| i18n (DE — источник, EN — словарь) | `src/core/i18n.ts` |
+| Texts (English only, written directly in source; i18n layer removed) | `src/game/content.ts`, `src/render/draw.ts` |
 | Бот: в `perk` всегда `{i:0}`; навыки по жёстким правилам класса | `tests/bot.ts:370, 382-399` |
 | Баланс: N сидов × класс × мета neu/max | `tests/balance.ts` |
 
@@ -45,7 +45,7 @@ Waldläufer neu (7) уже сейчас ниже нового коридора n
 - Статусы `brand, stun, sproede, dodge, stark, wall, gift`, функции `ignite`, `gain`, `addAff`, массив `traps` — основа большинства новых узлов.
 - `mode:'perk'` + `perkOverlay` — образец для `mode:'tree'`.
 - Схема `Meta.upg` + `loadMeta` с мерджем дефолтов → `Meta.tree` без поломки старых сейвов.
-- i18n-словарь — для DE/EN имён узлов.
+- Node names are written directly in English (no i18n dictionary).
 
 Заменяем:
 - Подмешивание карт рангов в `offerPerks` (`run.ts:844-849`) — убрать; ранги только через дерево.

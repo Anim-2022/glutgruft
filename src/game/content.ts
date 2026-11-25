@@ -15,30 +15,30 @@ export const CLASS_ORDER: ClassId[] = ['krieger', 'magier', 'waldlaeufer'];
 
 export const CLASSES: Record<ClassId, ClassDef> = {
   krieger: {
-    id: 'krieger', name: 'Krieger', desc: 'Zäher Nahkämpfer. Wut entsteht durch Treffer und Schmerz.',
-    hp: 30, atk: 5, def: 2, resName: 'Wut', resMax: 10, resStart: 0, resCol: '#ef7d57', range: 0, shot: '',
+    id: 'krieger', name: 'Warrior', desc: 'Tough melee fighter. Rage builds from hits dealt and taken.',
+    hp: 30, atk: 5, def: 2, resName: 'Rage', resMax: 10, resStart: 0, resCol: '#ef7d57', range: 0, shot: '',
     skills: [
-      { name: 'Schildstoß', cost: 2, desc: 'Schaden + betäubt 2 Züge' },
-      { name: 'Wirbelschlag', cost: 5, desc: 'Trifft alle Gegner ringsum' },
-      { name: 'Kriegsschrei', cost: 4, desc: '+3 Angriff für 6 Züge' },
+      { name: 'Shield Bash', cost: 2, desc: 'Damage + stuns for 2 turns' },
+      { name: 'Whirlwind', cost: 5, desc: 'Hits every enemy around you' },
+      { name: 'War Cry', cost: 4, desc: '+3 attack for 6 turns' },
     ],
   },
   magier: {
-    id: 'magier', name: 'Magier', desc: 'Zerbrechlich, aber verheerend. Mana kehrt langsam von selbst zurück.',
-    hp: 22, atk: 3, def: 1, resName: 'Mana', resMax: 12, resStart: 12, resCol: '#41a6f6', range: 3, shot: 'Funke',
+    id: 'magier', name: 'Mage', desc: 'Fragile but devastating. Mana slowly returns on its own.',
+    hp: 22, atk: 3, def: 1, resName: 'Mana', resMax: 12, resStart: 12, resCol: '#41a6f6', range: 3, shot: 'Spark',
     skills: [
-      { name: 'Feuerball', cost: 6, desc: 'Explosion + Brand' },
-      { name: 'Frostnova', cost: 6, desc: 'Friert Gegner in der Nähe ein' },
-      { name: 'Blinzeln', cost: 3, desc: 'Teleport weg von Gefahr' },
+      { name: 'Fireball', cost: 6, desc: 'Explosion + burning' },
+      { name: 'Frost Nova', cost: 6, desc: 'Freezes nearby enemies' },
+      { name: 'Blink', cost: 3, desc: 'Teleport away from danger' },
     ],
   },
   waldlaeufer: {
-    id: 'waldlaeufer', name: 'Waldläufer', desc: 'Schütze mit Fallen. Fokus wächst beim Warten im Kampf und mit jedem besiegten Gegner.',
-    hp: 26, atk: 4, def: 1, resName: 'Fokus', resMax: 8, resStart: 2, resCol: '#a7f070', range: 5, fokusOnHit: 1, shot: 'Schuss',
+    id: 'waldlaeufer', name: 'Ranger', desc: 'Archer with traps. Focus grows while waiting in combat and with every kill.',
+    hp: 26, atk: 4, def: 1, resName: 'Focus', resMax: 8, resStart: 2, resCol: '#a7f070', range: 5, fokusOnHit: 1, shot: 'Shot',
     skills: [
-      { name: 'Zielschuss', cost: 4, desc: 'Schwerer Schuss auf große Distanz' },
-      { name: 'Falle', cost: 2, desc: 'Legt eine Falle: Schaden + Betäubung' },
-      { name: 'Ausweichrolle', cost: 2, desc: '2 Felder rollen, weicht Angriffen aus' },
+      { name: 'Aimed Shot', cost: 4, desc: 'Heavy shot at long range' },
+      { name: 'Trap', cost: 2, desc: 'Places a trap: damage + stun' },
+      { name: 'Dodge Roll', cost: 2, desc: 'Roll 2 tiles and evade attacks' },
     ],
   },
 };
@@ -51,40 +51,40 @@ export interface MobDef {
 }
 
 export const MOBS: Record<string, MobDef> = {
-  ratte: { name: 'Gruftratte', hp: 6, atk: 2, def: 0, xp: 3, ai: 'chase' },
-  skelett: { name: 'Skelett', hp: 12, atk: 4, def: 1, xp: 6, ai: 'chase' },
-  schuetze: { name: 'Knochenschütze', hp: 8, atk: 3, def: 0, xp: 7, ai: 'chase', range: 5 },
-  fledermaus: { name: 'Fledermaus', hp: 5, atk: 3, def: 0, xp: 4, ai: 'erratic' },
-  sporling: { name: 'Sporling', hp: 12, atk: 3, def: 1, xp: 7, ai: 'chase', poison: true },
-  golem: { name: 'Steingolem', hp: 24, atk: 8, def: 3, xp: 14, ai: 'slow', smash: true },
-  glutgeist: { name: 'Glutgeist', hp: 14, atk: 5, def: 0, xp: 10, ai: 'erratic', burn: true },
-  koenig: { name: 'Gruftkönig', hp: 60, atk: 7, def: 2, xp: 40, ai: 'boss', boss: true, minion: 'skelett', smash: true },
-  mutter: { name: 'Sporenmutter', hp: 110, atk: 9, def: 3, xp: 80, ai: 'boss', boss: true, minion: 'sporling', poison: true, smash: true },
-  mimik: { name: 'Mimik', hp: 16, atk: 4, def: 2, xp: 12, ai: 'chase' },
+  ratte: { name: 'Crypt Rat', hp: 6, atk: 2, def: 0, xp: 3, ai: 'chase' },
+  skelett: { name: 'Skeleton', hp: 12, atk: 4, def: 1, xp: 6, ai: 'chase' },
+  schuetze: { name: 'Bone Archer', hp: 8, atk: 3, def: 0, xp: 7, ai: 'chase', range: 5 },
+  fledermaus: { name: 'Bat', hp: 5, atk: 3, def: 0, xp: 4, ai: 'erratic' },
+  sporling: { name: 'Sporeling', hp: 12, atk: 3, def: 1, xp: 7, ai: 'chase', poison: true },
+  golem: { name: 'Stone Golem', hp: 24, atk: 8, def: 3, xp: 14, ai: 'slow', smash: true },
+  glutgeist: { name: 'Ember Wisp', hp: 14, atk: 5, def: 0, xp: 10, ai: 'erratic', burn: true },
+  koenig: { name: 'Crypt King', hp: 60, atk: 7, def: 2, xp: 40, ai: 'boss', boss: true, minion: 'skelett', smash: true },
+  mutter: { name: 'Spore Mother', hp: 110, atk: 9, def: 3, xp: 80, ai: 'boss', boss: true, minion: 'sporling', poison: true, smash: true },
+  mimik: { name: 'Mimic', hp: 16, atk: 4, def: 2, xp: 12, ai: 'chase' },
   // Ereignisgegner
-  dieb: { name: 'Diebesratte', hp: 7, atk: 1, def: 0, xp: 2, ai: 'flee' },
-  goblin: { name: 'Schatzgoblin', hp: 12, atk: 2, def: 1, xp: 8, ai: 'flee' },
-  irrlicht: { name: 'Seelenlicht', hp: 1, atk: 0, def: 0, xp: 0, ai: 'wisp' },
-  schatten_k: { name: 'Schattenzwilling', hp: 1, atk: 1, def: 0, xp: 20, ai: 'chase' },
-  schatten_m: { name: 'Schattenzwilling', hp: 1, atk: 1, def: 0, xp: 20, ai: 'chase', range: 4 },
-  schatten_w: { name: 'Schattenzwilling', hp: 1, atk: 1, def: 0, xp: 20, ai: 'chase', range: 5 },
-  rivale_k: { name: 'Rivalin Hedda', hp: 1, atk: 1, def: 0, xp: 20, ai: 'chase' },
-  rivale_m: { name: 'Rivale Orban', hp: 1, atk: 1, def: 0, xp: 20, ai: 'chase', range: 4 },
-  rivale_w: { name: 'Rivalin Sela', hp: 1, atk: 1, def: 0, xp: 20, ai: 'chase', range: 5 },
-  ei: { name: 'Sporenei', hp: 6, atk: 0, def: 0, xp: 2, ai: 'idle' },
-  riesenpilz: { name: 'Riesenpilz', hp: 30, atk: 0, def: 2, xp: 16, ai: 'idle' },
+  dieb: { name: 'Thief rat', hp: 7, atk: 1, def: 0, xp: 2, ai: 'flee' },
+  goblin: { name: 'Treasure goblin', hp: 12, atk: 2, def: 1, xp: 8, ai: 'flee' },
+  irrlicht: { name: 'Soul light', hp: 1, atk: 0, def: 0, xp: 0, ai: 'wisp' },
+  schatten_k: { name: 'Shadow twin', hp: 1, atk: 1, def: 0, xp: 20, ai: 'chase' },
+  schatten_m: { name: 'Shadow twin', hp: 1, atk: 1, def: 0, xp: 20, ai: 'chase', range: 4 },
+  schatten_w: { name: 'Shadow twin', hp: 1, atk: 1, def: 0, xp: 20, ai: 'chase', range: 5 },
+  rivale_k: { name: 'Rival Hedda', hp: 1, atk: 1, def: 0, xp: 20, ai: 'chase' },
+  rivale_m: { name: 'Rival Orban', hp: 1, atk: 1, def: 0, xp: 20, ai: 'chase', range: 4 },
+  rivale_w: { name: 'Rival Sela', hp: 1, atk: 1, def: 0, xp: 20, ai: 'chase', range: 5 },
+  ei: { name: 'Spore egg', hp: 6, atk: 0, def: 0, xp: 2, ai: 'idle' },
+  riesenpilz: { name: 'Giant mushroom', hp: 30, atk: 0, def: 2, xp: 16, ai: 'idle' },
   // Jäger
-  echse: { name: 'Riesenechse', hp: 30, atk: 6, def: 2, xp: 22, ai: 'chase', hunter: true },
-  krake: { name: 'Landkrake', hp: 32, atk: 7, def: 1, xp: 24, ai: 'chase', hunter: true },
-  drache: { name: 'Drache', hp: 46, atk: 8, def: 3, xp: 36, ai: 'chase', hunter: true, burn: true },
+  echse: { name: 'Giant lizard', hp: 30, atk: 6, def: 2, xp: 22, ai: 'chase', hunter: true },
+  krake: { name: 'Land kraken', hp: 32, atk: 7, def: 1, xp: 24, ai: 'chase', hunter: true },
+  drache: { name: 'Dragon', hp: 46, atk: 8, def: 3, xp: 36, ai: 'chase', hunter: true, burn: true },
   medusa: { name: 'Medusa', hp: 34, atk: 6, def: 2, xp: 28, ai: 'chase', hunter: true },
-  schlange: { name: 'Schlange', hp: 6, atk: 3, def: 0, xp: 2, ai: 'chase', poison: true },
-  tod: { name: 'Der Tod', hp: 55, atk: 7, def: 3, xp: 45, ai: 'chase', hunter: true },
-  fuerst: { name: 'Schmiedefürst', hp: 180, atk: 13, def: 5, xp: 150, ai: 'boss', boss: true, minion: 'glutgeist', burn: true, smash: true },
+  schlange: { name: 'Snake', hp: 6, atk: 3, def: 0, xp: 2, ai: 'chase', poison: true },
+  tod: { name: 'Death', hp: 55, atk: 7, def: 3, xp: 45, ai: 'chase', hunter: true },
+  fuerst: { name: 'Forge Lord', hp: 180, atk: 13, def: 5, xp: 150, ai: 'boss', boss: true, minion: 'glutgeist', burn: true, smash: true },
 };
 
 export const BOSS_BY_BIOME = ['koenig', 'mutter', 'fuerst'];
-export const BIOME_NAMES = ['Gruft', 'Pilzhöhle', 'Glutschmiede'];
+export const BIOME_NAMES = ['Crypt', 'Fungal Cave', 'Ember Forge'];
 export const FLOORS_PER_BIOME = 5;
 export const LAST_FLOOR = 15;
 
@@ -101,53 +101,53 @@ export function spawnTable(floor: number): string[] {
 export interface PerkDef { name: string; desc: string; cls?: ClassId; }
 
 export const PERKS: Record<string, PerkDef> = {
-  zaeh: { name: 'Zäh', desc: '+6 max. Leben, heilt 6' },
-  scharf: { name: 'Scharfe Klinge', desc: '+1 Angriff' },
-  panzer: { name: 'Gepanzert', desc: '+1 Verteidigung' },
-  vampir: { name: 'Blutdurst', desc: 'Heilt 2 pro besiegtem Gegner' },
-  krit: { name: 'Präzision', desc: '+12 % kritische Treffer' },
-  quelle: { name: 'Tiefe Quelle', desc: '+3 max. Klassenressource' },
-  meister: { name: 'Meisterschaft', desc: 'Fähigkeiten +25 % Schaden' },
-  vorrat: { name: 'Vorrat', desc: '+2 Heiltränke' },
-  dornen: { name: 'Dornen', desc: 'Nahkämpfer erleiden 2 Schaden' },
-  seelen: { name: 'Seelenfänger', desc: '+50 % Seelensplitter' },
-  flink: { name: 'Flinke Füße', desc: '8 % Ausweichen' },
-  gier: { name: 'Goldnase', desc: '+40 % Gold' },
-  weitblick: { name: 'Weitblick', desc: '+2 Sicht' },
-  brandklinge: { name: 'Brandklinge', desc: '25 % Brand bei Treffer' },
-  giftklinge: { name: 'Giftklinge', desc: '25 % Gift bei Treffer' },
-  frosthauch: { name: 'Frosthauch', desc: '10 % Betäubung bei Treffer' },
-  riese: { name: 'Riesenschreck', desc: '+30 % gegen Bosse' },
-  sprengsatz: { name: 'Sprengsatz', desc: '+2 Bomben' },
-  berserker: { name: 'Berserker', desc: '+2 Angriff, -1 Verteidigung' },
-  atem: { name: 'Zweiter Atem', desc: 'Heilt 1 Leben alle 6 Züge' },
-  pilz: { name: 'Glückspilz', desc: 'Bessere Funde in Truhen' },
-  ausdauer: { name: 'Ausdauer', desc: '+1 Klassenressource pro Sieg' },
-  henker: { name: 'Henker', desc: '+25 % Schaden gegen Angeschlagene' },
-  spalter: { name: 'Spalter', desc: 'Angriffe treffen Nachbarn mit 40 %', cls: 'krieger' },
-  kettenblitz: { name: 'Kettenblitz', desc: 'Geschosse springen mit 50 % weiter', cls: 'magier' },
-  durchschuss: { name: 'Durchschuss', desc: 'Pfeile durchstoßen mit 60 %', cls: 'waldlaeufer' },
+  zaeh: { name: 'Tough', desc: '+6 max health, heals 6' },
+  scharf: { name: 'Sharp Blade', desc: '+1 attack' },
+  panzer: { name: 'Armored', desc: '+1 Defense' },
+  vampir: { name: 'Bloodthirst', desc: 'Heals 2 per kill' },
+  krit: { name: 'Precision', desc: '+12 % critical hits' },
+  quelle: { name: 'Deep Well', desc: '+3 max class resource' },
+  meister: { name: 'Mastery', desc: 'Skills deal +25 % damage' },
+  vorrat: { name: 'Supplies', desc: '+2 healing potions' },
+  dornen: { name: 'Thorns', desc: 'Melee attackers take 2 damage' },
+  seelen: { name: 'Soul Catcher', desc: '+50 % soul shards' },
+  flink: { name: 'Quick Feet', desc: '8 % dodge' },
+  gier: { name: 'Gold Nose', desc: '+40 % gold' },
+  weitblick: { name: 'Far Sight', desc: '+2 sight' },
+  brandklinge: { name: 'Burning Edge', desc: '25 % burn on hit' },
+  giftklinge: { name: 'Venom Edge', desc: '25 % poison on hit' },
+  frosthauch: { name: 'Frost Breath', desc: '10 % stun on hit' },
+  riese: { name: 'Giant Bane', desc: '+30 % vs. bosses' },
+  sprengsatz: { name: 'Explosives', desc: '+2 bombs' },
+  berserker: { name: 'Berserker', desc: '+2 attack, -1 defense' },
+  atem: { name: 'Second Wind', desc: 'Heals 1 health every 6 turns' },
+  pilz: { name: 'Lucky', desc: 'Better finds in chests' },
+  ausdauer: { name: 'Stamina', desc: '+1 class resource per kill' },
+  henker: { name: 'Executioner', desc: '+25 % damage vs. wounded enemies' },
+  spalter: { name: 'Cleaver', desc: 'Attacks cleave neighbours for 40 %', cls: 'krieger' },
+  kettenblitz: { name: 'Chain Lightning', desc: 'Bolts chain for 50 %', cls: 'magier' },
+  durchschuss: { name: 'Piercing Shot', desc: 'Arrows pierce for 60 %', cls: 'waldlaeufer' },
 };
 
 // Ultimative Fähigkeit ab Stufe 5; "cost" ist hier die Abklingzeit in Zügen
 export const ULT_LEVEL = 5;
 export const ULT: Record<ClassId, SkillDef> = {
-  krieger: { name: 'Wirbelsturm', cost: 25, desc: 'Trifft und betäubt alle Gegner im Umkreis von 2' },
-  magier: { name: 'Meteor', cost: 25, desc: 'Gewaltige Explosion beim Ziel, Umkreis 2' },
-  waldlaeufer: { name: 'Pfeilhagel', cost: 32, desc: 'Trifft jeden sichtbaren Gegner' },
+  krieger: { name: 'Cyclone', cost: 25, desc: 'Hits and stuns every enemy within 2 tiles' },
+  magier: { name: 'Meteor', cost: 25, desc: 'Massive explosion at the target, radius 2' },
+  waldlaeufer: { name: 'Arrow Storm', cost: 32, desc: 'Hits every visible enemy' },
 };
 // Rang II verstärkt eine Fähigkeit; bei Rang III wählt man eine von zwei Ausprägungen
 export interface SkillUp { r2: string; a: [string, string]; b: [string, string]; }
 export const SKILL_UP: Record<string, SkillUp> = {
-  krieger0: { r2: '+30 % Schaden, betäubt länger', a: ['Wucht', '+60 % Schaden, kostet 1 weniger'], b: ['Rammstoß', 'Schleudert das Ziel 2 Felder weg, Aufprall schadet'] },
-  krieger1: { r2: '+30 % Schaden', a: ['Weiter Bogen', '+60 % Schaden, Umkreis 2'], b: ['Blutwirbel', '+60 % Schaden, heilt 2 je Treffer'] },
-  krieger2: { r2: 'hält 3 Züge länger', a: ['Donnerruf', 'Hält 6 Züge länger, betäubt Nachbarn'], b: ['Bollwerk', 'Hält 6 Züge länger, dabei +3 Verteidigung'] },
-  magier0: { r2: '+30 % Schaden', a: ['Inferno', '+60 % Schaden, Umkreis 2'], b: ['Zwillingsflamme', '+60 % Schaden, zweiter Ball auf ein anderes Ziel'] },
-  magier1: { r2: '+30 % Schaden, betäubt länger', a: ['Eissturm', '+60 % Schaden, Umkreis 3'], b: ['Sprödfrost', 'Getroffene erleiden 3 Züge lang +50 % Schaden'] },
-  magier2: { r2: 'danach 1 Zug Ausweichen', a: ['Schockwelle', 'Explosion am Startpunkt'], b: ['Phasenschritt', 'Gibt 3 Mana zurück, 2 Züge Ausweichen'] },
-  waldlaeufer0: { r2: '+30 % Schaden', a: ['Durchschlag', '+60 % Schaden, durchstößt'], b: ['Eröffnung', 'Sicherer Volltreffer gegen unverletzte Ziele'] },
-  waldlaeufer1: { r2: 'Falle: +30 % Schaden', a: ['Bärenfalle', '+60 % Schaden, betäubt länger'], b: ['Fallenreihe', 'Legt drei Fallen in Blickrichtung'] },
-  waldlaeufer2: { r2: 'rollt 3 Felder', a: ['Hechtrolle', 'Rollt 4 Felder, 2 Züge Ausweichen'], b: ['Rollschuss', 'Schießt nach der Rolle auf den nächsten Gegner'] },
+  krieger0: { r2: '+30 % damage, longer stun', a: ['Impact', '+60 % damage, costs 1 less'], b: ['Ram', 'Hurls the target 2 tiles away, impact hurts'] },
+  krieger1: { r2: '+30 % damage', a: ['Wide Arc', '+60 % damage, radius 2'], b: ['Blood Whirl', '+60 % damage, heals 2 per hit'] },
+  krieger2: { r2: 'lasts 3 turns longer', a: ['Thunder Call', 'Lasts 6 turns longer, stuns neighbours'], b: ['Bulwark', 'Lasts 6 turns longer, +3 defense meanwhile'] },
+  magier0: { r2: '+30 % damage', a: ['Inferno', '+60 % damage, radius 2'], b: ['Twin Flame', '+60 % damage, second ball at another target'] },
+  magier1: { r2: '+30 % damage, longer stun', a: ['Ice Storm', '+60 % damage, radius 3'], b: ['Brittle Frost', 'Targets take +50 % damage for 3 turns'] },
+  magier2: { r2: 'then 1 turn of dodging', a: ['Shockwave', 'Explosion where you left'], b: ['Phase Step', 'Returns 3 mana, 2 turns of dodging'] },
+  waldlaeufer0: { r2: '+30 % damage', a: ['Punch Through', '+60 % damage, pierces'], b: ['Opener', 'Guaranteed crit against unhurt targets'] },
+  waldlaeufer1: { r2: 'Trap: +30 % damage', a: ['Bear Trap', '+60 % damage, stuns longer'], b: ['Trap Line', 'Places three traps in facing direction'] },
+  waldlaeufer2: { r2: 'rolls 3 tiles', a: ['Dive Roll', 'Rolls 4 tiles, 2 turns of dodging'], b: ['Roll Shot', 'Fires at the nearest enemy after the roll'] },
 };
 // Fertigkeitsbaum (docs/skill-tree.md): je Fähigkeit ein Zweig. Schritt 2a enthält nur die
 // vorhandenen Ränge: T1 = Rang II, T4a/T4b = Rang III mit Ausprägung A oder B.
@@ -163,21 +163,21 @@ export interface TreeNode {
   bundled?: boolean;  // kommt zusammen mit dem Elternknoten (kein eigener Punkt)
 }
 export const BRANCH_NAMES: Record<ClassId, string[]> = {
-  krieger: ['Schild', 'Klinge', 'Schlachtruf'],
-  magier: ['Feuer', 'Eis', 'Arkan'],
-  waldlaeufer: ['Scharfschütze', 'Fallensteller', 'Pirscher'],
+  krieger: ['Shield', 'Blade', 'Battle Cry'],
+  magier: ['Fire', 'Ice', 'Arcane'],
+  waldlaeufer: ['Marksman', 'Trapper', 'Stalker'],
 };
 // Neue Zauber aus dem Baum; sie belegen die Plätze 4–6 in der Reihenfolge des Lernens
 export const NEW_SKILLS: Record<string, SkillDef & { branch: number }> = {
-  flammenwand: { name: 'Flammenwand', cost: 5, desc: 'Drei brennende Felder zwischen dir und dem Gegner, 4 Züge', branch: 0 },
-  eislanze: { name: 'Eislanze', cost: 4, desc: 'Strahl bis 6 Felder, durchbohrt; Betäubte erleiden doppelten Schaden', branch: 1 },
-  arkanschild: { name: 'Arkanschild', cost: 4, desc: 'Schild fängt 8 + Stufe Schaden ab, 5 Züge', branch: 2 },
-  schildwurf: { name: 'Schildwurf', cost: 7, desc: 'Wurf auf einen Gegner bis 4 Felder', branch: 0 },
-  sturmangriff: { name: 'Sturmangriff', cost: 7, desc: 'Sturm bis 4 Felder zum Gegner, schwerer Schlag', branch: 1 },
-  markieren: { name: 'Markieren', cost: 2, desc: 'Markiert einen Gegner 6 Züge: +30 % Schaden gegen ihn, sein Tod gibt 2 Fokus', branch: 0 },
-  fangnetz: { name: 'Fangnetz', cost: 3, desc: 'Netz bis 4 Felder: das Ziel kann sich 3 Züge nicht bewegen', branch: 1 },
-  rauchbombe: { name: 'Rauchbombe', cost: 3, desc: 'Rauch im Umkreis 2, 4 Züge: Schützen sehen dich nicht, Nahkämpfer verfehlen oft', branch: 2 },
-  herausforderung: { name: 'Herausforderung', cost: 6, desc: 'Gegner im Umkreis 4 kommen zu dir, Schützen schießen 1 Zug nicht', branch: 2 },
+  flammenwand: { name: 'Wall of Flame', cost: 5, desc: 'Three burning tiles between you and the enemy, 4 turns', branch: 0 },
+  eislanze: { name: 'Ice Lance', cost: 4, desc: 'Beam up to 6 tiles, pierces; stunned targets take double damage', branch: 1 },
+  arkanschild: { name: 'Arcane Shield', cost: 4, desc: 'Shield absorbs 8 + level damage, 5 turns', branch: 2 },
+  schildwurf: { name: 'Shield Throw', cost: 7, desc: 'Throw at an enemy up to 4 tiles away', branch: 0 },
+  sturmangriff: { name: 'Charge', cost: 7, desc: 'Charge up to 4 tiles at an enemy, heavy strike', branch: 1 },
+  markieren: { name: 'Mark', cost: 2, desc: 'Marks an enemy for 6 turns: +30 % damage against it, its death gives 2 focus', branch: 0 },
+  fangnetz: { name: 'Net', cost: 3, desc: 'Net up to 4 tiles: the target cannot move for 3 turns', branch: 1 },
+  rauchbombe: { name: 'Smoke Bomb', cost: 3, desc: 'Smoke within 2 for 4 turns: archers cannot see you, melee attackers often miss', branch: 2 },
+  herausforderung: { name: 'Challenge', cost: 6, desc: 'Enemies within 4 come to you, archers do not shoot for 1 turn', branch: 2 },
 };
 // Stellschrauben des Baums (balance.ts darf sie für Messungen überschreiben):
 // treePtsMax – Fertigkeitspunkte je Lauf, danach gibt es Gaben; kryoMana – Mana je Treffer
@@ -230,46 +230,46 @@ export const HAZARD = { minFloor: 2, spot: 0.35, spotSicht: 0.1, mimic: 0.15, mi
 // Texte der Knoten T2a, T2b, T3, T5
 export const NODE_TEXT: Partial<Record<ClassId, Record<string, [string, string]>>> = {
   magier: {
-    n0_2a: ['Zunder', 'Funke entzündet mit 30 %'],
-    n0_2b: ['Schwelbrand', 'Brand hält 1 Zug länger und brennt 1 stärker'],
-    n0_3: ['Flammenwand', 'Neuer Zauber, 5 Mana: drei brennende Felder zwischen dir und dem Gegner, 4 Züge'],
-    n0_5: ['Flächenbrand', 'Brennende Gegner explodieren beim Tod und entzünden ihre Nachbarn'],
-    n1_2a: ['Raureif', 'Betäubte Gegner erleiden +25 % Schaden'],
-    n1_2b: ['Eisrüstung', 'Nach der Frostnova 2 Züge +2 Verteidigung'],
-    n1_3: ['Eislanze', 'Neuer Zauber, 4 Mana: Strahl bis 6 Felder, durchbohrt; Betäubte erleiden doppelten Schaden'],
-    n1_5: ['Kryomant', 'Mana kehrt langsamer zurück (drei Viertel); +2 Mana je Treffer gegen Betäubte und Bosse'],
-    n2_2a: ['Nachhall', 'Nach dem Blinzeln kostet der nächste Zauber 2 Mana weniger'],
-    n2_2b: ['Schutzrune', 'Einmal je Ebene: unter 30 % Leben blinzelst du von selbst'],
-    n2_3: ['Arkanschild', 'Neuer Zauber, 4 Mana: Schild fängt 8 + Stufe Schaden ab, 5 Züge'],
-    n2_5: ['Zeitriss', 'Blinzeln kostet keinen Zug, danach 3 Züge Abklingzeit'],
+    n0_2a: ['Tinder', 'Spark ignites with 30 %'],
+    n0_2b: ['Smoulder', 'Burning lasts 1 turn longer and burns 1 harder'],
+    n0_3: ['Wall of Flame', 'New spell, 5 mana: three burning tiles between you and the enemy, 4 turns'],
+    n0_5: ['Wildfire', 'Burning enemies explode on death and ignite their neighbours'],
+    n1_2a: ['Rime', 'Stunned enemies take +25 % damage'],
+    n1_2b: ['Ice Armor', 'After Frost Nova +2 defense for 2 turns'],
+    n1_3: ['Ice Lance', 'New spell, 4 mana: beam up to 6 tiles, pierces; stunned targets take double damage'],
+    n1_5: ['Cryomancer', 'Mana returns more slowly (three quarters); +2 mana per hit on stunned enemies and bosses'],
+    n2_2a: ['Afterglow', 'After Blink your next spell costs 2 mana less'],
+    n2_2b: ['Ward Rune', 'Once per floor: below 30 % life you blink on your own'],
+    n2_3: ['Arcane Shield', 'New spell, 4 mana: shield absorbs 8 + level damage, 5 turns'],
+    n2_5: ['Time Rift', 'Blink costs no turn, then 3 turns of cooldown'],
   },
   krieger: {
-    n0_2a: ['Schildwall', 'Warten im Kampf: +2 Verteidigung bis zum nächsten Zug und +1 Wut'],
-    n0_2b: ['Gegenschlag', '25 %: auf einen Nahkampftreffer schlägst du sofort zurück'],
-    n0_3: ['Schildwurf', 'Neue Fähigkeit, 7 Wut: Wurf auf einen Gegner bis 4 Felder'],
-    n0_5: ['Vergelter', 'Wut nicht mehr aus eigenen Schlägen, doppelt aus erlittenen; Schildstoß betäubt alle Nachbarn'],
-    n1_2a: ['Schwungkraft', '+1 Wut je Gegner, den der Wirbelschlag trifft'],
-    n1_2b: ['Gezackte Klinge', 'Wirbelschlag vergiftet'],
-    n1_3: ['Sturmangriff', 'Neue Fähigkeit, 7 Wut: Sturm bis 4 Felder zum Gegner, schwerer Schlag'],
-    n1_5: ['Klingenrausch', 'Ein Sieg gibt einen freien Zug, höchstens alle 3 Züge'],
-    n2_2a: ['Schmerzensgeld', 'Erlittene Nahkampftreffer geben +1 Wut zusätzlich'],
-    n2_2b: ['Einschüchterung', 'Kriegsschrei: Gegner im Umkreis 2 haben –1 Angriff, solange er wirkt'],
-    n2_3: ['Herausforderung', 'Neue Fähigkeit, 6 Wut: Gegner im Umkreis 4 kommen zu dir, Schützen schießen 1 Zug nicht'],
-    n2_5: ['Blutzorn', 'Fehlende Wut zahlst du mit Leben (2 je Wut); unter 50 % Leben +30 % Schaden'],
+    n0_2a: ['Shield Wall', 'Waiting in combat: +2 defense until your next turn and +1 rage'],
+    n0_2b: ['Riposte', '25 %: when hit in melee you strike back at once'],
+    n0_3: ['Shield Throw', 'New skill, 7 rage: throw at an enemy up to 4 tiles away'],
+    n0_5: ['Avenger', 'No rage from your own blows, double from blows taken; Shield Bash stuns all neighbours'],
+    n1_2a: ['Momentum', '+1 rage per enemy hit by Whirlwind'],
+    n1_2b: ['Serrated Blade', 'Whirlwind poisons'],
+    n1_3: ['Charge', 'New skill, 7 rage: charge up to 4 tiles at an enemy, heavy strike'],
+    n1_5: ['Blade Rush', 'A kill grants a free turn, at most every 3 turns'],
+    n2_2a: ['Blood Price', 'Melee hits taken give +1 extra rage'],
+    n2_2b: ['Intimidate', 'War Cry: enemies within 2 have –1 attack while it lasts'],
+    n2_3: ['Challenge', 'New skill, 6 rage: enemies within 4 come to you, archers do not shoot for 1 turn'],
+    n2_5: ['Blood Rage', 'Missing rage is paid with life (2 per rage); below 50 % life +30 % damage'],
   },
   waldlaeufer: {
-    n0_2a: ['Ruhige Hand', 'Warten ohne Gegner daneben gibt doppelten Fokus'],
-    n0_2b: ['Schwachstelle', '15 %: Zielschuss trifft kritisch und betäubt 1 Zug'],
-    n0_3: ['Markieren', 'Neue Fähigkeit, 2 Fokus: Markierung 6 Züge, +30 % Schaden gegen das Ziel, sein Tod gibt 2 Fokus'],
-    n0_5: ['Anlegen', 'Jeder Zug ohne Schritt: nächster Schuss +25 % (bis +100 %); Reichweite +2'],
-    n1_2a: ['Stacheldraht', 'Fallen vergiften'],
-    n1_2b: ['Werkzeuggürtel', 'Bis zu 5 Fallen statt 3'],
-    n1_3: ['Fangnetz', 'Neue Fähigkeit, 3 Fokus: Netz bis 4 Felder, das Ziel kann sich 3 Züge nicht bewegen'],
-    n1_5: ['Minenfeld', 'Fallen kosten nichts, die Ausweichrolle hinterlässt eine Falle; Grundschuss –30 %'],
-    n2_2a: ['Schattenschritt', 'Nach der Ausweichrolle trifft der nächste Schuss mit +50 %'],
-    n2_2b: ['Leichtfuß', 'Rolle weg von einem Gegner daneben gibt 1 Fokus zurück'],
-    n2_3: ['Rauchbombe', 'Neue Fähigkeit, 3 Fokus: Rauch im Umkreis 2, 4 Züge – Schützen sehen dich nicht, Nahkämpfer verfehlen oft'],
-    n2_5: ['Rückzugsgefecht', 'Schritt weg von einem Gegner daneben: freier Schuss; Warten gibt keinen Fokus mehr'],
+    n0_2a: ['Steady Hand', 'Waiting with no enemy next to you gives double focus'],
+    n0_2b: ['Weak Spot', '15 %: Aimed Shot crits and stuns for 1 turn'],
+    n0_3: ['Mark', 'New skill, 2 focus: mark for 6 turns, +30 % damage against the target, its death gives 2 focus'],
+    n0_5: ['Draw Bead', 'Each turn without a step: next shot +25 % (up to +100 %); range +2'],
+    n1_2a: ['Barbed Wire', 'Traps poison'],
+    n1_2b: ['Tool Belt', 'Up to 5 traps instead of 3'],
+    n1_3: ['Net', 'New skill, 3 focus: net up to 4 tiles, the target cannot move for 3 turns'],
+    n1_5: ['Minefield', 'Traps are free, Dodge Roll leaves a trap; basic shot –30 %'],
+    n2_2a: ['Shadow Step', 'After Dodge Roll your next shot deals +50 %'],
+    n2_2b: ['Light Foot', 'Rolling away from an adjacent enemy refunds 1 focus'],
+    n2_3: ['Smoke Bomb', 'New skill, 3 focus: smoke within 2 for 4 turns – archers cannot see you, melee attackers often miss'],
+    n2_5: ['Skirmisher', 'Stepping away from an adjacent enemy: free shot; waiting no longer gives focus'],
   },
 };
 const baseNodes = (b: number, minPts4: number): TreeNode[] => [
@@ -313,25 +313,25 @@ export const treePool = (cls: ClassId, meta: { tree?: Partial<Record<ClassId, st
 // Zwei bestimmte Gaben zusammen ergeben eine zusätzliche Wirkung
 export interface Synergy { id: string; need: [string, string]; name: string; desc: string; }
 export const SYNERGIES: Synergy[] = [
-  { id: 'hexen', need: ['brandklinge', 'giftklinge'], name: 'Hexenkessel', desc: '+30 % Schaden gegen Brennende und Vergiftete' },
-  { id: 'stachel', need: ['dornen', 'panzer'], name: 'Stachelpanzer', desc: 'Dornen wirken doppelt' },
-  { id: 'rausch', need: ['vampir', 'henker'], name: 'Blutrausch', desc: 'Jeder Sieg heilt 3 mehr' },
-  { id: 'konter', need: ['flink', 'krit'], name: 'Konter', desc: 'Nach dem Ausweichen trifft der nächste Schlag kritisch' },
-  { id: 'midas', need: ['gier', 'pilz'], name: 'Midas', desc: 'Jede Truhe enthält zusätzlich Gold' },
-  { id: 'erz', need: ['meister', 'quelle'], name: 'Erzmagie', desc: 'Fähigkeiten kosten 1 weniger' },
+  { id: 'hexen', need: ['brandklinge', 'giftklinge'], name: 'Witch Cauldron', desc: '+30 % damage vs. burning and poisoned enemies' },
+  { id: 'stachel', need: ['dornen', 'panzer'], name: 'Spiked Plate', desc: 'Thorns count double' },
+  { id: 'rausch', need: ['vampir', 'henker'], name: 'Blood Frenzy', desc: 'Every kill heals 3 more' },
+  { id: 'konter', need: ['flink', 'krit'], name: 'Riposte', desc: 'After a dodge your next hit is critical' },
+  { id: 'midas', need: ['gier', 'pilz'], name: 'Midas', desc: 'Every chest also holds gold' },
+  { id: 'erz', need: ['meister', 'quelle'], name: 'Archmagic', desc: 'Skills cost 1 less' },
 ];
 export interface UpgDef { id: string; name: string; desc: string; max: number; cost: number; }
 
 export const UPGRADES: UpgDef[] = [
-  { id: 'vit', name: 'Vitalität', desc: '+2 Leben pro Stufe', max: 5, cost: 40 },
-  { id: 'atk', name: 'Schleifstein', desc: '+1 Angriff pro Stufe (Magier: +15 % Fähigkeiten)', max: 2, cost: 120 },
-  { id: 'trank', name: 'Proviant', desc: '+1 Heiltrank zum Start', max: 3, cost: 50 },
-  { id: 'fokus', name: 'Fokus', desc: '+1 max. Klassenressource', max: 3, cost: 40 },
-  { id: 'gold', name: 'Startkapital', desc: '+15 Gold zum Start', max: 3, cost: 30 },
-  { id: 'bombe', name: 'Pulvervorrat', desc: '+1 Bombe zum Start', max: 2, cost: 40 },
-  { id: 'fund', name: 'Schatzsucher', desc: 'Bessere Funde in Truhen', max: 3, cost: 60 },
-  { id: 'wahl', name: 'Weisheit', desc: '+1 Auswahl beim Stufenaufstieg', max: 1, cost: 160 },
-  { id: 'erbe', name: 'Erbstück', desc: 'Start mit einer zufälligen Reliquie', max: 1, cost: 240 },
+  { id: 'vit', name: 'Vitality', desc: '+2 health per rank', max: 5, cost: 40 },
+  { id: 'atk', name: 'Whetstone', desc: '+1 attack per rank (Mage: +15 % abilities)', max: 2, cost: 120 },
+  { id: 'trank', name: 'Provisions', desc: '+1 starting potion', max: 3, cost: 50 },
+  { id: 'fokus', name: 'Focus', desc: '+1 max class resource', max: 3, cost: 40 },
+  { id: 'gold', name: 'Starting Gold', desc: '+15 gold at the start', max: 3, cost: 30 },
+  { id: 'bombe', name: 'Powder Stock', desc: '+1 bomb at the start', max: 2, cost: 40 },
+  { id: 'fund', name: 'Treasure Hunter', desc: 'Better finds in chests', max: 3, cost: 60 },
+  { id: 'wahl', name: 'Wisdom', desc: '+1 choice on level-up', max: 1, cost: 160 },
+  { id: 'erbe', name: 'Heirloom', desc: 'Start with a random relic', max: 1, cost: 240 },
 ];
 export const RANGER_COST = 120;
 // Schleifstein beim Magier: Anteil mehr Fähigkeitsschaden je Stufe
@@ -339,26 +339,26 @@ export const MAGE_WHET = 0.15;
 export const upgCost = (u: UpgDef, lvl: number) => u.cost * (lvl + 1);
 
 export const RELICS: Record<string, PerkDef> = {
-  glutherz: { name: 'Glutherz', desc: 'Brand heilt dich, statt zu schaden' },
-  donnerfaust: { name: 'Donnerfaust', desc: 'Jeder 5. Treffer trifft auch alle Gegner daneben' },
-  pulverfass: { name: 'Pulverhaut', desc: 'Explosionen verletzen dich nicht' },
-  sprengmeister: { name: 'Sprengmeister', desc: '+1 Bombe auf jeder neuen Ebene' },
-  geisterlicht: { name: 'Geisterlicht', desc: 'Du siehst 3 Felder weiter' },
-  steinhaut: { name: 'Steinhaut', desc: 'Jeder Treffer gegen dich: 1 Schaden weniger' },
-  blutpakt: { name: 'Blutpakt', desc: '+3 Angriff, aber -20 % max. Leben' },
-  seelenkelch: { name: 'Seelenkelch', desc: 'Heiltränke heilen vollständig' },
-  zeitsand: { name: 'Zeitsand', desc: 'Gegner verlieren manchmal ihren Zug' },
-  giftzahn: { name: 'Giftzahn', desc: 'Deine Treffer vergiften' },
-  frostkern: { name: 'Frostkern', desc: 'Betäubungen halten 1 Zug länger' },
-  muenze: { name: 'Glücksmünze', desc: 'Truhen geben doppelte Beute' },
-  eisenwille: { name: 'Eisenwille', desc: 'Überlebe einmal pro Ebene einen tödlichen Treffer' },
-  jaeger: { name: 'Riesentöter', desc: '+50 % Schaden gegen Bosse' },
-  echo: { name: 'Echo', desc: 'Fähigkeiten kosten 1 weniger' },
+  glutherz: { name: 'Ember Heart', desc: 'Burning heals you instead of hurting' },
+  donnerfaust: { name: 'Thunder Fist', desc: 'Every 5th hit also strikes all adjacent enemies' },
+  pulverfass: { name: 'Powder Skin', desc: 'Explosions do not hurt you' },
+  sprengmeister: { name: 'Demolitionist', desc: '+1 bomb on every new floor' },
+  geisterlicht: { name: 'Ghost Light', desc: 'You see 3 tiles farther' },
+  steinhaut: { name: 'Stone Skin', desc: 'Every hit against you deals 1 less damage' },
+  blutpakt: { name: 'Blood Pact', desc: '+3 attack, but -20 % max health' },
+  seelenkelch: { name: 'Soul Chalice', desc: 'Potions heal you fully' },
+  zeitsand: { name: 'Sands of Time', desc: 'Enemies sometimes lose their turn' },
+  giftzahn: { name: 'Venom Fang', desc: 'Your hits poison' },
+  frostkern: { name: 'Frost Core', desc: 'Stuns last 1 turn longer' },
+  muenze: { name: 'Lucky Coin', desc: 'Chests give double loot' },
+  eisenwille: { name: 'Iron Will', desc: 'Survive one lethal hit per floor' },
+  jaeger: { name: 'Giant Slayer', desc: '+50 % damage against bosses' },
+  echo: { name: 'Echo', desc: 'Skills cost 1 less' },
 };
 
-export const RARITY = ['Gewöhnlich', 'Selten', 'Episch', 'Legendär'];
+export const RARITY = ['Common', 'Rare', 'Epic', 'Legendary'];
 export const RARITY_COL = ['#94b0c2', '#41a6f6', '#9a4fc0', '#ffcd75'];
-export const SLOT_NAMES = ['Waffe', 'Rüstung', 'Amulett', 'Ring', 'Verbrauch'];
+export const SLOT_NAMES = ['Weapon', 'Armor', 'Amulet', 'Ring', 'Consumable'];
 export interface Item {
   slot: number; name: string; rar: number; atk: number; def: number; hp: number; crit: number; cursed?: boolean; lock?: number; // lock: Ebene, auf der ein verfluchtes Stück angelegt wurde
   aff?: [string, number][]; // besondere Eigenschaften
@@ -369,30 +369,30 @@ export interface Item {
 }
 // Eigenschaften von Ausrüstung und Gaben
 export const AFFIX: Record<string, (v: number) => string> = {
-  vamp: v => `+${v} Leben pro Sieg`, dorn: v => `${v} Dornenschaden`, quell: v => `+${v} max. Klassenressource`, macht: v => `+${v} % Fähigkeiten`,
-  gold: v => `+${v} % Gold`, sicht: v => `+${v} Sicht`, brand: v => `${v} % Brand bei Treffer`, gift: v => `${v} % Gift bei Treffer`,
-  frost: v => `${v} % Betäubung bei Treffer`, boss: v => `+${v} % gegen Bosse`, flink: v => `${v} % Ausweichen`,
-  spalt: v => `Trifft Nachbarn mit ${v} %`, stoss: v => `Durchstößt mit ${v} %`, kette: v => `Springt weiter mit ${v} %`, weite: v => `+${v} Reichweite`,
-  asche: () => 'Besiegte explodieren',
+  vamp: v => `+${v} health per kill`, dorn: v => `${v} thorn damage`, quell: v => `+${v} max class resource`, macht: v => `+${v} % skills`,
+  gold: v => `+${v} % gold`, sicht: v => `+${v} sight`, brand: v => `${v} % burn on hit`, gift: v => `${v} % poison on hit`,
+  frost: v => `${v} % stun on hit`, boss: v => `+${v} % vs. bosses`, flink: v => `${v} % dodge`,
+  spalt: v => `Cleaves neighbours for ${v} %`, stoss: v => `Pierces for ${v} %`, kette: v => `Chains for ${v} %`, weite: v => `+${v} range`,
+  asche: () => 'Slain enemies explode',
 };
 export const USE_ORDER = ['karte', 'sprung', 'kraft', 'quell'];
 export const CONSUMABLES: Record<string, PerkDef> = {
-  karte: { name: 'Kartenrolle', desc: 'Deckt die ganze Ebene auf' },
-  sprung: { name: 'Sprungrolle', desc: 'Versetzt dich weit weg von Gegnern' },
-  kraft: { name: 'Krafttrank', desc: '+3 Angriff für 10 Züge' },
-  quell: { name: 'Quelltrank', desc: 'Gibt 6 Klassenressource zurück' },
+  karte: { name: 'Map Scroll', desc: 'Reveals the whole floor' },
+  sprung: { name: 'Blink Scroll', desc: 'Carries you far away from enemies' },
+  kraft: { name: 'Might Potion', desc: '+3 attack for 10 turns' },
+  quell: { name: 'Wellspring Potion', desc: 'Restores 6 class resource' },
 };
 type U = { slot: number; name: string; wk?: number; atk?: number; def?: number; hp?: number; crit?: number; aff: [string, number][]; cls?: ClassId };
 export const UNIQUES: U[] = [
-  { slot: 0, cls: 'krieger', name: 'Aschenspalter', wk: 1, atk: 5, aff: [['spalt', 70], ['asche', 1]] },
-  { slot: 0, cls: 'magier', name: 'Weltenbrand', wk: 0, atk: 4, aff: [['brand', 60], ['kette', 60]] },
-  { slot: 0, cls: 'waldlaeufer', name: 'Sternenfall', wk: 0, atk: 4, aff: [['weite', 2], ['stoss', 80]] },
-  { slot: 1, name: 'Drachenhaut', def: 2, hp: 10, aff: [['dorn', 4], ['flink', 6]] },
-  { slot: 1, name: 'Schattenmantel', def: 1, hp: 4, aff: [['flink', 15], ['sicht', 2]] },
-  { slot: 2, name: 'Herz des Vulkans', hp: 6, crit: 0.08, aff: [['brand', 40], ['asche', 1]] },
-  { slot: 2, name: 'Auge des Sehers', crit: 0.16, aff: [['sicht', 3], ['macht', 15]] },
-  { slot: 3, name: 'Blutring', aff: [['vamp', 3], ['boss', 30]] },
-  { slot: 3, name: 'Ring der Gier', aff: [['gold', 40], ['quell', 4]] },
-  { slot: 3, name: 'Sturmring', aff: [['kette', 60], ['macht', 20]] },
+  { slot: 0, cls: 'krieger', name: 'Ashcleaver', wk: 1, atk: 5, aff: [['spalt', 70], ['asche', 1]] },
+  { slot: 0, cls: 'magier', name: 'Worldfire', wk: 0, atk: 4, aff: [['brand', 60], ['kette', 60]] },
+  { slot: 0, cls: 'waldlaeufer', name: 'Starfall', wk: 0, atk: 4, aff: [['weite', 2], ['stoss', 80]] },
+  { slot: 1, name: 'Dragonhide', def: 2, hp: 10, aff: [['dorn', 4], ['flink', 6]] },
+  { slot: 1, name: 'Shadow Cloak', def: 1, hp: 4, aff: [['flink', 15], ['sicht', 2]] },
+  { slot: 2, name: 'Heart of the Volcano', hp: 6, crit: 0.08, aff: [['brand', 40], ['asche', 1]] },
+  { slot: 2, name: 'Eye of the Seer', crit: 0.16, aff: [['sicht', 3], ['macht', 15]] },
+  { slot: 3, name: 'Blood Ring', aff: [['vamp', 3], ['boss', 30]] },
+  { slot: 3, name: 'Ring of Greed', aff: [['gold', 40], ['quell', 4]] },
+  { slot: 3, name: 'Storm Ring', aff: [['kette', 60], ['macht', 20]] },
 ];
 export interface Offer { kind: 'potion' | 'bomb' | 'item' | 'forge' | 'reroll'; name: string; desc: string; price: number; sold: boolean; item?: Item; left?: number; }

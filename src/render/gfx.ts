@@ -2,7 +2,6 @@
 export const VW = 640, VH = 360, TS = 16;
 
 import { PAL, SPR, ACTORS, NO_OUTLINE, VIEWS, FLOATERS, WEAPON_ART, WeaponArt, DECALS, RECOLORS } from './sprites';
-import { tr } from '../core/i18n';
 import { poseFrames } from './poses';
 import { floorMacro, capBases, capEdges, capTiles, plinth, grassBed, scorchTiles, floorDecals, wallVariants, wallCracks, lavaVeins } from './tiles';
 export { PAL };
@@ -270,7 +269,6 @@ export function glyphs(s: string, col: string, size: number): HTMLCanvasElement 
 
 export function text(ctx: CanvasRenderingContext2D, s: string, x: number, y: number, col = '#f4f4f4', size = 10, align: 'left' | 'center' | 'right' = 'left', shadow = true): number {
   if (!s) return 0;
-  s = tr(s);
   const c = glyphs(s, col, size);
   if (align === 'center') x -= c.width >> 1;
   else if (align === 'right') x -= c.width;
@@ -281,7 +279,6 @@ export function text(ctx: CanvasRenderingContext2D, s: string, x: number, y: num
 }
 
 export function wrap(s: string, n: number): string[] {
-  s = tr(s);
   const out: string[] = [];
   let line = '';
   for (const w of s.split(' ')) {
