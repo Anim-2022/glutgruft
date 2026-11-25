@@ -157,7 +157,7 @@ describe('Blickrichtungen', () => {
 import { PERKS, RELICS, UPGRADES, CONSUMABLES, UNIQUES, ULT, SKILL_UP, SYNERGIES, AFFIX } from '../src/game/content';
 import { WEAPON_ART } from '../src/render/sprites';
 import { genItem, itemLines } from '../src/game/run';
-import { tr, setLang } from '../src/core/i18n';
+const GERMAN = /[äöüÄÖÜß]/;
 
 describe('Gegenstände und Ausbau', () => {
   it('Anlegen und Ablegen lässt die Werte unverändert zurück', () => {
@@ -182,8 +182,7 @@ describe('Gegenstände und Ausbau', () => {
     }
   });
 
-  it('alle neuen Texte haben eine englische Fassung', () => {
-    setLang('en');
+  it('all new texts are English', () => {
     const all: string[] = [];
     for (const t of [PERKS, RELICS, CONSUMABLES, ULT]) for (const d of Object.values(t)) all.push(d.name, d.desc);
     for (const u of UPGRADES) all.push(u.name, u.desc);
@@ -191,8 +190,7 @@ describe('Gegenstände und Ausbau', () => {
     for (const v of Object.values(SKILL_UP)) all.push(v.r2, ...v.a, ...v.b);
     for (const v of SYNERGIES) all.push(v.name, v.desc);
     for (const f of Object.values(AFFIX)) all.push(f(7));
-    const same = all.filter(s => tr(s) === s && !['Berserker', 'Meteor', 'Echo', 'Inferno', 'Midas'].includes(s));
-    setLang('de');
+    const same = all.filter(s => GERMAN.test(s));
     expect(same).toEqual([]);
   });
 });

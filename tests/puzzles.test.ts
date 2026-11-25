@@ -61,7 +61,7 @@ describe('Rätselkammer in der Ebene', () => {
       expect(run.p.relics.length).toBe(1);
       return;
     }
-    throw new Error('keine Runenkammer gefunden');
+    throw new Error('keine Rune chamber gefunden');
   });
 });
 
@@ -103,7 +103,7 @@ describe('Neue und verbesserte Kammern', () => {
     for (let k = 0; k < 9; k++) if (press & (1 << k)) { const [lx, ly] = lightCell(k); stepOn(run, z.x + lx, z.y + ly); }
     expect(z.solved).toBe(true);
     expect(run.mode).toBe('perk');
-    expect(puzzleGoal(run)).toMatch(/gelöst/);
+    expect(puzzleGoal(run)).toMatch(/solved/);
   });
 
   it('Eiskristalle liegen auf erreichbaren Haltefeldern abseits des Ziels', () => {
@@ -159,7 +159,7 @@ describe('Neue und verbesserte Kammern', () => {
     expect(z.fails).toBe(1);
     const guards = run.mobs.filter(m => m.x >= z.x && m.x < z.x + 7 && m.y >= z.y && m.y < z.y + 7);
     expect(guards.length).toBe(1);
-    expect(puzzleGoal(run)).toMatch(/Versuche 2\/3/);
+    expect(puzzleGoal(run)).toMatch(/Tries 2\/3/);
   });
 
   it('alle sechs Kammerarten kommen vor', () => {

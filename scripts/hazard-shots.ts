@@ -44,7 +44,7 @@ await page.waitForTimeout(250);
 await page.mouse.move(box.x + 5, box.y + 5);
 await page.locator('canvas').screenshot({ path: `${OUT}/falle-ausgeloest.png` });
 // Mimik anstoßen
-console.log('Mimik', await page.evaluate(() => { const g = (window as any).__g, r = g.run; r.p.hp = r.p.maxHp; r.p.y += 2; g.act({ t: 'move', dx: 0, dy: 1 }); return [r.p.hp, r.mobs.map((m: any) => m.kind), r.log.slice(-2)]; }));
+console.log('Mimic', await page.evaluate(() => { const g = (window as any).__g, r = g.run; r.p.hp = r.p.maxHp; r.p.y += 2; g.act({ t: 'move', dx: 0, dy: 1 }); return [r.p.hp, r.mobs.map((m: any) => m.kind), r.log.slice(-2)]; }));
 await page.waitForTimeout(350);
 await page.locator('canvas').screenshot({ path: `${OUT}/mimik.png` });
 await browser.close(); await server.close();
