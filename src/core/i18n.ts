@@ -248,6 +248,7 @@ const EN: Record<string, string> = {
   'Journal: alle Meldungen nachlesen': 'Journal: read all messages', 'Noch nichts geschehen.': 'Nothing has happened yet.', '[J] oder [ESC] schließen': '[J] or [ESC] close',
   'SPIEL STARTEN': 'START GAME', 'SPRACHE: DEUTSCH': 'LANGUAGE: ENGLISH', 'TON: AN': 'SOUND: ON', 'TON: AUS': 'SOUND: OFF', 'VOLLBILD': 'FULLSCREEN', 'GRAFIK: HOCH': 'GRAPHICS: HIGH', 'GRAFIK: NIEDRIG': 'GRAPHICS: LOW',
   'Pfeile wählen · ENTER bestätigen': 'Arrows select · ENTER confirm',
+  'Pfeile wählen · ENTER bestätigen · H Hilfe': 'Arrows select · ENTER confirm · H help',
   'Bewegen: Pfeile/WASD · Fähigkeiten: 1-3 · Rucksack: I · Hilfe: H': 'Move: arrows/WASD · Skills: 1-3 · Backpack: I · Help: H',
   // Fertigkeitsbaum
   'Schild': 'Shield', 'Klinge': 'Blade', 'Schlachtruf': 'Battle Cry', 'Eis': 'Ice', 'Arkan': 'Arcane',
