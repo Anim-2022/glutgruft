@@ -67,3 +67,28 @@
 - Where: `src/render/draw.ts` tile sprites: `T.CURSED` uses `cursed`, but after opening it
   becomes `T.CHEST_OPEN` (gold `chest_open`).
 - Fix: add a cursed open state (own tile or flag) with a purple `cursed_open` sprite.
+
+## 9. Ice puzzle: slide instead of teleport
+
+- Where: `src/game/run.ts` (~line 2779, `slide(...)` sets `p.x, p.y` at once), render in
+  `src/render/draw.ts` / `src/render/timeline.ts`.
+- Problem: the hero jumps straight to the end tile; no visible slide.
+- Fix: push an `fx` event with the path (start → end, direction). The renderer moves the hero
+  tile by tile with a constant speed (~0.05 s per tile), a lean pose, ice spray particles and a
+  short scrape sound; small bump when stopping at a wall. Input waits until the slide finishes
+  (input buffer already exists). Logic stays one turn.
+
+---
+
+# Stages
+
+Each stage: implement, `npm test`, `npx tsc --noEmit`, screenshot check, one commit.
+
+1. **Quick fixes** – #8 cursed chest stays purple, #4 hunter countdown out from under the
+   minimap, #1 bigger rune circle.
+2. **Hunters** – #3 one hunter at a time, each next one stronger; balance regression.
+3. **Ice slide** – #9 visible sliding on ice.
+4. **Sound** – #2 softer, quieter sounds, compressor, pitch variation, volume slider.
+5. **Targeting** – #7 aim at barrels and destructibles (mouse + target cycle key).
+6. **Status HUD** – #5 effect/buff/passive icons with hover tooltips.
+7. **Corpses** – #6 corpse variants per enemy and cause of death (largest art task, last).
