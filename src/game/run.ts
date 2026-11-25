@@ -93,7 +93,9 @@ export type Fx =
   | { k: 'gaze'; x0: number; y0: number; x1: number; y1: number }
   | { k: 'roar'; id: number; x: number; y: number }
   | { k: 'blink'; x: number; y: number }
-  | { k: 'reap'; x: number; y: number; v: number };
+  | { k: 'reap'; x: number; y: number; v: number }
+  // the hero slid over ice: every tile from start to end (rendering plays it back tile by tile)
+  | { k: 'slide'; path: [number, number][] };
 
 // Versteckte Bodenfalle. seen: der Held hat sie entdeckt (oder sie wurde ausgelöst) – dann ist sie sichtbar.
 export type HazardKind = 'stachel' | 'pfeil' | 'gas' | 'glut';
@@ -2784,7 +2786,10 @@ export function act(run: Run, a: Action): void {
           if (mobAt(run, x, y)) return 'block' as const;
           return tt === T.ICE ? 'ice' as const : walkable(tt) ? 'floor' as const : 'block' as const;
         };
-        [p.x, p.y] = slide(kind, p.x, p.y, a.dx, a.dy);
+        const [ex, ey] = slide(kind, p.x, p.y, a.dx, a.dy), path: [number, number][] = [[p.x, p.y]];
+        for (let sx = p.x, sy = p.y; sx !== ex || sy !== ey;) { sx += a.dx; sy += a.dy; path.push([sx, sy]); }
+        if (path.length > 1) run.fx.push({ k: 'slide', path });
+        [p.x, p.y] = [ex, ey];
         used = true;
         afterStep(run);
         stepHazard(run, p);

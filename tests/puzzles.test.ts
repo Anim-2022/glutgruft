@@ -123,6 +123,28 @@ describe('Neue und verbesserte Kammern', () => {
     for (const i of z.gems!) expect(run.tiles[i]).toBe(T.ICE);
   });
 
+  it('Ice: one move slides the hero in one turn and reports the whole path for rendering', () => {
+    const run = vaultRun('ice'), z = run.puzzle!, p = run.p, Wd = 64;
+    let tested = 0;
+    for (let y = 0; y < VS && !tested; y++) for (let x = 0; x < VS && !tested; x++) for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      const sx = z.x + x, sy = z.y + y;
+      if (run.tiles[sy * Wd + sx] !== T.ICE || run.tiles[(sy + dy) * Wd + sx + dx] !== T.ICE || run.tiles[(sy + 2 * dy) * Wd + sx + 2 * dx] !== T.ICE) continue;
+      p.x = sx; p.y = sy; run.fx.length = 0;
+      const turn = run.turn;
+      act(run, { t: 'move', dx, dy });
+      const f = run.fx.find(e => e.k === 'slide');
+      if (!f || f.k !== 'slide') throw new Error('no slide fx');
+      expect(run.turn).toBe(turn + 1);
+      expect(f.path[0]).toEqual([sx, sy]);
+      expect(f.path[f.path.length - 1]).toEqual([p.x, p.y]);
+      expect(f.path.length).toBeGreaterThanOrEqual(3);
+      f.path.forEach(([px, py], k) => { expect(px).toBe(sx + dx * k); expect(py).toBe(sy + dy * k); });
+      tested++;
+      break;
+    }
+    expect(tested).toBe(1);
+  });
+
   it('Pfeilgang: mit Warten und Gehen erreichbar, rote Reihen sind genau die schießenden', () => {
     const run = vaultRun('darts'), z = run.puzzle!, p = run.p;
     p.hp = p.maxHp = 500;

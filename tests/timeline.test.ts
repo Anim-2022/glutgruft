@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { schedule, advance, busy, hitstop, held, resetTimeline, plannedTimes, setPlayback, stopping, BUDGET } from '../src/render/timeline';
+import { schedule, advance, busy, hitstop, held, resetTimeline, plannedTimes, setPlayback, stopping, BUDGET, heroSlide, SLIDE_TILE, SLIDE_BUMP } from '../src/render/timeline';
 import { InputQueue } from '../src/core/input';
 import type { Fx } from '../src/game/run';
 
@@ -71,6 +71,32 @@ describe('render timeline', () => {
     schedule(fx);
     setPlayback(Infinity);
     expect(advance(1 / 60).out.length).toBe(fx.filter(f => f.k !== 'beat').length);
+    expect(busy()).toBe(false);
+  });
+
+  it('ice slide plays back tile by tile at constant speed; input waits until the stop', () => {
+    const path: [number, number][] = [[2, 3], [3, 3], [4, 3], [5, 3], [6, 3]];
+    schedule([{ k: 'slide', path }, beat(7), lunge(7), flash(0), num()]);
+    expect(busy()).toBe(true);
+    expect(heroSlide()).toMatchObject({ x: 2, y: 3, dx: 1, dy: 0, phase: 'move' });
+    advance(SLIDE_TILE * 2);
+    expect(heroSlide()!.x).toBeCloseTo(4, 5);
+    // the enemy reply waits for the slide to end
+    expect(at('lunge')).toBeGreaterThan(SLIDE_TILE * 2);
+    advance(SLIDE_TILE * 2 + 0.01);
+    expect(heroSlide()).toMatchObject({ x: 6, y: 3, phase: 'bump' });
+    expect(busy()).toBe(true);
+    for (let k = 0; k < 30; k++) advance(1 / 60);
+    expect(heroSlide()).toBe(null);
+    expect(busy()).toBe(false);
+    expect(new InputQueue().press('w', false, 0, busy(), 110)).toBe('run');
+    expect(SLIDE_BUMP).toBeLessThan(0.15);
+  });
+
+  it('pending input skips an ice slide like any other playback', () => {
+    schedule([{ k: 'slide', path: [[0, 0], [0, 1], [0, 2], [0, 3]] }]);
+    setPlayback(Infinity); advance(1 / 60);
+    expect(heroSlide()).toBe(null);
     expect(busy()).toBe(false);
   });
 });
