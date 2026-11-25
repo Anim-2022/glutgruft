@@ -1,5 +1,5 @@
 import { drawIcon, UPG_ICON } from './render/icons';
-import { titleScene, drawLogo, drawTitleMenu } from './render/title';
+import { titleScene, drawLogo, drawTitleMenu, menuStep, menuHit } from './render/title';
 import { VW, VH, bake, sprites, tilesets, text, panel, wrap, figure } from './render/gfx';
 import { getLang, setLang } from './core/i18n';
 import { drawRun, drawCard, setTutStep, drawTree, treeMove, treeFocus, treeCursor, resetView, setMouse, toggleMap, setTutorial, tileAt, getOverlay, setOverlay, invMove, invAction, invDrop, invClick, lootIndex, lootDone } from './render/draw';
@@ -112,7 +112,7 @@ function onKey(k: string): boolean {
     return true;
   }
   if (scene === 'title') {
-    if (MOVES[k] && MOVES[k][1]) { tRow = (tRow + MOVES[k][1] + TITLE_ITEMS) % TITLE_ITEMS; return true; }
+    if (MOVES[k] && (MOVES[k][0] || MOVES[k][1])) { tRow = menuStep(tRow, MOVES[k][0], MOVES[k][1], TITLE_ITEMS); return true; }
     if (k === ' ' || k === 'enter') { titleAction(); return true; }
     if (k === 'l') { setLang(getLang() === 'de' ? 'en' : 'de'); return true; }
     return false;
@@ -215,13 +215,16 @@ function onKey(k: string): boolean {
 
 cv.addEventListener('mousemove', e => {
   const r = cv.getBoundingClientRect();
-  setMouse(((e.clientX - r.left) * VW) / r.width, ((e.clientY - r.top) * VH) / r.height);
+  const mx = ((e.clientX - r.left) * VW) / r.width, my = ((e.clientY - r.top) * VH) / r.height;
+  setMouse(mx, my);
+  if (scene === 'title') { const i = menuHit(mx, my, TITLE_ITEMS); if (i >= 0) tRow = i; }
 });
 cv.addEventListener('mouseleave', () => setMouse(-1, -1));
 cv.addEventListener('click', e => {
-  if (scene !== 'run' || !run) return;
   const r = cv.getBoundingClientRect();
   const mx = ((e.clientX - r.left) * VW) / r.width, my = ((e.clientY - r.top) * VH) / r.height;
+  if (scene === 'title') { wakeAudio(); const i = menuHit(mx, my, TITLE_ITEMS); if (i >= 0) { tRow = i; titleAction(); } return; }
+  if (scene !== 'run' || !run) return;
   // Im Rucksack wählt und benutzt die Maus dieselben Zeilen wie die Tastatur
   if (getOverlay() === 'inv') {
     if (run.mode !== 'play') return;
@@ -272,19 +275,24 @@ function titleAction() {
 }
 
 function drawTitle(time: number, dt: number) {
-  void time; void dt;
+  void time;
   // ruhendes Bild über den ganzen Schirm (einmal gemalt), darüber Schriftzug und Menü
   ctx.drawImage(titleScene(), 0, 0);
   drawLogo(ctx, 'Ein Abstieg in fünfzehn Ebenen');
-  drawTitleMenu(ctx, [
-    { label: 'SPIEL STARTEN', icon: 'play' },
+  if (noteT > 0) noteT -= dt;
+  drawTitleMenu(ctx, titleItems(), tRow, 'Pfeile wählen · ENTER bestätigen · Maus: klicken', noteT > 0 ? note : '');
+}
+// Einträge mit ihren aktuellen Werten; Reihenfolge = titleAction
+function titleItems() {
+  return [
+    { label: 'SPIEL STARTEN', icon: '' },
     { label: 'SPRACHE: DEUTSCH', icon: 'globe' },
     { label: soundOn() ? 'TON: AN' : 'TON: AUS', icon: soundOn() ? 'sound' : 'mute' },
     { label: meta.tutOff ? 'LEHRGANG: AUS' : 'LEHRGANG: AN', icon: 'book' },
-    { label: 'LEHRGANG NEU BEGINNEN', icon: 'restart' },
+    { label: 'LEHRGANG NEU', icon: 'restart' },
     { label: reducedFx() ? 'GRAFIK: NIEDRIG' : 'GRAFIK: HOCH', icon: 'screen' },
-    { label: 'VOLLBILD', icon: 'full' },
-  ], tRow, 'Pfeile wählen · ENTER bestätigen · H Hilfe');
+    { label: document.fullscreenElement ? 'VOLLBILD: AN' : 'VOLLBILD: AUS', icon: 'full' },
+  ];
 }
 
 function drawLager(time: number, dt: number) {
