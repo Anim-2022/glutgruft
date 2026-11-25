@@ -546,6 +546,8 @@ function drawLagerTree(time: number, dt: number) {
 const mouse = { x: -1, y: -1 };
 const inBox = (p: { x: number; y: number }, b: { x: number; y: number; w: number; h: number }) => p.x >= b.x && p.x < b.x + b.w && p.y >= b.y && p.y < b.y + b.h;
 
+// render cost of the last frames in ms (scripts/perf.ts reads it)
+const frameMs: number[] = [];
 let last = performance.now();
 function frame(now: number) {
   const dt = Math.min(0.05, (now - last) / 1000), time = now / 1000;
@@ -553,7 +555,7 @@ function frame(now: number) {
   if (scene === 'title') drawTitle(time, dt);
   else if (scene === 'lager') drawLager(time, dt);
   else if (scene === 'baum') drawLagerTree(time, dt);
-  else if (run) { drawRun(ctx, run, dt, time); pumpInput(now); }
+  else if (run) { const t0 = performance.now(); drawRun(ctx, run, dt, time); frameMs.push(performance.now() - t0); if (frameMs.length > 600) frameMs.shift(); pumpInput(now); }
   // Lehrgang: Schritt im Lauf, Karten beim ersten Kennenlernen
   if (!meta.tutOff && !card) {
     if (scene === 'run' && run) card = runCard(meta.tut, run);
@@ -579,7 +581,7 @@ function propGallery(bi: number): string {
   return c.toDataURL('image/png');
 }
 
-(window as unknown as { __g: unknown }).__g = { get run() { return run; }, propGallery, get scene() { return scene; }, meta, sprites, plannedTimes, busy,
+(window as unknown as { __g: unknown }).__g = { get run() { return run; }, propGallery, get scene() { return scene; }, meta, sprites, plannedTimes, busy, frameMs,
   start(seed: number, cls: 'krieger' | 'magier' | 'waldlaeufer') { resetView(); run = newRun(seed, cls, meta); scene = 'run'; return run; },
   act(a: Action) { if (run) act(run, a); },
   // Abstieg bis Ebene n (für Bildschirmfotos): Treppe unter den Helden legen und hinabsteigen

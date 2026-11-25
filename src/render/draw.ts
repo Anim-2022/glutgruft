@@ -28,6 +28,7 @@ const pos = new Map<number, { x: number; y: number }>();
 const bolts: { x0: number; y0: number; x1: number; y1: number; col: string; t: number }[] = [];
 const booms: { x: number; y: number; r: number; t: number }[] = [];
 const fuseTags: { x: number; y: number; n: number }[] = []; // counters over burning fuses (drawn after the light)
+let shimmerLeft = 0; // heat shimmer tiles left this frame
 const fireBlocks = new Map<number, { x: number; y: number; n: number; k: number }>(); // fire lights merged per 3×3 block
 // Particles; fy: floor height where heavy particles come to rest (then fade slowly)
 const bits: { x: number; y: number; vx: number; vy: number; col: string; t: number; g?: number; fy?: number; rest?: number; rl?: number }[] = [];
@@ -357,6 +358,7 @@ export function drawRun(ctx: CanvasRenderingContext2D, run: Run, dt: number, tim
   // Spuren am Boden liegen über dem Boden, aber unter Gegenständen, Fallen und Figuren
   pruneFire(run.fire);
   fireBlocks.clear();
+  shimmerLeft = 8;
   drawDecals(ctx, run, ox, oy, lights, time, dt);
   drawSpots(ctx, run, ox, oy, dt);
   drawGas(ctx, run, ox, oy, time);
@@ -410,7 +412,8 @@ export function drawRun(ctx: CanvasRenderingContext2D, run: Run, dt: number, tim
       const k = Math.min(1, (run.fire.get(i) ?? 1) / 3), f = run.fire;
       const nb = (f.has(i - W) ? 1 : 0) | (f.has(i - 1) ? 2 : 0) | (f.has(i + 1) ? 4 : 0) | (f.has(i + W) ? 8 : 0);
       const kind = t === T.OIL ? 'oil' : t === T.GRASS ? 'grass' : 'plain';
-      drawFlames(ctx, dx, dy, x, y, k, time, nb, kind, fireAge(i, time), fx && fxLevel() >= 1);
+      // heat shimmer copies the frame onto itself: costly, so only on strong effects and for a few tiles
+      drawFlames(ctx, dx, dy, x, y, k, time, nb, kind, fireAge(i, time), fxLevel() >= 2 && shimmerLeft-- > 0);
       // one light per 3×3 block (merged below): a large fire breathes as a whole and does not overexpose
       const bk = ((y / 3) | 0) * 64 + ((x / 3) | 0), fb = fireBlocks.get(bk);
       if (fb) { fb.x += x; fb.y += y; fb.n++; fb.k = Math.max(fb.k, k); } else fireBlocks.set(bk, { x, y, n: 1, k });
