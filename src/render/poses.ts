@@ -58,7 +58,15 @@ function heroAttack(cls: string, v: string, rows: string[]): string[] {
 }
 
 // Zauber des Magiers: Stab mit Hand hoch, Funken um die Kugel
-function heroCast(v: string, rows: string[]): string[] {
+// Cast pose: the weapon is raised; the mage's orb flares. Warrior and ranger lift blade or bow by two pixels.
+function heroCast(name: string, v: string, rows: string[]): string[] {
+  if (name !== 'magier') {
+    const g = pad(rows), [x0, x1, y0, y1] = WEAPON_ART[name].box[v];
+    const px: [number, number, string][] = [];
+    for (let y = y0 + POSE_PAD; y <= y1 + POSE_PAD && y < g.length; y++) for (let x = x0 + POSE_PAD; x <= x1 + POSE_PAD; x++) if (g[y]?.[x] && g[y][x] !== '.') { px.push([x, y, g[y][x]]); g[y][x] = '.'; }
+    drop(g, px, 0, -2);
+    return toRows(g);
+  }
   const g = pad(rows), [x0, x1] = WEAPON_ART.magier.box[v];
   const px: [number, number, string][] = [];
   for (let y = 0; y < g.length; y++) for (let x = x0 + POSE_PAD; x <= x1 + POSE_PAD; x++) if (g[y][x] !== '.') { px.push([x, y, g[y][x]]); g[y][x] = '.'; }
@@ -113,7 +121,7 @@ export function poseFrames(name: string, views: Record<string, string[]>): Recor
   const hero = HEROES.has(name);
   for (const [v, rows] of Object.entries(views)) {
     out[`${v}a`] = hero ? heroAttack(name, v, rows) : mobAttack(name, v, rows);
-    if (name === 'magier') out[`${v}c`] = heroCast(v, rows);
+    if (hero) out[`${v}c`] = heroCast(name, v, rows);
     if (hero) {
       const [d0, d1, d2] = deathFrames(rows, views.f);
       out[`${v}d0`] = d0; out[`${v}d1`] = d1; out[`${v}d2`] = d2;
