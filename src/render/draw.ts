@@ -9,7 +9,7 @@ import { dropShadow, drawAO } from './shade';
 import { floorTint, softEdged, pickDecal } from './tiles';
 import { propsFor, drawProp, recolor, torchSpots } from './props';
 import { stepAmbient, drawAmbient, drawFog, resetAmbient, postFx } from './ambient';
-import { drawFlames, smoke, drawSmoke, resetFire, trackBurns, drawEmbers } from './fire';
+import { drawFlames, smoke, drawSmoke, resetFire, trackBurns, drawEmbers, fireAge, pruneFire } from './fire';
 
 // Arena des Bosses: Fackeln brennen in seiner Farbe [außen, Kern], dazu eine Aura um ihn
 const BOSS_FLAME: [string, string][] = [['#9a4fc0', '#c9d4dc'], ['#38b764', '#a7f070'], ['#ef7d57', '#f4f4f4']];
@@ -28,7 +28,8 @@ import { ClassId, treeNodes, NEW_SKILLS, TUNE, BRANCH_NAMES, SKILL_UP, treeNode,
 const pos = new Map<number, { x: number; y: number }>();
 const bolts: { x0: number; y0: number; x1: number; y1: number; col: string; t: number }[] = [];
 const booms: { x: number; y: number; r: number; t: number }[] = [];
-const fuseTags: { x: number; y: number; n: number }[] = []; // Zähler über brennenden Lunten (nach dem Licht gezeichnet)
+const fuseTags: { x: number; y: number; n: number }[] = [];
+const fireBlocks = new Map<number, { x: number; y: number; n: number; k: number }>(); // fire lights merged per 3×3 block // Zähler über brennenden Lunten (nach dem Licht gezeichnet)
 // Particles; fy: floor height where heavy particles come to rest (then fade slowly)
 const bits: { x: number; y: number; vx: number; vy: number; col: string; t: number; g?: number; fy?: number; rest?: number }[] = [];
 const BIT_MAX = 400, BIT_T = 0.55, REST_T = 1.5;
@@ -338,6 +339,8 @@ export function drawRun(ctx: CanvasRenderingContext2D, run: Run, dt: number, tim
     }
   }
   // Spuren am Boden liegen über dem Boden, aber unter Gegenständen, Fallen und Figuren
+  pruneFire(run.fire);
+  fireBlocks.clear();
   drawDecals(ctx, run, ox, oy, lights, time, dt);
   drawSpots(ctx, run, ox, oy, dt);
   drawGas(ctx, run, ox, oy, time);
@@ -388,9 +391,13 @@ export function drawRun(ctx: CanvasRenderingContext2D, run: Run, dt: number, tim
     }
     if (run.fire.has(i) && run.vis[i]) {
       // Flammen wachsen mit der Restdauer; frisches Feuer raucht und sprüht Funken
-      const k = Math.min(1, (run.fire.get(i) ?? 1) / 3);
-      drawFlames(ctx, dx, dy, x, y, k, time);
-      lights.push({ x, y, r: (2.2 + 1.4 * k) * flick(i), col: '#ef7d57' });
+      const k = Math.min(1, (run.fire.get(i) ?? 1) / 3), f = run.fire;
+      const nb = (f.has(i - W) ? 1 : 0) | (f.has(i - 1) ? 2 : 0) | (f.has(i + 1) ? 4 : 0) | (f.has(i + W) ? 8 : 0);
+      const kind = t === T.OIL ? 'oil' : t === T.GRASS ? 'grass' : 'plain';
+      drawFlames(ctx, dx, dy, x, y, k, time, nb, kind, fireAge(i, time), fx && fxLevel() >= 1);
+      // one light per 3×3 block (merged below): a large fire breathes as a whole and does not overexpose
+      const bk = ((y / 3) | 0) * 64 + ((x / 3) | 0), fb = fireBlocks.get(bk);
+      if (fb) { fb.x += x; fb.y += y; fb.n++; fb.k = Math.max(fb.k, k); } else fireBlocks.set(bk, { x, y, n: 1, k });
       if (fx && Math.random() < dt * (0.8 + 2.5 * k)) smoke(x * TS + 8, y * TS + 4 - 4 * k);
       if (fx && Math.random() < dt * 5 * k) bits.push({ x: x * TS + 3 + Math.random() * 10, y: y * TS + 6, vx: (Math.random() - 0.5) * 10, vy: -25 - Math.random() * 20, col: Math.random() < 0.5 ? '#ffcd75' : '#ef7d57', t: 0, g: -15 });
     }
@@ -438,6 +445,8 @@ export function drawRun(ctx: CanvasRenderingContext2D, run: Run, dt: number, tim
     ctx.fillStyle = 'rgba(90,58,40,0.55)';
     for (const i of run.mud) if (run.seen[i]) ctx.fillRect((i % W) * TS + ox, ((i / W) | 0) * TS + oy, TS, TS);
   }
+  // merged fire lights: centroid of the burning tiles, a bit wider for bigger blocks, redder as the fire dies
+  for (const [bk, b] of fireBlocks) lights.push({ x: b.x / b.n, y: b.y / b.n, r: (2.2 + 1.4 * b.k) * (1 + 0.15 * Math.sqrt(b.n - 1)) * flick(bk), col: b.k <= 0.34 ? '#b13e53' : '#ef7d57' });
   drawDying(ctx, run, ox, oy, lights, dt);
 
   // Status auf dem Sprite: Betäubung, Brand, Gift, Spröde, Schutzwall
