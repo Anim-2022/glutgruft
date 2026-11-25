@@ -237,8 +237,8 @@ describe('Neue Reliquien', () => {
   it('Titanenherz und Falkenauge ändern die Werte', () => {
     const run = newRun(3, 'krieger', defaultMeta()), hp = run.p.maxHp, crit = run.p.crit;
     take(run, 'titanenherz'); take(run, 'falkenauge');
-    expect(run.p.maxHp).toBe(hp + 15);
-    expect(run.p.crit).toBeCloseTo(crit + 0.12);
+    expect(run.p.maxHp).toBe(hp + 10);
+    expect(run.p.crit).toBeCloseTo(crit + 0.08);
     expect(run.p.relics).toEqual(['titanenherz', 'falkenauge']);
   });
   it('jede Reliquie lässt sich nehmen', () => {
