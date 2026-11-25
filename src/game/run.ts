@@ -1290,22 +1290,25 @@ function hunterTick(run: Run) {
   run.floorTurns = (run.floorTurns ?? 0) + 1;
   const t = run.floorTurns;
   if (t === HUNTER.first - HUNTER.warn) say(run, 'Something is following you ...');
+  // one hunter at a time (hunt pressure): while one lives the clock is held, the next comes `respawn` turns after the kill
+  if (FEATURES.huntPressure && h.n && run.mobs.some(isHunter)) { h.next = Math.max(h.next, t + HUNTER.respawn); return; }
   if (t < h.next) return;
   // aufgeschoben (nicht verloren): in der Rätselkammer, in einem versiegelten Ereignis, bei voller Zahl
   if (inVault(run, run.p.x, run.p.y) || run.ev?.seal?.length) return;
-  // Death answers whoever stays too long – the cap does not hold it back
-  const death = FEATURES.huntPressure && h.n >= HUNTER.deathFrom;
-  if (!death && run.mobs.filter(isHunter).length >= HUNTER.cap) return;
-  // jeder weitere Jäger kommt schneller: 30 → 25 → 20 → 15 Züge
+  if (FEATURES.huntPressure) {
+    // each new hunter is one stage stronger (stage = hunter index on this floor); from deathFrom on, Death comes
+    if (spawnHunter(run, h.n)) { h.n++; h.next = t + HUNTER.respawn; }
+    return;
+  }
+  // legacy rules (huntPressure off): up to `cap` at once, each further one comes faster: 30 → 25 → 20 → 15 turns
+  if (run.mobs.filter(isHunter).length >= HUNTER.cap) return;
   if (spawnHunter(run, h.n)) {
     h.n++;
-    // pressure: from the pairFrom-th hunter on they come in pairs (the second may exceed the cap)
-    if (FEATURES.huntPressure && h.n > HUNTER.pairFrom && h.n <= HUNTER.deathFrom && spawnHunter(run, h.n, true)) h.n++;
     h.next = t + Math.max(HUNTER.minInterval, HUNTER.interval - HUNTER.shrink * (h.n - 1));
   }
 }
 
-function spawnHunter(run: Run, stage = 0, extra = false): boolean {
+function spawnHunter(run: Run, stage = 0): boolean {
   const p = run.p, rng = run.rng;
   // nur Jäger, die auf dieser Tiefe schon vorkommen (auch erzwungene – sonst wartet der Jäger)
   const pool = HUNTER.pool.filter(([k, , f]) => run.floor >= f && (!FEATURES.hunterForce || k === FEATURES.hunterForce));
@@ -1342,8 +1345,6 @@ function spawnHunter(run: Run, stage = 0, extra = false): boolean {
   if (death) {
     say(run, 'You stayed too long. DEATH IS COMING – it brings no reward.');
     run.fx.push({ k: 'banner', title: 'DEATH IS COMING', sub: 'Descend while you still can!', col: '#b13e53' }, { k: 'shake', n: 7 });
-  } else if (extra) {
-    say(run, `A second hunter follows: ${m.name}!`);
   } else {
     say(run, `THE HUNTER IS HERE: ${m.name}!`);
     run.fx.push({ k: 'banner', title: 'THE HUNTER IS HERE', sub: m.name, col: '#b13e53' }, { k: 'shake', n: 5 });
@@ -1667,6 +1668,7 @@ export function hunterInfo(run: Run): { text: string; col: string } | null {
   if (!run.hunt) return null;
   const t = run.floorTurns ?? 0, h = run.hunt;
   if (FEATURES.huntPressure && h.n >= HUNTER.deathFrom) return { text: 'Death hunts you – to the stairs!', col: '#b13e53' };
+  if (FEATURES.huntPressure && run.mobs.some(isHunter)) return { text: 'A hunter is on your trail!', col: '#b13e53' };
   if (h.n) return { text: `Next hunter: ${Math.max(0, h.next - t)} turns`, col: '#b13e53' };
   if (t >= HUNTER.first - 10) return { text: `The hunt begins soon ... ${Math.max(0, HUNTER.first - t)}`, col: '#b13e53' };
   if (t >= HUNTER.first - HUNTER.warn) return { text: 'Something is following you ...', col: '#ef7d57' };
