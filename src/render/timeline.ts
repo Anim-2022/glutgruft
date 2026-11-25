@@ -6,7 +6,7 @@ import type { Fx } from '../game/run';
 import { fxScale, reducedFx } from './fxopts';
 
 // Gap between two acting enemies; a whole turn plays back in at most BUDGET seconds
-export const STAGGER = 0.045, BUDGET = 0.3, MELEE_HIT = 0.05, MAX_STOP = 0.17;
+export const STAGGER = 0.03, BUDGET = 0.3, MELEE_HIT = 0.06, MAX_STOP = 0.17;
 export const LUNGE_T = 0.16, FLASH_T = 0.12, RECOIL_T = 0.12, HURT_T = 0.3;
 
 // ---------- Per-actor state ----------
@@ -26,6 +26,22 @@ export function anim(id: number): ActorAnim {
   return a;
 }
 export const peekAnim = (id: number) => anims.get(id);
+
+// ---------- Poses and transitions (animation pass) ----------
+// Weight of an actor: heavy ones wind up longer and strike further, quick ones snap
+const HEAVY = new Set(['golem', 'koenig', 'mutter', 'fuerst', 'koenig2', 'mutter2', 'fuerst2', 'echse', 'krake', 'drache', 'medusa', 'tod']);
+const QUICK = new Set(['ratte', 'fledermaus', 'glutgeist']);
+export const weightOf = (kind: string) => (HEAVY.has(kind) ? 2 : QUICK.has(kind) ? 0 : 1);
+// Attack offset in pixels along the lunge direction: wind-up (pull back) → strike → recover.
+// The whole move fits LUNGE_T; the blow lands near MELEE_HIT (the peak), as the timeline expects.
+export function lungeOffset(t: number, weight: number): number {
+  const f = t / LUNGE_T, wind = weight === 2 ? 0.3 : weight === 0 ? 0.12 : 0.2, back = weight === 2 ? 2 : 1, reach = weight === 2 ? 8 : weight === 0 ? 5 : 6;
+  if (f < wind) return -back * (f / wind);
+  const g = (f - wind) / (1 - wind);
+  return g < 0.35 ? -back + (reach + back) * (g / 0.35) : reach * (1 - (g - 0.35) / 0.65) ** 2;
+}
+// Lean while hurt: shear factor (0 … 0.18) that decays over RECOIL_T
+export const hurtLean = (a: ActorAnim | undefined) => (a && a.hurt < RECOIL_T ? 0.18 * (1 - a.hurt / RECOIL_T) : 0);
 
 // Phase for poses (read by the animation pass; derived from the same state)
 export function phaseOf(id: number): Phase {

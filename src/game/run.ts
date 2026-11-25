@@ -62,6 +62,8 @@ export type Fx =
   | { k: 'num'; x: number; y: number; s: string; col: string; dot?: boolean }
   // beat: from here on the next enemy (id) or the world (id -1) acts; only used to sequence rendering
   | { k: 'beat'; id: number }
+  // the hero uses a skill or the ultimate (rendering: cast pose and a glow in the class colour)
+  | { k: 'cast'; col: string; ult: boolean }
   // something broke or caught fire (rendering: debris of this material, sound)
   | { k: 'break'; x: number; y: number; mat: Mat }
   | { k: 'shake'; n: number }
@@ -2880,12 +2882,12 @@ export function act(run: Run, a: Action): void {
     case 'descend':
       if (run.tiles[p.y * W + p.x] === T.STAIRS) nextFloor(run);
       break;
-    case 'skill':
-      used = useSkill(run, a.i);
+    case 'skill': case 'ult': {
+      const n0 = run.fx.length;
+      used = a.t === 'skill' ? useSkill(run, a.i) : useUlt(run);
+      if (used) run.fx.splice(n0, 0, { k: 'cast', col: CLASSES[p.cls].resCol, ult: a.t === 'ult' });
       break;
-    case 'ult':
-      used = useUlt(run);
-      break;
+    }
   }
   if (used && p.cls === 'waldlaeufer') afterWl(run, a, px, py, adj0);
   playerActing = false;

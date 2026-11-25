@@ -16,7 +16,7 @@ const BOSS_FLAME: [string, string][] = [['#9a4fc0', '#c9d4dc'], ['#38b764', '#a7
 const bossTorch: HTMLCanvasElement[][] = [];
 const torchOf = (bi: number, f: number) => (bossTorch[bi] ??= [0, 1].map(k => recolor(sprites[`torch${k}`], { '#ef7d57': BOSS_FLAME[bi][0], '#ffcd75': BOSS_FLAME[bi][1] })))[f];
 import { sfx } from '../core/audio';
-import { schedule, advance, held, anim, peekAnim, startLunge, setPose, hitActor, hitstop, resetTimeline, busy, LUNGE_T, FLASH_T, RECOIL_T } from './timeline';
+import { schedule, advance, held, anim, peekAnim, startLunge, setPose, hitActor, hitstop, resetTimeline, busy, FLASH_T, RECOIL_T, lungeOffset, weightOf, hurtLean } from './timeline';
 import { addNum, drawNums, addShake, stepShake, critFlash, hurtFlash, drawScreenFlash, splat, drawSpots, tinted, noteKill, resetJuice } from './juice';
 import { fxScale, fxLevel } from './fxopts';
 import { drawWorldTile, drawGas, MAT_COLS, MAT_SOUND } from './world';
@@ -43,6 +43,7 @@ const rings: { x: number; y: number; r: number; t: number }[] = [];
 const sparks: { x: number; y: number; col: string; big: boolean; t: number }[] = [];
 const bashes: { x: number; y: number; dx: number; dy: number; t: number }[] = [];
 const swipes: { x: number; y: number; dx: number; dy: number; big: boolean; t: number }[] = [];
+const auras: { col: string; ult: boolean; t: number }[] = []; // cast glow around the hero
 let deathT = -1; // Zeit seit dem Tod des Helden, -1 = lebt
 const SWIPE_T = 0.2, DEATH_T = 1.3;
 // Actor poses: a attack, c cast (frame from poses.ts), time left in seconds – state lives in timeline.ts
@@ -103,7 +104,7 @@ function buildLight(run: Run) {
 export function resetView() {
   pos.clear(); resetTimeline(); resetJuice();
   bolts.length = 0; bits.length = 0; booms.length = 0;
-  shots.length = 0; rings.length = 0; sparks.length = 0; bashes.length = 0; swipes.length = 0; deathT = -1;
+  shots.length = 0; rings.length = 0; sparks.length = 0; bashes.length = 0; swipes.length = 0; auras.length = 0; deathT = -1;
   resetDeaths(); resetAmbient(); resetFire(); resetHunterFx(); fuseTags.length = 0;
 }
 
@@ -168,6 +169,12 @@ export function drawRun(ctx: CanvasRenderingContext2D, run: Run, dt: number, tim
         break;
       }
       case 'shake': shake(f.n, hitDir); break;
+      case 'cast': {
+        pose(0, 'c', f.ult ? 0.4 : 0.28);
+        auras.push({ col: f.col, ult: f.ult, t: 0 });
+        burstBits(run.p.x * TS + 8, run.p.y * TS + 6, Math.round((f.ult ? 16 : 8) * Math.max(0.5, fxScale())), [f.col, '#f4f4f4'], 15, f.ult ? 70 : 40, 30, -20);
+        break;
+      }
       case 'bolt': bolts.push({ ...f, t: 0 }); sfx('zap'); setDir(f.x1 - f.x0, f.y1 - f.y0); if (f.x0 === run.p.x && f.y0 === run.p.y) pose(0, 'a'); break;
       case 'lunge': {
         startLunge(f.id, f.dx, f.dy); setDir(f.dx, f.dy); pose(f.id, 'a');
@@ -188,6 +195,8 @@ export function drawRun(ctx: CanvasRenderingContext2D, run: Run, dt: number, tim
         hitstop(big ? 0.12 : 0.07);
         splat(f.kind, f.x, f.y, hitDir, big ? 14 : 7);
         sparks.push({ x: f.x * TS + 8, y: f.y * TS + 7, col: '#f4f4f4', big: big, t: 0 });
+        // loot glint: a few coins hop out and settle
+        burstBits(f.x * TS + 8, f.y * TS + 8, big ? 8 : 3, ['#ffcd75', '#c98a3a'], 20, 45, 55);
         const n = noteKill(time);
         if (n >= 2) addNum(run.p.x, run.p.y - 1, `×${n}`, '#ffcd75', false, 0);
         break;
@@ -543,20 +552,30 @@ export function drawRun(ctx: CanvasRenderingContext2D, run: Run, dt: number, tim
     if (a === p && deathT >= 0) frame = `${base}:${v}d${deathT < 0.14 ? 0 : deathT < 0.3 ? 1 : 2}`;
     else if (ps && sprites[`${base}:${v}${ps.k}`]) frame = `${base}:${v}${ps.k}`;
     const img = sprites[frame];
-    const l = an?.lunge, k = l ? Math.sin((l.t / LUNGE_T) * Math.PI) * 6 : 0;
+    const l = an?.lunge, k = l ? lungeOffset(l.t, a === p ? 1 : weightOf(a.kind)) : 0;
+    // telegraph: an enemy that can strike next turn leans back from the hero, pulsing
+    const th = a !== p && !l && fxLevel() > 0 ? threatOf(run, a) : null, tp = th ? (Math.sin(time * 8 + a.id) > 0 ? 1 : 0) : 0;
+    const tlx = th ? -Math.sign(p.x - a.x) * tp : 0, tly = th ? -Math.sign(p.y - a.y) * tp : 0;
+    // flyers hover
+    const bob = FLY.has(a.kind) && !l ? Math.round(Math.sin(time * 4 + a.id) * 1.5) : 0;
     // recoil: 2 px away from the attacker, decays over RECOIL_T; plus a short squash
     const rc = an?.recoil, rk = rc ? (1 - rc.t / RECOIL_T) * 2 : 0, sq = an && an.hurt < 0.1 && fxLevel() > 0 ? 1 - an.hurt / 0.1 : 0;
     const glow = GLOW[base.split(':')[0]] ?? GLOW[a.kind];
     const jx = glow ? Math.round(Math.sin(time * 17 + a.id) * 0.6) : 0;
-    const bx = Math.round(q.x * TS + (l ? l.dx * k : 0) + (rc ? rc.dx * rk : 0)) + ox, by = Math.round(q.y * TS + (l ? l.dy * k : 0) + (rc ? rc.dy * rk : 0)) + oy;
+    const bx = Math.round(q.x * TS + (l ? l.dx * k : 0) + (rc ? rc.dx * rk : 0)) + tlx + ox, by = Math.round(q.y * TS + (l ? l.dy * k : 0) + (rc ? rc.dy * rk : 0)) + tly + oy;
     const hunt = a !== p && isHunter(a);
-    const dx = bx + 8 - img.width / 2 + jx, dy = by + 14 - img.height - Math.round(leapLift(a.id));
+    const dx = bx + 8 - img.width / 2 + jx, dy = by + 14 - img.height - Math.round(leapLift(a.id)) + bob;
     // squash on hit: wider and flatter, feet stay on the ground
     const sw = sq ? Math.round(img.width * (1 + 0.15 * sq)) : img.width, sh = sq ? Math.round(img.height * (1 - 0.15 * sq)) : img.height;
     const qx = dx - ((sw - img.width) >> 1), qy = dy + (img.height - sh);
+    // hurt: the body leans away from the blow for a moment (shear anchored at the feet)
+    const lean = fxLevel() > 0 ? hurtLean(an) * (rc ? Math.sign(rc.dx) || 1 : 1) : 0;
     const blit = (c: HTMLCanvasElement) => {
-      if (!mirror) { ctx.drawImage(c, qx, qy, sw, sh); return; }
-      ctx.save(); ctx.translate(qx + sw, qy); ctx.scale(-1, 1); ctx.drawImage(c, 0, 0, sw, sh); ctx.restore();
+      if (!mirror && !lean) { ctx.drawImage(c, qx, qy, sw, sh); return; }
+      ctx.save();
+      if (lean) { ctx.translate(qx + sw / 2, qy + sh); ctx.transform(1, 0, -lean, 1, 0, 0); ctx.translate(-(qx + sw / 2), -(qy + sh)); }
+      if (mirror) { ctx.translate(qx + sw, qy); ctx.scale(-1, 1); ctx.drawImage(c, 0, 0, sw, sh); } else ctx.drawImage(c, qx, qy, sw, sh);
+      ctx.restore();
     };
     // Bodenschatten; Flieger werfen einen kleineren, atmenden Schatten
     const fly = FLY.has(a.kind), foot = by + 14;
@@ -787,6 +806,17 @@ export function drawRun(ctx: CanvasRenderingContext2D, run: Run, dt: number, tim
       }
     }
     ctx.globalAlpha = 1;
+  }
+  // cast glow: a ring in the class colour that widens around the hero
+  for (let i = auras.length - 1; i >= 0; i--) {
+    const u = auras[i], dur = u.ult ? 0.45 : 0.28;
+    u.t += dt;
+    if (u.t > dur) { auras.splice(i, 1); continue; }
+    const f = u.t / dur, rad = 5 + f * (u.ult ? 18 : 11), cx = pp.x * TS + 8 + ox, cy = pp.y * TS + 9 + oy, steps = Math.round(rad * 3);
+    ctx.globalAlpha = 1 - f; ctx.fillStyle = u.col;
+    for (let k = 0; k < steps; k++) { const ang = (k / steps) * Math.PI * 2; if ((k + Math.floor(time * 20)) % 3) ctx.fillRect(Math.round(cx + Math.cos(ang) * rad), Math.round(cy + Math.sin(ang) * rad * 0.6), 1, 1); }
+    ctx.globalAlpha = 1;
+    lights.push({ x: pp.x, y: pp.y, r: 2 + (u.ult ? 3 : 1.5) * (1 - f), col: u.col, a: 0.8 });
   }
   stepHunterFx(ctx, ox, oy, dt, lights, time);
   for (const b of booms) lights.push({ x: b.x, y: b.y, r: (4 + 1.5 * b.r) * Math.max(0, 1 - b.t / (0.28 + 0.06 * b.r)) + 1, col: '#ffcd75' });
