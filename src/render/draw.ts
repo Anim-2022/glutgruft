@@ -16,6 +16,7 @@ const BOSS_FLAME: [string, string][] = [['#9a4fc0', '#c9d4dc'], ['#38b764', '#a7
 const bossTorch: HTMLCanvasElement[][] = [];
 const torchOf = (bi: number, f: number) => (bossTorch[bi] ??= [0, 1].map(k => recolor(sprites[`torch${k}`], { '#ef7d57': BOSS_FLAME[bi][0], '#ffcd75': BOSS_FLAME[bi][1] })))[f];
 import { sfx } from '../core/audio';
+import { hunterFx, resetHunterFx, isHunter, leaping, leapLift, drawHunterAura, hunterGlow, drawHunterBar, drawHunterMarks, stepHunterFx, stoneOverlay } from './hunters';
 import { tr } from '../core/i18n';
 import { Run, Actor, xpNeed, skillCost, skillReady, spellAt, itemText, itemValue, itemScore, perkInfo, skillModName, shotRange, RANKS, SORT_NAMES, BAG_MAX, RUNE_NAMES, availableNodes, puzzleGoal, eventGoal, hunterWarn, hunterInfo, dartWarn, inVault, VAULT_NAMES, HAZARD_NAMES } from '../game/run';
 import { ClassId, treeNodes, NEW_SKILLS, TUNE, BRANCH_NAMES, SKILL_UP, treeNode, nodeText, CLASSES, MOBS, PERKS, RELICS, RARITY, RARITY_COL, BIOME_NAMES, biomeOf, Item, AFFIX, CONSUMABLES, SLOT_NAMES, ULT, ULT_LEVEL, USE_ORDER, SYNERGIES } from '../game/content';
@@ -91,13 +92,13 @@ export function resetView() {
   pos.clear(); lunges.clear(); flashes.clear();
   nums.length = 0; bolts.length = 0; bits.length = 0; booms.length = 0; shake = 0;
   shots.length = 0; rings.length = 0; sparks.length = 0; bashes.length = 0; swipes.length = 0; deathT = -1; poses.clear();
-  resetDeaths(); resetAmbient(); resetFire(); fuseTags.length = 0;
+  resetDeaths(); resetAmbient(); resetFire(); resetHunterFx(); fuseTags.length = 0;
 }
 
 function smooth(a: Actor, dt: number) {
   let p = pos.get(a.id);
-  if (!p || Math.abs(p.x - a.x) + Math.abs(p.y - a.y) > 3) { p = { x: a.x, y: a.y }; pos.set(a.id, p); }
-  const k = Math.min(1, dt * 11);
+  if (!p || (Math.abs(p.x - a.x) + Math.abs(p.y - a.y) > 3 && !leaping(a.id))) { p = { x: a.x, y: a.y }; pos.set(a.id, p); }
+  const k = Math.min(1, dt * (leaping(a.id) ? 7 : 11));
   p.x += (a.x - p.x) * k; p.y += (a.y - p.y) * k;
   return p;
 }
@@ -109,7 +110,7 @@ const OBJ_SHADOW: Record<number, [number, number]> = {
   [T.TRADER]: [15, 14], [T.CRATE]: [15, 16], [T.CRATE_ON]: [15, 16], [T.TABLET]: [15, 14], [T.LEVER]: [14, 10], [T.CURSED]: [14, 15],
   [T.FOUNTAIN]: [15, 15], [T.FOUNTAIN_DRY]: [15, 15], [T.BRAZIER]: [15, 10], [T.BRAZIER_ON]: [15, 10], [T.STATUE]: [15, 14], [T.MIMIC]: [13, 16],
 };
-const FLY = new Set(['fledermaus', 'glutgeist']);
+const FLY = new Set(['fledermaus', 'glutgeist', 'tod']);
 
 const TILE_SPR: Record<number, string> = {
   [T.STAIRS]: 'stairs', [T.CHEST]: 'chest', [T.CHEST_OPEN]: 'chest_open', [T.ALTAR]: 'altar', [T.ALTAR_USED]: 'altar_used',
@@ -120,6 +121,8 @@ const TILE_SPR: Record<number, string> = {
 
 export function drawRun(ctx: CanvasRenderingContext2D, run: Run, dt: number, time: number) {
   for (const f of run.fx.splice(0)) {
+    const hs = hunterFx(f);
+    if (hs >= 0) { shake = Math.max(shake, reducedFx() ? 0 : hs); continue; }
     switch (f.k) {
       case 'num': nums.push({ x: f.x * TS + 8, y: f.y * TS - nums.filter(n => n.t < 0.1).length * 8, s: f.s, col: f.col, t: 0 }); break;
       case 'shake': shake = Math.max(shake, f.n); break;
@@ -352,6 +355,7 @@ export function drawRun(ctx: CanvasRenderingContext2D, run: Run, dt: number, tim
       ctx.fillStyle = `rgba(255,120,120,${(pulse + 0.3).toFixed(3)})`;
       ctx.fillRect(x + 1, y + 1, TS - 2, 1); ctx.fillRect(x + 1, y + TS - 2, TS - 2, 1); ctx.fillRect(x + 1, y + 2, 1, TS - 4); ctx.fillRect(x + TS - 2, y + 2, 1, TS - 4);
     }
+    if (hw.length) drawHunterMarks(ctx, run, ox, oy, time, lights);
   }
   // Ziele: Geist, leuchtende Truhe, Altar (eins) oder Kerzen, Pilze, Kühlplatten (mehrere)
   if (run.ev && (run.ev.mark !== undefined || run.ev.marks?.length)) {
@@ -436,7 +440,8 @@ export function drawRun(ctx: CanvasRenderingContext2D, run: Run, dt: number, tim
     const glow = GLOW[base.split(':')[0]] ?? GLOW[a.kind];
     const jx = glow ? Math.round(Math.sin(time * 17 + a.id) * 0.6) : 0;
     const bx = Math.round(q.x * TS + (l ? l.dx * k : 0)) + ox, by = Math.round(q.y * TS + (l ? l.dy * k : 0)) + oy;
-    const dx = bx + 8 - img.width / 2 + jx, dy = by + 14 - img.height;
+    const hunt = a !== p && isHunter(a);
+    const dx = bx + 8 - img.width / 2 + jx, dy = by + 14 - img.height - Math.round(leapLift(a.id));
     const blit = (c: HTMLCanvasElement) => {
       if (!mirror) { ctx.drawImage(c, dx, dy); return; }
       ctx.save(); ctx.translate(dx + c.width, dy); ctx.scale(-1, 1); ctx.drawImage(c, 0, 0); ctx.restore();
@@ -444,11 +449,18 @@ export function drawRun(ctx: CanvasRenderingContext2D, run: Run, dt: number, tim
     // Bodenschatten; Flieger werfen einen kleineren, atmenden Schatten
     const fly = FLY.has(a.kind), foot = by + 14;
     if (fly) dropShadow(ctx, bx + 8, foot, 8 + (Math.sin(time * 5 + a.id) > 0 ? 2 : 0), glow ? 0.5 : 0.8);
-    else dropShadow(ctx, bx + 8, foot, a.boss ? 22 : 12, glow ? 0.5 : 1);
+    else dropShadow(ctx, bx + 8, foot, a.boss || hunt ? Math.max(22, img.width - 4) - leapLift(a.id) : 12, glow ? 0.5 : 1);
+    if (hunt) drawHunterAura(ctx, a, q, bx, foot, time, dt, lights);
     // Ausweichen: Held flackert halbdurchsichtig
     if (statusMarks(a, a === p).includes('dodge')) ctx.globalAlpha = 0.55 + 0.25 * Math.sin(time * 18);
     blit(img);
     ctx.globalAlpha = 1;
+    if (a === p && p.st.stein) stoneOverlay(ctx, () => blit(masks[frame]), dx, dy, img.width);
+    const hg = hunt ? hunterGlow(a, time) : null;
+    if (hg) {
+      ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = Math.max(0, hg[1]); blit(masks[frame]);
+      ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
+    }
     if (glow) {
       // Feuerwesen flimmern, werfen Licht und verlieren Funken
       ctx.globalCompositeOperation = 'lighter';
@@ -478,7 +490,8 @@ export function drawRun(ctx: CanvasRenderingContext2D, run: Run, dt: number, tim
       ctx.fillStyle = '#ffcd75';
       for (const [cx, cy] of [[0, 0], [13, 0], [0, 13], [13, 13]]) { ctx.fillRect(bx + cx, by + cy, 3, 1); ctx.fillRect(bx + (cx ? 15 : 0), by + cy - (cy ? 2 : 0), 1, 3); }
     }
-    if (a !== p && a.hp < a.maxHp) {
+    if (hunt) drawHunterBar(ctx, a, bx, dy, time);
+    else if (a !== p && a.hp < a.maxHp) {
       const w = a.boss ? 24 : 12, hx = bx + 8 - w / 2, hy = dy - 4;
       ctx.fillStyle = '#0d0e17'; ctx.fillRect(hx - 1, hy - 1, w + 2, 4);
       ctx.fillStyle = '#b13e53'; ctx.fillRect(hx, hy, Math.ceil(w * a.hp / a.maxHp), 2);
@@ -648,6 +661,7 @@ export function drawRun(ctx: CanvasRenderingContext2D, run: Run, dt: number, tim
     }
     ctx.globalAlpha = 1;
   }
+  stepHunterFx(ctx, ox, oy, dt, lights, time);
   for (const b of booms) lights.push({ x: b.x, y: b.y, r: (4 + 1.5 * b.r) * Math.max(0, 1 - b.t / (0.28 + 0.06 * b.r)) + 1, col: '#ffcd75' });
   for (const b of bolts) lights.push({ x: b.x1, y: b.y1, r: 2, col: b.col === '#1a1c2c' ? undefined : b.col, a: 0.7 });
   const amb = AMBIENTS[bio];

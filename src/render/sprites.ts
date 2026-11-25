@@ -6,11 +6,14 @@ export const PAL: Record<string, string> = {
   c: '#41a6f6', s: '#73eff7', p: '#5d275d', v: '#9a4fc0',
   n: '#8a5a3a', N: '#5a3a28', h: '#e8b796', H: '#c48a6a',
   S: '#c9d4dc', F: '#1e6b3a',
+  // Jäger: P helles Seelenviolett, K Tiefschwarz (Kutte, Schlund)
+  P: '#d08cff', K: '#0d0e17',
   // Phase 2: R dunkelrot, i Stahl hell, m Stahl dunkel (T ist schon Petrol), u Knochenschatten
   R: '#6b1d2a', i: '#8b8f9c', m: '#4a4d58', u: '#d9cfb4',
 };
 
-export const ACTORS = ['krieger', 'magier', 'waldlaeufer', 'ratte', 'skelett', 'schuetze', 'fledermaus', 'sporling', 'golem', 'glutgeist', 'koenig', 'mutter', 'fuerst', 'mimik'];
+export const ACTORS = ['krieger', 'magier', 'waldlaeufer', 'ratte', 'skelett', 'schuetze', 'fledermaus', 'sporling', 'golem', 'glutgeist', 'koenig', 'mutter', 'fuerst', 'mimik',
+  'echse', 'krake', 'drache', 'medusa', 'tod'];
 export const NO_OUTLINE = new Set(['stairs', 'trap', 'rubble', 'crack', 'crack2', 'fire_a', 'fire_b', 'plate', 'goal',
   'rune0', 'rune1', 'rune2', 'rune3', 'rune0_on', 'rune1_on', 'rune2_on', 'rune3_on']);
 
@@ -1067,9 +1070,9 @@ if (SCHUETZE_NEU) ATTACK.schuetze = { f: [
 ] };
 
 // Schwebende Wesen laufen nicht – sie wippen nur
-export const FLOATERS = new Set(['fledermaus', 'glutgeist', 'ratte']);
+export const FLOATERS = new Set(['fledermaus', 'glutgeist', 'ratte', 'tod']);
 // Wesen, die selbst leuchten: Radius in Feldern und Farbe
-export const GLOW: Record<string, [number, string]> = { glutgeist: [3.4, '#ef7d57'], fuerst: [5, '#ef7d57'], irrlicht: [2.6, '#73eff7'], drache: [3.6, '#ef7d57'], tod: [2.4, '#9a4fc0'] };
+export const GLOW: Record<string, [number, string]> = { glutgeist: [3.4, '#ef7d57'], fuerst: [5, '#ef7d57'], irrlicht: [2.6, '#73eff7'], tod: [2.4, '#9a4fc0'] };
 
 // Ereignisse: Leuchtpilz, Kühlplatte, Sporenei
 SPR.leuchtpilz = ['................', '................', '................', '.....ssss.......', '...sscwwcss.....', '..scccsscccs....', '..sccscccsccs...', '...ssssssssss...', '......gg........', '......gg....ss..',
@@ -1088,13 +1091,6 @@ for (const [k, hex] of Object.entries(PAL)) {
   SHADOW[k] = l > 170 ? '#9a4fc0' : l > 90 ? '#5d275d' : '#1a1c2c';
 }
 SHADOW.k = '#f4f4f4'; // leuchtende Augen
-// Der Tod: Kutte schwarz, Knochen und Sense bleich, Augen violett
-const TOD: Record<string, string> = {};
-for (const [k, hex] of Object.entries(PAL)) {
-  const n = parseInt(hex.slice(1), 16), l = 0.3 * (n >> 16) + 0.59 * ((n >> 8) & 255) + 0.11 * (n & 255);
-  TOD[k] = l > 190 ? '#e8e4d8' : l > 120 ? '#566c86' : l > 70 ? '#262b44' : '#0d0e17';
-}
-TOD.k = '#9a4fc0';
 // Rivalen: andere Farben für Umhang und Rüstung
 const RIVAL: Record<string, string> = { r: '#257179', e: '#1e6b3a', b: '#7d2b45', B: '#5d275d', c: '#ef7d57', G: '#c98a3a', F: '#7d2b45' };
 export const RECOLORS: [string, string, Record<string, string>][] = [
@@ -1104,14 +1100,232 @@ export const RECOLORS: [string, string, Record<string, string>][] = [
   ['schatten_k', 'krieger', SHADOW], ['schatten_m', 'magier', SHADOW], ['schatten_w', 'waldlaeufer', SHADOW],
   ['rivale_k', 'krieger', RIVAL], ['rivale_m', 'magier', RIVAL], ['rivale_w', 'waldlaeufer', RIVAL],
   ['riesenpilz', 'sporling', { G: '#b13e53', F: '#7d2b45', T: '#5d275d', l: '#ef7d57' }],
-  // Jäger: große Gestalten aus den Bossbildern, umgefärbt
-  ['echse', 'golem', { g: '#38b764', d: '#257179', D: '#1e6b3a', S: '#a7f070', i: '#38b764', m: '#1e6b3a' }],
-  ['krake', 'mutter', { G: '#9a4fc0', F: '#5d275d', T: '#333c57', l: '#c9d4dc', r: '#5d275d' }],
-  ['drache', 'fuerst', { r: '#38b764', e: '#1e6b3a', R: '#257179', o: '#ffcd75' }],
-  ['medusa', 'sporling', { G: '#38b764', F: '#1e6b3a', T: '#257179', l: '#ffcd75' }],
+  // Jäger haben eigene Bilder (siehe unten); nur die Schlange ist umgefärbt
   ['schlange', 'ratte', { d: '#38b764', h: '#a7f070', g: '#ffcd75' }],
-  ['tod', 'koenig', TOD],
 ];
+
+// ---------- Jäger: eigene große Gestalten, größer als Bosse (Echse 32x26, Drache 32x32, Medusa 28x32, Krake und Tod 24x24) ----------
+SPR.echse = [
+  '..........uu....................',
+  '........uuu..uu.................',
+  '.......uu...uu..................',
+  '...TTTTTTu.......u..............',
+  '..TGGGGFFFT.....uY...u..........',
+  '.TGGTTTToyTT...uYY..uY...u.....u',
+  'TGTTTTTTTTTTTTTTTTTTYY..uY....YT',
+  'TTTTTTTTTTTTGGGGGGTTTTTTYY..u.TT',
+  'kwkwkwkRRTTGGTGGTGGTTTTTTTTTuY.T',
+  'kkrrrrkkRTTGGGGGGTGGGTFTTTTFTTYT',
+  '.wkwkwkRTuuGGGTGGGTTTTTTTFTTTTTT',
+  '..TTTTTTuuuuTGGTTTTTTTTFFFTTTTTF',
+  '.....TTuuYuuTTTTTTTTTFFFFFFFTFF.',
+  '.....TuuuuuuTTTTGGFTTFFFF...FF..',
+  '...TTTTuYuuuTTTGGTTTTTFF........',
+  '..uTTTFFuuuuTTGTTTTTTTF.........',
+  '..u.uFF.uYuuFTTTTTTTTFF.........',
+  '....u...uuuFFFTTTTTTFF..........',
+  '.........uYFFFFTTTTFFF..........',
+  '..........FFFF.FTTTTF...........',
+  '.........FFFF...FTTTF...........',
+  '.........FFF....FTTF............',
+  '........FFF....FTTTF............',
+  '.......FFFF...FTTTTF............',
+  '......uFuFu..uFuFuFu............',
+  '................................',
+];
+SPR.krake = [
+  '........................',
+  '.........pppppp.........',
+  '.......ppvvvvvvpp.......',
+  '......pvvPvvvvvvvp......',
+  '.....pvPvvvvpvvvvvp.....',
+  '.....pvvvpppppppvvp.....',
+  '....pvvvppyyyyyppvvp....',
+  '....pvvpyyrkkryypvvp....',
+  '....pvvpyrrkkrrypvvp....',
+  '....pvvpyyrkkryypvvp....',
+  '....ppvvppyyyyppvvpp....',
+  '..v..pvvvppppppvvvp..v..',
+  '.vPv.ppKwKwKwKwKwpp.vPv.',
+  '.vv..pvKKKKKKKKKKvp..vv.',
+  '.vp..pvvKwKwKwKwvvp..pv.',
+  '..vp.pvvppvvpvvppvp.pv..',
+  '..pvvpvP.pvPp.pvPppvvp..',
+  '...pp.vp.pv.vp.vp..pp...',
+  '......pv.vP..pvPv.......',
+  '.....pv..vp...pv.p......',
+  '....pPv..pv....pv.v.....',
+  '....vp..pv......vp.vP...',
+  '...vp...vP.......pv.....',
+  '........................',
+];
+SPR.drache = [
+  '.u............................u.',
+  'uro......u............u......oru',
+  '.Rro......u..........u......orR.',
+  'RRroR.....u....re....u.....RorRR',
+  'ReeroR.....u...rr...u.....RoreeR',
+  'ReeeoRR.....uY.rr.Yu.....RRoeeeR',
+  'ReeeeoR......rrrrrr......RoeeeeR',
+  'RReeeroR....RRrreeRR....RoreeeRR',
+  'RReeeeroR..rrRRreRRee..RoreeeeRR',
+  'uReeeeero..reoyreyoee..oreeeeeRu',
+  'Reeeeeeeo...rrkrrkre...oeeeeeeeR',
+  'RRReeeeeeo..RwuRRuwR..oeeeeeeRRR',
+  'RRRRReeeeor.RwkookwR.roeeeeRRRRR',
+  'RRRRRReeeeo.ekwrrwke.oeeeeRRRRRR',
+  'RRRRRRRReeRr.eeeeee.rReeRRRRRRRR',
+  '.R.RRRRRRRe..ryyyye..eRRRRRRR.R.',
+  '..eeeeeeeee.rryyyyee.eeeeeeeee..',
+  '.u..ReeeR..rrrYyyYeee..ReeeR..u.',
+  '..........rerryyyYeere..........',
+  '....u...u.rerYYYYYYere.u...uo...',
+  '.........rerryyyyYYerre....rrr..',
+  '.........rerrYYYYYYeere.....e...',
+  '........uuurryyyYYYeeuuu....re..',
+  '..........rrrYYYYYYeee......re..',
+  '..........rrryyyyYYeee.....re...',
+  '.........rrrrrYYYYeeeee....re...',
+  '.........rrrrryyyYeeeee..rre....',
+  '.........rrrrrYYYYeeeerrree.....',
+  '.........RRRR.rrre.RRReee.......',
+  '.........RRRR......RRRR.........',
+  '........u.u.u......u.u.u........',
+  '................................',
+];
+SPR.medusa = [
+  '.......rll...GGGG.llr.......',
+  '......GGGG...GF.wrGGGG......',
+  '.....rw.FFG..FF..GF..wr.....',
+  '....GGGG.FGGFGFGFGFG.GGG....',
+  '..rllFFG.GFGFFFGFFFGGFFllr..',
+  '.GGGG..FGGFGFGFGFGFGF..GGGG.',
+  'rw.F...GFGFGFGFGFGFFF...F.wr',
+  '.......GGGFFFFFFFFGGF.......',
+  'rll....FGFFFFFFFFFGFF....llr',
+  'GGG.GGGGGFGYYSgYYGGFGGGG.GGG',
+  '.GGGFFFFGFGywSgwyGGFFFFFGGG.',
+  '.FGF....GFSSSgggggG.....FGF.',
+  '..F........SSddgg........F..',
+  '...........Swkkwg...........',
+  '............SSgg............',
+  '...........SSSSSS...........',
+  '.........SSSSSSgggS.........',
+  '........SSSSdggdgggg........',
+  '......SSgSSYyyyyYggdg.......',
+  '......SgSSYyyYYyyYggdg......',
+  '...S.Sg..SYYyyyyYYg.ddg.S...',
+  '....Sg.....YYYYYY.....dS...y',
+  '...S.S....YYYyyYYY....S.S.YY',
+  '...kSk....GGllGFFF....kSk..G',
+  '..........GGllGFFF........G.',
+  '.......GGGGGllGFFGGGG.....G.',
+  '....GGGGGG.GllGFF.GGGGGG.G..',
+  '..GGGG.....GllGFF.....GGGG..',
+  '..GlGl................GlGG..',
+  '..GGGFFFF..........FFFFGGG..',
+  '....FFFFFFFFFFFFFFFFFFFF....',
+  '.......GGGFFFFFFFFGGG.......',
+];
+SPR.tod = [
+  '.........SSwwwwwS.......',
+  '.......Sw.......wSS.....',
+  '......S...kkkk....wS....',
+  '........kkKKKKkk...SS...',
+  '.......kKKKKKKKKk...uS..',
+  '......kKKKKKKKKKKk.uS...',
+  '......kKKKuuuuKKKk..S...',
+  '.....kKKKuuuuuuKKKk.S...',
+  '.....kKKuPKuuKPuKKk.S...',
+  '.....kKKuvKuuKvuKKk.S...',
+  '.....kKKKuuuuuuKKKk.S...',
+  '.....kKKKKuKuKuKKKkuu...',
+  '....kKKKKKKKKKKKKKKuuk..',
+  '...kKKpKKKKKKKKKKKKSKk..',
+  '..kKKpKKKKKKKKKKKKKSKKk.',
+  '..kKpKKKKKKvKKKKKKKSKpk.',
+  '..uukKKKKKKKvKKKKKKSKpk.',
+  '..uu.kKKKKKKKKKKKKKSKk..',
+  '.....kKKpKKKKKKKKpKSKk..',
+  '.....kKKKpKKKKKKpKKSk...',
+  '......kKk.kKKpKKk.kSk...',
+  '.......k...kKk.Kk..S....',
+  '............k...k..S....',
+  '........................',
+];
+// Rückansicht: dunkler, ohne Gesicht; Seitenansicht wie vorn (wird gespiegelt)
+const backOf = (rows: string[], face: string, to: string) => rows.map(r => r.replace(new RegExp(`[${face}]`, 'g'), to));
+VIEWS.echse = { b: SPR.echse, s: flip(SPR.echse) }; // seitlich gezeichnet, Blick nach links
+VIEWS.krake = { b: backOf(SPR.krake, 'wyrkK', 'v'), s: SPR.krake };
+VIEWS.drache = { b: [
+    '.u............................u.',
+    'uro......u............u......oru',
+    '.Rro......u..........u......orR.',
+    'RRroR.....u....re....u.....RorRR',
+    'ReeroR.....u...rr...u.....RoreeR',
+    'ReeeoRR.....ue.rr.eu.....RRoeeeR',
+    'ReeeeoR......rrrrrr......RoeeeeR',
+    'RReeeroR....RRrreeRR....RoreeeRR',
+    'RReeeeroR..rrRRreRRee..RoreeeeRR',
+    'uReeeeerr..rerrrerree..rreeeeeRu',
+    'Reeeeeeer...rrerrere...reeeeeeeR',
+    'RRReeeeeer..RruRRurR..reeeeeeRRR',
+    'RRRRReeeerr.RrerrerR.rreeeeRRRRR',
+    'RRRRRReeeer.eerrrree.reeeeRRRRRR',
+    'RRRRRRRReeRr.eeeeee.rReeRRRRRRRR',
+    '.R.RRRRRRRe..rrrrre..eRRRRRRR.R.',
+    '..eeeeeeeee.rrrrrree.eeeeeeeee..',
+    '.u..ReeeR..rrrerreeee..ReeeR..u.',
+    '..........rerrrrreeere..........',
+    '....u...u.rereeeeeeere.u...uo...',
+    '.........rerrrrrreeerre....rrr..',
+    '.........rerreeeeeeeere.....e...',
+    '........uuurrrrreeeeeuuu....re..',
+    '..........rrreeeeeeeee......re..',
+    '..........rrrrrrreeeee.....re...',
+    '.........rrrrreeeeeeeee....re...',
+    '.........rrrrrrrreeeeee..rre....',
+    '.........rrrrreeeeeeeerrree.....',
+    '.........RRRR.rrre.RRReee.......',
+    '.........RRRR......RRRR.........',
+    '........u.u.u......u.u.u........',
+    '................................',
+  ], s: SPR.drache };
+VIEWS.medusa = { b: [
+    '.......rll...GGGG.llr.......',
+    '......GGGG...GF.wrGGGG......',
+    '.....rw.FFG..FF..GF..wr.....',
+    '....GGGG.FGGFGFGFGFG.GGG....',
+    '..rllFFG.GFGFFFGFFFGGFFllr..',
+    '.GGGG..FGGFGFGFGFGFGF..GGGG.',
+    'rw.F...GFGFGFGFGFGFFF...F.wr',
+    '.......GGGFFFFFFFFGGF.......',
+    'rll....FGFFFFFFFFFGFF....llr',
+    'GGG.GGGGGFGGFGFGFGGFGGGG.GGG',
+    '.GGGFFFFGFGFGFGFGGGFFFFFGGG.',
+    '.FGF....GFFGFGFGFGG.....FGF.',
+    '..F........FGFGFG........F..',
+    '...........GFGFGF...........',
+    '............GFGF............',
+    '...........GFGFGF...........',
+    '.........SSSSSSgggS.........',
+    '........SSSSdggdgggg........',
+    '......SSgSSYyyyyYggdg.......',
+    '......SgSSYyyYYyyYggdg......',
+    '...S.Sg..SYYyyyyYYg.ddg.S...',
+    '....Sg.....YYYYYY.....dS...y',
+    '...S.S....YYYyyYYY....S.S.YY',
+    '...kSk....GGllGFFF....kSk..G',
+    '..........GGllGFFF........G.',
+    '.......GGGGGllGFFGGGG.....G.',
+    '....GGGGGG.GllGFF.GGGGGG.G..',
+    '..GGGG.....GllGFF.....GGGG..',
+    '..GlGl................GlGG..',
+    '..GGGFFFF..........FFFFGGG..',
+    '....FFFFFFFFFFFFFFFFFFFF....',
+    '.......GGGFFFFFFFFGGG.......',
+  ], s: SPR.medusa };
+VIEWS.tod = { b: backOf(SPR.tod, 'uPv', 'K'), s: SPR.tod, alt: ['.'.repeat(24), ...SPR.tod.slice(0, 23)] };
 
 SPR.fountain = [E, E, '.......ss.......', '......scws......', '.....s.ss.s.....', '....s..cc..s....', '...gggggggggg...', '..gccscccscccg..', '..gcccccccccsg..', '..gggggggggggg..',
   '...gddddddddg...', '....gddddddg....', '....gddddddg....', '...gggggggggg...', '..DDDDDDDDDDDD..', E];

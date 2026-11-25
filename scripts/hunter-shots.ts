@@ -24,7 +24,7 @@ const scene = (seed: number, cls: string, floor: number, kind: string, dx: numbe
   r.mobs = []; r.evQ = []; r.p.hp = r.p.maxHp = 300;
   for (let y = r.p.y - 3; y <= r.p.y + 3; y++) for (let x = r.p.x - 6; x <= r.p.x + 6; x++) { r.tiles[y * W + x] = 1; r.seen[y * W + x] = 1; }
   r.floorTurns = 700; r.hunt = { next: 730, n: 1 };
-  const d = { echse: [22, 5, 2, 16], krake: [24, 6, 1, 18], drache: [34, 7, 3, 28], medusa: [24, 5, 2, 22], tod: [40, 5, 3, 36] }[kind]!;
+  const d = { echse: [30, 6, 2, 22], krake: [32, 7, 1, 24], drache: [46, 8, 3, 36], medusa: [34, 6, 2, 28], tod: [55, 7, 3, 45] }[kind]!;
   r.mobs.push({ id: 900, kind, name: { echse: 'Riesenechse', krake: 'Landkrake', drache: 'Drache', medusa: 'Medusa', tod: 'Der Tod' }[kind], x: r.p.x + dx, y: r.p.y, hp: d[0] * 3, maxHp: d[0] * 3, atk: 0, def: d[2], st: {}, xp: d[3], cd: 0, awake: true });
   for (let k = 0; k < turns; k++) g.act({ t: 'wait' });
   return [r.mobs.map((m: any) => [m.kind, m.x - r.p.x, m.st]), r.log.slice(-2)];
@@ -39,13 +39,27 @@ console.log(await page.evaluate(() => {
 }));
 await page.waitForTimeout(700);
 await shot('jaeger-banner');
-console.log(await scene(5, 'magier', 12, 'tod', 2, 1));
-await page.waitForTimeout(3300);
-await shot('tod-sense');
-console.log(await scene(8, 'waldlaeufer', 9, 'drache', 3, 1));
-await page.waitForTimeout(3300);
-await shot('drache-atem');
-console.log(await scene(9, 'krieger', 6, 'krake', 3, 1));
-await page.waitForTimeout(3300);
-await shot('krake-tentakel');
+// Ankündigung (Warnfelder) und der Angriff selbst, je Jäger
+for (const [seed, cls, floor, kind, dx] of [
+  [5, 'magier', 12, 'tod', 2], [8, 'waldlaeufer', 9, 'drache', 5], [8, 'waldlaeufer', 9, 'drache', 3], [9, 'krieger', 6, 'krake', 3],
+  [11, 'krieger', 4, 'echse', 3], [12, 'magier', 7, 'medusa', 4],
+] as [number, string, number, string, number][]) {
+  console.log(await scene(seed, cls, floor, kind, dx, 1));
+  await page.waitForTimeout(2500);
+  await shot(`${kind}-${dx}-warn`);
+  await page.evaluate(() => (window as any).__g.act({ t: 'wait' }));
+  await page.waitForTimeout(140);
+  await shot(`${kind}-${dx}-hit`);
+}
+// alle Jäger nebeneinander
+await page.evaluate(() => {
+  const g = (window as any).__g; g.start(3, 'krieger'); g.goto(8);
+  const r = g.run, W = 64;
+  r.mobs = []; r.evQ = []; r.p.hp = r.p.maxHp = 300;
+  for (let y = r.p.y - 4; y <= r.p.y + 3; y++) for (let x = r.p.x - 10; x <= r.p.x + 10; x++) { r.tiles[y * W + x] = 1; r.seen[y * W + x] = 1; }
+  ['echse', 'krake', 'drache', 'medusa', 'tod'].forEach((kind, k) => r.mobs.push({ id: 900 + k, kind, name: kind, x: r.p.x - 6 + k * 3, y: r.p.y - 2, hp: 30, maxHp: 40, atk: 0, def: 0, st: { stun: 99 }, xp: 1, cd: 0, awake: true }));
+  g.act({ t: 'wait' });
+});
+await page.waitForTimeout(2500);
+await shot('alle');
 await browser.close(); await server.close();

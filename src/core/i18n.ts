@@ -630,6 +630,23 @@ const EN: Record<string, string> = {
   "Aus Medusas Haar fällt eine Schlange!": "A snake drops from Medusa's hair!",
   "verfehlt": "missed",
   " (Stufe ": " (stage ",
+  "Wand!": "Wall!",
+  "Umschlungen": "Entangled",
+  "Versteinert": "Petrified",
+  "unterbrochen": "interrupted",
+  "RASEREI": "FRENZY",
+  " reißt dich zu Boden!": " slams you to the ground!",
+  " springt ins Leere.": " leaps at nothing.",
+  "Ein Tentakel reißt dich heran!": "A tentacle drags you in!",
+  "Medusas Blick lässt dich zu Stein erstarren!": "Medusa's gaze turns you to stone!",
+  "Du wendest den Blick gerade noch ab.": "You avert your eyes just in time.",
+  " gerät in Raserei!": " flies into a frenzy!",
+  " peitscht mit dem Schwanz aus ...": " lashes out with its tail ...",
+  " duckt sich zum Sprung!": " crouches to pounce!",
+  "Der Boden unter dir bebt ...": "The ground beneath you trembles ...",
+  " brüllt – Feuer regnet herab!": " roars – fire rains down!",
+  "Medusas Augen beginnen zu glühen ...": "Medusa's eyes begin to glow ...",
+  "Der Tod tritt aus den Schatten hinter dich.": "Death steps out of the shadows behind you.",
 };
 
 const exact = new Map(Object.entries(EN));
