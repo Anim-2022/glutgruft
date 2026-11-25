@@ -1,0 +1,20 @@
+# Balance v10 (one hunter at a time, to-do #3) – N=40, SEEDS=0, BUILD=heur
+# Rule change: with hunt pressure only one hunter lives at a time; the next comes HUNTER.respawn (12) turns after
+# the kill, one stage stronger (growHp2 +30 % HP, growAtk2 +1 atk per stage); the 5th (deathFrom 4) is Death.
+# Removed: pairs from the 3rd hunter (pairFrom) and Death ignoring the cap.
+#                 before (previous commit)              after
+# Wins/40         base   new
+neu krieger        5      6
+neu magier         3     10
+neu waldlaeufer    3      4
+max krieger       13     14
+max magier         7     10
+max waldlaeufer    8      9
+# total           39     53      (median floor unchanged or +1)
+# Why: the bot often lingers > 560 turns on a floor (mostly magier/waldlaeufer). Before, it then met hunters every
+# 15-30 turns, pairs and Death regardless of kills (Death spawns 152 -> 42 over all cells). Now pressure only grows
+# when a hunter is killed, so a lingering hero faces one stronger hunter instead of a crowd. Hunter deaths shift from
+# a crowd of hunters to Death itself (tod deaths 16 -> 22), which is the intended "you stayed too long" end.
+# Side effect: max turns per floor rise (592-625 -> 649-868) because nothing new spawns while the hunter is alive;
+# rewards still decay per kill (rewardDecay), so farming does not pay more.
+# Knobs: HUNTER.respawn, deathFrom, growHp2, growAtk2 (content.ts).

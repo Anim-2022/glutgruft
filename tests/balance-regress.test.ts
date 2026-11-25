@@ -10,6 +10,7 @@ import type { ClassId } from '../src/game/content';
 function arena(cls: ClassId, floor = 3): Run {
   const r = newRun(77, cls, defaultMeta());
   r.floor = floor; r.mobs = []; r.puzzle = null; r.fire.clear(); r.traps = [];
+  r.ev = null; r.evQ = []; // no event may bring enemies into the empty corridor
   for (let i = 0; i < W * H; i++) r.tiles[i] = T.WALL;
   for (let y = 5; y < 8; y++) for (let x = 2; x < 60; x++) r.tiles[y * W + x] = T.FLOOR;
   r.p.x = 30; r.p.y = 6;

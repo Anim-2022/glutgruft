@@ -1,13 +1,15 @@
 import { VW, VH, TS, sprites, masks, tilesets, text, panel, bar, heroLook, figure, BIOMES as FLOOR_COLS } from './gfx';
 import { GLOW } from './sprites';
 import { W, H, T, wallLike, walkable } from '../game/dungeon';
+import { VS } from '../game/puzzles';
 import { threatOf, statusMarks } from './warn';
 import { onDeath, drawDecals, drawDying, resetDeaths, reducedFx } from './deaths';
 import { drawItemIcon, drawIcon, PERK_ICON } from './icons';
 import { Light, applyLight, AMBIENTS } from './light';
 import { dropShadow, drawAO } from './shade';
 import { softEdged, pickDecal, bakeFloor } from './tiles';
-import { propsFor, drawProp, recolor, torchSpots } from './props';
+import { propsFor, drawProp, drawPropSlice, propSpan, recolor, torchSpots } from './props';
+import type { Zone } from './props';
 import { stepAmbient, drawAmbient, drawFog, resetAmbient, postFx } from './ambient';
 import { drawFlames, smoke, drawSmoke, resetFire, trackBurns, drawEmbers, fireAge, pruneFire } from './fire';
 
@@ -16,8 +18,8 @@ const BOSS_FLAME: [string, string][] = [['#9a4fc0', '#c9d4dc'], ['#38b764', '#a7
 const bossTorch: HTMLCanvasElement[][] = [];
 const torchOf = (bi: number, f: number) => (bossTorch[bi] ??= [0, 1].map(k => recolor(sprites[`torch${k}`], { '#ef7d57': BOSS_FLAME[bi][0], '#ffcd75': BOSS_FLAME[bi][1] })))[f];
 import { sfx } from '../core/audio';
-import { schedule, advance, held, anim, peekAnim, startLunge, setPose, hitActor, hitstop, resetTimeline, busy, FLASH_T, RECOIL_T, lungeOffset, weightOf, hurtLean } from './timeline';
-import { addNum, drawNums, addShake, stepShake, critFlash, hurtFlash, drawScreenFlash, splat, drawSpots, tinted, noteKill, resetJuice } from './juice';
+import { schedule, advance, held, anim, peekAnim, startLunge, setPose, hitActor, hitstop, resetTimeline, busy, FLASH_T, RECOIL_T, lungeOffset, weightOf, hurtLean, heroSlide } from './timeline';
+import { addNum, drawNums, addShake, stepShake, hurtFlash, drawScreenFlash, splat, drawSpots, tinted, noteKill, resetJuice } from './juice';
 import { fxScale, fxLevel } from './fxopts';
 import { drawWorldTile, drawGas, MAT_COLS, MAT_SOUND } from './world';
 import { hunterFx, resetHunterFx, isHunter, leaping, leapLift, drawHunterAura, hunterGlow, drawHunterBar, drawHunterMarks, stepHunterFx, stoneOverlay } from './hunters';
@@ -42,6 +44,9 @@ type Shot = { x0: number; y0: number; x1: number; y1: number; col: string; kind:
 const shots: Shot[] = [];
 const rings: { x: number; y: number; r: number; t: number }[] = [];
 const sparks: { x: number; y: number; col: string; big: boolean; t: number }[] = [];
+// critical hits: white silhouette and a short light on the hit actor only (no full-screen flash)
+const CRIT_T = 0.06;
+const critHits: { id: number; x: number; y: number; t: number }[] = [];
 const bashes: { x: number; y: number; dx: number; dy: number; t: number }[] = [];
 const swipes: { x: number; y: number; dx: number; dy: number; big: boolean; t: number }[] = [];
 const auras: { col: string; ult: boolean; t: number }[] = []; // cast glow around the hero
@@ -57,6 +62,8 @@ const burstBits = (x: number, y: number, n: number, cols: string[], v0: number, 
   }
 };
 const cam = { x: 0, y: 0 };
+const ICE_SPRAY = ['#f4f4f4', '#c9d4dc', '#73eff7', '#94b0c2'];
+let slidePhase: 'move' | null = null; // the last frame showed the hero sliding (bump fires on the change)
 const view = { ox: 0, oy: 0 };
 // Bildschirmpunkt -> Kartenfeld (für Mausklicks)
 export const tileAt = (mx: number, my: number): [number, number] => [Math.floor((mx - view.ox) / TS), Math.floor((my - view.oy) / TS)];
@@ -105,12 +112,21 @@ function buildLight(run: Run) {
 export function resetView() {
   pos.clear(); resetTimeline(); resetJuice();
   bolts.length = 0; bits.length = 0; booms.length = 0;
-  shots.length = 0; rings.length = 0; sparks.length = 0; bashes.length = 0; swipes.length = 0; auras.length = 0; deathT = -1;
-  resetDeaths(); resetAmbient(); resetFire(); resetHunterFx(); fuseTags.length = 0;
+  shots.length = 0; rings.length = 0; sparks.length = 0; critHits.length = 0; bashes.length = 0; swipes.length = 0; auras.length = 0; deathT = -1;
+  resetDeaths(); resetAmbient(); resetFire(); resetHunterFx(); fuseTags.length = 0; slidePhase = null;
+}
+
+// Puzzle chamber with its walls and the entrance below: no decor, no floor marks
+function bareZone(run: Run): Zone | null {
+  const z = run.puzzle;
+  return z ? { x0: z.x - 1, y0: z.y - 1, x1: z.x + VS, y1: z.y + VS + 1 } : null;
 }
 
 function smooth(a: Actor, dt: number) {
   let p = pos.get(a.id);
+  // ice slide: the hero follows the played-back path exactly (constant speed, no easing)
+  const sl = a.id === 0 ? heroSlide() : null;
+  if (sl) { if (!p) pos.set(a.id, (p = { x: sl.x, y: sl.y })); p.x = sl.x; p.y = sl.y; return p; }
   if (!p || (Math.abs(p.x - a.x) + Math.abs(p.y - a.y) > 3 && !leaping(a.id))) { p = { x: a.x, y: a.y }; pos.set(a.id, p); }
   // an enemy whose beat has not come yet still stands at its old position
   if (held(a.id)) return p;
@@ -129,15 +145,46 @@ function smooth(a: Actor, dt: number) {
 
 // Bodenschatten unter Gegenständen: [Fußzeile im Feld, Breite]
 const OBJ_SHADOW: Record<number, [number, number]> = {
-  [T.PILLAR]: [15, 14], [T.BARREL]: [14, 13], [T.CHEST]: [13, 16], [T.CHEST_OPEN]: [13, 16], [T.ALTAR]: [15, 14], [T.ALTAR_USED]: [15, 14],
+  [T.PILLAR]: [15, 14], [T.BARREL]: [14, 13], [T.CHEST]: [13, 16], [T.CHEST_OPEN]: [13, 16], [T.CURSED_OPEN]: [13, 16], [T.ALTAR]: [15, 14], [T.ALTAR_USED]: [15, 14],
   [T.TRADER]: [15, 14], [T.CRATE]: [15, 16], [T.CRATE_ON]: [15, 16], [T.TABLET]: [15, 14], [T.LEVER]: [14, 10], [T.CURSED]: [14, 15],
   [T.FOUNTAIN]: [15, 15], [T.FOUNTAIN_DRY]: [15, 15], [T.BRAZIER]: [15, 10], [T.BRAZIER_ON]: [15, 10], [T.STATUE]: [15, 14], [T.MIMIC]: [13, 16],
   [T.POT]: [14, 10], [T.SPORE]: [15, 12],
 };
 const FLY = new Set(['fledermaus', 'glutgeist', 'tod']);
 
+// Look variants of common objects: shapes, each with its mirrored version. Within a few tiles two objects
+// of the same kind get different shapes, so a row of pots or barrels never looks copy-pasted.
+const VARIANTS: Record<number, string[][]> = {
+  [T.POT]: [['pot', 'pot_m'], ['pot1', 'pot1_m'], ['pot2', 'pot2_m']],
+  [T.BARREL]: [['barrel'], ['barrel1'], ['barrel2']],
+  [T.SPORE]: [['spore', 'spore_m'], ['spore1', 'spore1_m']],
+};
+const VARIANT_R = 4;
+let varKey = '';
+const varOf = new Map<number, { t: number; name: string }>();
+function objectSprite(run: Run, i: number, t: number): string {
+  const key = `${run.seed}:${run.floor}`;
+  if (key !== varKey) {
+    varKey = key; varOf.clear();
+    const shapeAt = new Map<number, number>();
+    for (let j = 0; j < W * H; j++) {
+      const v = VARIANTS[run.tiles[j]];
+      if (!v) continue;
+      const x = j % W, y = (j / W) | 0, used = new Set<number>();
+      for (const [k, sh] of shapeAt) if (run.tiles[k] === run.tiles[j] && Math.max(Math.abs((k % W) - x), Math.abs(((k / W) | 0) - y)) <= VARIANT_R) used.add(sh);
+      const h = hash(x, y, run.seed + run.floor * 13);
+      let shape = h % v.length;
+      for (let n = 0; n < v.length && used.has(shape); n++) shape = (shape + 1) % v.length;
+      shapeAt.set(j, shape);
+      varOf.set(j, { t: run.tiles[j], name: v[shape][(h >>> 4) % v[shape].length] });
+    }
+  }
+  const v = VARIANTS[t], o = varOf.get(i);
+  return o && o.t === t ? o.name : v[hash(i % W, (i / W) | 0, 31) % v.length][0]; // objects created later (events) fall back to a hash
+}
+
 const TILE_SPR: Record<number, string> = {
-  [T.STAIRS]: 'stairs', [T.CHEST]: 'chest', [T.CHEST_OPEN]: 'chest_open', [T.ALTAR]: 'altar', [T.ALTAR_USED]: 'altar_used',
+  [T.STAIRS]: 'stairs', [T.CHEST]: 'chest', [T.CHEST_OPEN]: 'chest_open', [T.CURSED_OPEN]: 'cursed_open', [T.ALTAR]: 'altar', [T.ALTAR_USED]: 'altar_used',
   [T.CRATE]: 'crate', [T.CRATE_ON]: 'crate', [T.PLATE]: 'plate', [T.LEVER]: 'lever', [T.TABLET]: 'tablet', [T.GOAL]: 'goal',
   [T.CURSED]: 'cursed', [T.TRADER]: 'trader', [T.FOUNTAIN]: 'fountain', [T.FOUNTAIN_DRY]: 'fountain_dry', [T.GATE]: 'gate', [T.BRAZIER]: 'brazier', [T.BRAZIER_ON]: 'brazier_on', [T.STATUE]: 'statue', [T.MIMIC]: 'chest',
   [T.BARREL]: 'barrel', [T.PILLAR]: 'pillar', [T.RUBBLE]: 'rubble', [T.FRAGILE]: 'crack', [T.FRAGILE2]: 'crack2',
@@ -162,7 +209,8 @@ export function drawRun(ctx: CanvasRenderingContext2D, run: Run, dt: number, tim
         if (f.s === 'missed') sfx('miss');
         else if (/^\d+!$/.test(f.s)) {
           // critical hit: short stop, flash, own sound, ring of sparks
-          hitstop(0.06); critFlash(); sfx('crit');
+          hitstop(0.06); sfx('crit');
+          if (fxLevel() >= 1) critHits.push({ id: a ? a.id : -1, x: f.x, y: f.y, t: 0 });
           sparks.push({ x: f.x * TS + 8, y: f.y * TS + 7, col: '#ffcd75', big: true, t: 0 });
           burstBits(f.x * TS + 8, f.y * TS + 7, Math.round(8 * fxScale()), ['#ffcd75', '#f4f4f4'], 40, 100, 30);
           shake(3, hitDir);
@@ -257,6 +305,7 @@ export function drawRun(ctx: CanvasRenderingContext2D, run: Run, dt: number, tim
         if (f.mat === 'stone' || f.mat === 'metal') shake(2);
         break;
       }
+      case 'slide': setDir(Math.sign(f.path[1][0] - f.path[0][0]), Math.sign(f.path[1][1] - f.path[0][1])); sfx('scrape'); slidePhase = 'move'; break;
       case 'debris':
         sfx('crack');
         for (let k = 0; k < 14; k++) {
@@ -267,7 +316,17 @@ export function drawRun(ctx: CanvasRenderingContext2D, run: Run, dt: number, tim
     }
   }
 
-  const p = run.p, pp = smooth(p, dt);
+  const p = run.p, pp = smooth(p, dt), sl = heroSlide();
+  // ice slide: spray behind the feet while moving, a small bump when the hero stops
+  if (sl?.phase === 'move' && fxLevel() > 0 && Math.random() < 0.5 + 0.5 * fxScale()) {
+    const fx0 = pp.x * TS + 8 - sl.dx * 5, fy0 = pp.y * TS + 14 - sl.dy * 3;
+    for (let k = 0; k < 2; k++) bits.push({ x: fx0 + (Math.random() - 0.5) * 6, y: fy0, vx: -sl.dx * (20 + Math.random() * 30) + (Math.random() - 0.5) * 24,
+      vy: -sl.dy * (20 + Math.random() * 30) - 18 - Math.random() * 22, col: ICE_SPRAY[(Math.random() * ICE_SPRAY.length) | 0], t: 0, fy: fy0 + 1 + Math.random() * 3 });
+  }
+  if (slidePhase === 'move' && sl?.phase !== 'move') {
+    slidePhase = null;
+    if (sl) { shake(1, [sl.dx, sl.dy]); sfx('step'); burstBits(pp.x * TS + 8 + sl.dx * 5, pp.y * TS + 13 + sl.dy * 2, Math.round(4 * fxScale()) + 2, ICE_SPRAY, 10, 35, 15); }
+  }
   // Held bleibt immer in der Bildmitte; jenseits des Kartenrands ist es einfach dunkel
   const tx = pp.x * TS + 8 - VW / 2, ty = pp.y * TS + 8 - VH / 2;
   if (Math.abs(tx - cam.x) > 220 || Math.abs(ty - cam.y) > 220) { cam.x = tx; cam.y = ty; }
@@ -278,12 +337,19 @@ export function drawRun(ctx: CanvasRenderingContext2D, run: Run, dt: number, tim
   view.ox = ox - sx; view.oy = oy - sy;
   ctx.fillStyle = '#08090f'; ctx.fillRect(0, 0, VW, VH);
   const bio = biomeOf(run.floor), ts = tilesets[bio], boss = run.floor % 5 === 0, fx = !reducedFx();
-  const props = propsFor(run.tiles, run.seed + run.floor);
-  // Bodenspur auf etwa jedem elften Feld, aber nie direkt neben einer anderen (keine Häufchen)
+  const zone = bareZone(run), props = propsFor(run.tiles, run.seed + run.floor, bio, zone);
+  // floor marks on about every eleventh tile, never right next to another one (no clusters), none in a puzzle chamber
   const dseed = run.seed + run.floor * 7, dcand = (x: number, y: number) => hash(x, y, dseed) % 11 === 0;
-  const decalAt = (x: number, y: number) => dcand(x, y) && !dcand(x - 1, y) && !dcand(x, y - 1) && !dcand(x - 1, y - 1) && !dcand(x + 1, y - 1);
+  const decalAt = (x: number, y: number) => dcand(x, y) && !dcand(x - 1, y) && !dcand(x, y - 1) && !dcand(x - 1, y - 1) && !dcand(x + 1, y - 1)
+    && !(zone && x >= zone.x0 && x <= zone.x1 && y >= zone.y0 && y <= zone.y1);
   buildLight(run);
   const lights: Light[] = [], floorTiles: number[] = [];
+  for (let k = critHits.length - 1; k >= 0; k--) {
+    const c = critHits[k];
+    if (c.t > CRIT_T + 0.12) { critHits.splice(k, 1); continue; }
+    lights.push({ x: c.x, y: c.y, r: 2.4 * (1 - c.t / (CRIT_T + 0.12)), col: '#ffcd75', a: 0.9 });
+    c.t += dt;
+  }
   const flick = (n: number) => 0.92 + 0.08 * Math.sin(time * 9 + n) + 0.04 * Math.sin(time * 23 + n * 1.7);
   const x0 = Math.max(0, Math.floor(cam.x / TS) - 1), x1 = Math.min(W - 1, x0 + VW / TS + 2);
   const y0 = Math.max(0, Math.floor(cam.y / TS) - 1), y1 = Math.min(H - 1, y0 + Math.ceil(VH / TS) + 2);
@@ -297,7 +363,8 @@ export function drawRun(ctx: CanvasRenderingContext2D, run: Run, dt: number, tim
       const l = open(-1, 0), r = open(1, 0), u = open(0, -1);
       // Wandspielart fest am Feld (Hash der Koordinaten, kein Zufall): meist die Grundwand
       // Wandspielart fest am Feld: meist schlichte Mauer in vier Tönungen, sonst Riss, Abplatzer oder Biomstück
-      const plain = hash(x, y, 101) % 100 < 74;
+      // wall decor always hangs on the plain wall; elsewhere mostly the plain wall, sometimes a crack, chip or biome piece
+      const wprop = t === T.WALL ? props[i] : null, plain = !!wprop || hash(x, y, 101) % 100 < 74;
       if (front) ctx.drawImage(plain ? ts.walls[hash(x, y, 111) % ts.walls.length] : ts.wallsX[hash(x, y, 121) % ts.wallsX.length], dx, dy);
       else {
         const c = [open(-1, -1), open(1, -1), open(-1, 1), open(1, 1)];
@@ -324,11 +391,7 @@ export function drawRun(ctx: CanvasRenderingContext2D, run: Run, dt: number, tim
         const tf = Math.floor(time * 7 + x) % 2;
         ctx.drawImage(boss ? torchOf(bio, tf) : sprites[`torch${tf}`], dx, dy);
         lights.push({ x, y: y + 0.6, r: (boss ? 5.5 : 5) * flick(i), col: boss ? BOSS_FLAME[bio][0] : '#ef7d57' });
-      } else if (front && plain && t === T.WALL && !torches.has(i - 1) && !torches.has(i + 1)) {
-        // Wanddekor (Ketten, Banner, Wurzeln …) nur auf der schlichten Grundwand
-        const pr = props[i];
-        if (pr) drawProp(ctx, bio, pr, x, y, dx, dy, time, lights);
-      }
+      } else if (front && wprop) drawProp(ctx, bio, wprop, x, y, dx, dy, time, lights); // chains, banners, roots … (placement keeps torches clear)
     } else {
       // floor from the per-level bake: pattern and brightness wave run across tile borders
       ctx.drawImage(floorOf(run, bio), x * TS, y * TS, TS, TS, dx, dy, TS, TS);
@@ -336,12 +399,19 @@ export function drawRun(ctx: CanvasRenderingContext2D, run: Run, dt: number, tim
       const edge = (k: number) => { let e = 0; [[0, -1, 1], [-1, 0, 2], [1, 0, 4], [0, 1, 8]].forEach(([ex, ey, bit]) => { const n = run.tiles[i + ey * W + ex]; if (n !== k && !wallLike(n)) e |= bit; }); return e; };
       if (t === T.ICE) ctx.drawImage(softEdged(sprites.ice, edge(T.ICE)), dx, dy);
       if (t === T.GRASS) ctx.drawImage(softEdged(ts.bed, edge(T.GRASS)), dx, dy);
+      // large floor patterns (rune circle, 3×3): the neighbouring tiles draw their slice of it
+      let covered = false;
+      for (let sy = -1; sy <= 1; sy++) for (let sx = -1; sx <= 1; sx++) {
+        if (!sx && !sy) continue;
+        const cx = x - sx, cy = y - sy, pr = cx >= 0 && cy >= 0 && cx < W && cy < H ? props[cy * W + cx] : null;
+        if (pr && pr.kind === 'flat' && propSpan(bio, pr) > 1) { drawPropSlice(ctx, bio, pr, sx, sy, dx, dy, time, cx, cy); covered = true; }
+      }
       drawAO(ctx, run.tiles, x, y, dx, dy);
       if (t >= T.OIL) drawWorldTile(ctx, run, t, i, x, y, dx, dy, time);
       if (t === T.FLOOR) {
         const pr = props[i];
         if (pr) drawProp(ctx, bio, pr, x, y, dx, dy, time, lights);
-        else if (decalAt(x, y)) ctx.drawImage(pickDecal(ts.decals, bio, hash(x, y, run.seed + run.floor * 7)), dx, dy);
+        else if (!covered && decalAt(x, y)) ctx.drawImage(pickDecal(ts.decals, bio, hash(x, y, run.seed + run.floor * 7)), dx, dy);
       }
       if (t === T.GRASS) ctx.drawImage(ts.grass[(x * 5 + y * 3) % 3], dx, dy);
       else if (t === T.BURNT) {
@@ -378,7 +448,7 @@ export function drawRun(ctx: CanvasRenderingContext2D, run: Run, dt: number, tim
     if (sh) dropShadow(ctx, dx + 8, dy + sh[0], sh[1]);
     // Lunte: Fass zittert im letzten Zug, Zähler der verbleibenden Züge darüber
     const fz = t === T.BARREL ? run.fuses.get(i) : undefined;
-    const sname = t === T.TRADER && Math.floor(time * 1.6 + x) % 2 ? 'trader_b' : t === T.STATUE && run.puzzle && x === run.puzzle.x + 6 ? 'statue_l' : s;
+    const sname = t === T.TRADER && Math.floor(time * 1.6 + x) % 2 ? 'trader_b' : t === T.STATUE && run.puzzle && x === run.puzzle.x + 6 ? 'statue_l' : VARIANTS[t] ? objectSprite(run, i, t) : s;
     // Mimik: sieht aus wie eine Truhe, aber alle paar Sekunden zuckt der Deckel und ein Zahn blitzt
     const twitch = t === T.MIMIC && (time * 0.22 + (i % 13) * 0.071) % 1 < 0.045;
     if (s) ctx.drawImage(sprites[sname], dx + (fz === 1 ? Math.round(Math.sin(time * 60)) : 0), dy - (twitch ? 1 : 0));
@@ -546,7 +616,8 @@ export function drawRun(ctx: CanvasRenderingContext2D, run: Run, dt: number, tim
     // Blickrichtung wählt die Ansicht, Bewegung die Schrittbilder
     const f = a === p ? p.dir : a.f ?? [0, 1];
     const v = f[1] < 0 ? 'b' : f[1] > 0 ? 'f' : 's', mirror = v === 's' && f[0] < 0;
-    const moving = Math.abs(q.x - a.x) + Math.abs(q.y - a.y) > 0.04;
+    const asl = a === p ? heroSlide() : null;
+    const moving = !asl && Math.abs(q.x - a.x) + Math.abs(q.y - a.y) > 0.04;
     const fr = moving ? [2, 0, 3, 0][Math.floor(time * 11) % 4] : Math.floor(time * 2.5 + a.id * 0.37) % 2;
     // Bosse zeigen ab halber Lebenskraft ihre verwundete Fassung (nur gelesen, keine Logik)
     const base = a === p ? lookOf(p) : a.boss && a.hp * 2 < a.maxHp && sprites[`${a.kind}2:f0`] ? `${a.kind}2` : a.kind, an = peekAnim(a.id), ps = an?.pose;
@@ -565,14 +636,20 @@ export function drawRun(ctx: CanvasRenderingContext2D, run: Run, dt: number, tim
     const rc = an?.recoil, rk = rc ? (1 - rc.t / RECOIL_T) * 2 : 0, sq = an && an.hurt < 0.1 && fxLevel() > 0 ? 1 - an.hurt / 0.1 : 0;
     const glow = GLOW[base.split(':')[0]] ?? GLOW[a.kind];
     const jx = glow ? Math.round(Math.sin(time * 17 + a.id) * 0.6) : 0;
-    const bx = Math.round(q.x * TS + (l ? l.dx * k : 0) + (rc ? rc.dx * rk : 0)) + tlx + ox, by = Math.round(q.y * TS + (l ? l.dy * k : 0) + (rc ? rc.dy * rk : 0)) + tly + oy;
+    // ice bump: the body runs on 2 px past the stop and settles back
+    const bump = asl?.phase === 'bump' ? Math.sin(asl.u * Math.PI) * 2 : 0;
+    const bx = Math.round(q.x * TS + (l ? l.dx * k : 0) + (rc ? rc.dx * rk : 0) + (asl ? asl.dx * bump : 0)) + tlx + ox, by = Math.round(q.y * TS + (l ? l.dy * k : 0) + (rc ? rc.dy * rk : 0) + (asl ? asl.dy * bump : 0)) + tly + oy;
     const hunt = a !== p && isHunter(a);
     const dx = bx + 8 - img.width / 2 + jx, dy = by + 14 - img.height - Math.round(leapLift(a.id)) + bob;
     // squash on hit: wider and flatter, feet stay on the ground
-    const sw = sq ? Math.round(img.width * (1 + 0.15 * sq)) : img.width, sh = sq ? Math.round(img.height * (1 - 0.15 * sq)) : img.height;
+    // sliding: crouched a little (sideways the lean shows it, up/down a slight squash); the stop squashes once more
+    const ssq = !asl || fxLevel() === 0 ? 0 : asl.phase === 'bump' ? 0.12 * Math.sin(asl.u * Math.PI) : asl.dx ? 0 : 0.06;
+    const sw = sq ? Math.round(img.width * (1 + 0.15 * sq)) : ssq ? Math.round(img.width * (1 + ssq)) : img.width, sh = sq ? Math.round(img.height * (1 - 0.15 * sq)) : ssq ? Math.round(img.height * (1 - ssq)) : img.height;
     const qx = dx - ((sw - img.width) >> 1), qy = dy + (img.height - sh);
     // hurt: the body leans away from the blow for a moment (shear anchored at the feet)
-    const lean = fxLevel() > 0 ? hurtLean(an) * (rc ? Math.sign(rc.dx) || 1 : 1) : 0;
+    // sliding sideways: the body leans back against the direction of travel (eases in, springs upright at the stop)
+    const slean = asl && asl.dx ? -asl.dx * (asl.phase === 'move' ? 0.2 * Math.min(1, asl.u * 4 + 0.4) : 0.2 * (1 - asl.u) - 0.06 * Math.sin(asl.u * Math.PI)) : 0;
+    const lean = fxLevel() > 0 ? hurtLean(an) * (rc ? Math.sign(rc.dx) || 1 : 1) + slean : 0;
     const blit = (c: HTMLCanvasElement) => {
       if (!mirror && !lean) { ctx.drawImage(c, qx, qy, sw, sh); return; }
       ctx.save();
@@ -621,6 +698,7 @@ export function drawRun(ctx: CanvasRenderingContext2D, run: Run, dt: number, tim
     if (tint && masks[frame]) { ctx.globalAlpha = 0.22 + 0.08 * Math.sin(time * 6 + a.id); blit(tinted(masks[frame], tint)); ctx.globalAlpha = 1; }
     const fl = an?.flash;
     if (fl) { ctx.globalAlpha = Math.min(1, fl / FLASH_T + 0.2); blit(masks[frame]); ctx.globalAlpha = 1; }
+    if (masks[frame] && critHits.some(c => c.id === a.id && c.t < CRIT_T)) { blit(masks[frame]); blit(masks[frame]); }
     statusFx(a, a === p, dx, dy, img.width, img.height, q);
     if (a !== p) warn(a, q, dx, dy, img.width);
     if (run.target && a.id === run.target) {
@@ -926,7 +1004,9 @@ function hud(ctx: CanvasRenderingContext2D, run: Run, time: number) {
   }
   // Ziel der Rätselkammer, solange man darin steht (und die laufende Prüfung)
   const goal = puzzleGoal(run);
+  let goalLine = false;
   if (goal) {
+    goalLine = true;
     const z = run.puzzle!, col = z.solved ? '#a7f070' : z.dead ? '#566c86' : z.kind === 'arena' && z.started ? '#b13e53' : '#73eff7', gw = goal.length * 6 + 12;
     ctx.fillStyle = 'rgba(8,9,15,0.7)'; ctx.fillRect(VW / 2 - gw / 2, 56, gw, 14);
     text(ctx, goal, VW / 2, 59, col, 8, 'center');
@@ -934,15 +1014,20 @@ function hud(ctx: CanvasRenderingContext2D, run: Run, time: number) {
     // Ziel des laufenden Ereignisses
     const ev = eventGoal(run);
     if (ev) {
+      goalLine = true;
       const s = `${ev.title} – ${ev.goal}`, gw = s.length * 6 + 12;
       ctx.fillStyle = 'rgba(8,9,15,0.7)'; ctx.fillRect(VW / 2 - gw / 2, 56, gw, 14);
       text(ctx, s, VW / 2, 59, ev.col, 8, 'center');
     }
   }
 
-  // Jäger: Zugzähler und Warnung unter der Vorratszeile
+  // Hunters: turn counter and warning at the top centre, under the goal line (never under the minimap)
   const hi = hunterInfo(run);
-  if (hi) text(ctx, hi.text, VW - 6, 20, hi.col, 8, 'right');
+  if (hi) {
+    const hy = goalLine ? 72 : 56, hw = hi.text.length * 6 + 12;
+    ctx.fillStyle = 'rgba(8,9,15,0.6)'; ctx.fillRect(VW / 2 - hw / 2, hy, hw, 14);
+    text(ctx, hi.text, VW / 2, hy + 3, hi.col, 8, 'center');
+  }
 
   // Ebene und Vorräte: eine Zeile oben rechts
   const parts: [string | null, string, string][] = [[null, `[I] ${p.bag.length}/${BAG_MAX}`, p.bag.length >= BAG_MAX ? '#ef7d57' : p.bag.length ? '#ffcd75' : '#566c86']];

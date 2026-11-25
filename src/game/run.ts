@@ -1,6 +1,6 @@
 import { RNG } from '../core/rng';
 import type { Meta } from '../core/save';
-import { W, H, T, Room, genDungeon, center, walkable, opaque, los, computeFov, distMap } from './dungeon';
+import { W, H, T, Room, genDungeon, center, walkable, wallLike, opaque, los, computeFov, distMap } from './dungeon';
 import { VS, CRATE_TEMPLATES, mirror, genIce, slide, iceStops, genLights, lightsPress, lightCell, LIGHTS_ALL, dartFires, DartLane } from './puzzles';
 import { CLASSES, ClassId, MOBS, PERKS, RELICS, Item, Offer, AFFIX, CONSUMABLES, UNIQUES, ULT, ULT_LEVEL, SKILL_UP, SYNERGIES, NEW_SKILLS, TUNE, treeNodes, treeNode, treePool, nodeText, MAGE_WHET, BOSS_BY_BIOME, BIOME_NAMES, FLOORS_PER_BIOME, LAST_FLOOR, biomeOf, spawnTable, FEATURES, HAZARD, EVENT, HUNTER, DIFF, DESTR } from './content';
 import { EVENTS, EVENT_BY_ID, NOTES } from './events';
@@ -93,7 +93,9 @@ export type Fx =
   | { k: 'gaze'; x0: number; y0: number; x1: number; y1: number }
   | { k: 'roar'; id: number; x: number; y: number }
   | { k: 'blink'; x: number; y: number }
-  | { k: 'reap'; x: number; y: number; v: number };
+  | { k: 'reap'; x: number; y: number; v: number }
+  // the hero slid over ice: every tile from start to end (rendering plays it back tile by tile)
+  | { k: 'slide'; path: [number, number][] };
 
 // Versteckte Bodenfalle. seen: der Held hat sie entdeckt (oder sie wurde ausgelöst) – dann ist sie sichtbar.
 export type HazardKind = 'stachel' | 'pfeil' | 'gas' | 'glut';
@@ -744,9 +746,25 @@ export function puzzleGoal(run: Run): string | null {
 }
 
 // Setzt ein blockierendes Objekt nur, wenn danach noch alles erreichbar bleibt.
-function tryBlock(run: Run, x: number, y: number, tile: number): boolean {
+// Objects that stand on a tile (furniture, containers, obstacles). Placement keeps them apart.
+const OBJECTS = new Set<number>([T.POT, T.SPORE, T.BARREL, T.PILLAR, T.CHEST, T.CURSED, T.MIMIC, T.ALTAR, T.TRADER, T.FOUNTAIN, T.TABLET, T.LEVER, T.STAIRS, T.STATUE, T.CRATE]);
+// a doorway: walkable tile squeezed between two walls (the mouth of a corridor or a gap in a wall)
+const doorwayAt = (t: Uint8Array, i: number) => walkable(t[i]) && ((wallLike(t[i - 1]) && wallLike(t[i + 1])) || (wallLike(t[i - W]) && wallLike(t[i + W])));
+// Room to breathe: no other object and no doorway on the eight tiles around (x, y)
+export function roomy(t: Uint8Array, x: number, y: number): boolean {
+  for (let oy = -1; oy <= 1; oy++) for (let ox = -1; ox <= 1; ox++) {
+    if (!ox && !oy) continue;
+    const j = (y + oy) * W + x + ox;
+    if (OBJECTS.has(t[j]) || doorwayAt(t, j)) return false;
+  }
+  return true;
+}
+
+// spaced: the object also needs room to breathe (see roomy) – used for everything placed at random
+function tryBlock(run: Run, x: number, y: number, tile: number, spaced = false): boolean {
   const i = y * W + x;
   if (run.tiles[i] !== T.FLOOR || !isFree(run, x, y)) return false;
+  if (spaced && FEATURES.spacing && !roomy(run.tiles, x, y)) return false;
   // Nie in einen Durchgang: die begehbaren Nachbarn müssen ringsum eine einzige zusammenhängende Gruppe bilden
   const ring = [[-1, -1], [0, -1], [1, -1], [1, 0], [1, 1], [0, 1], [-1, 1], [-1, 0]].map(([ox, oy]) => walkable(run.tiles[(y + oy) * W + x + ox]));
   let groups = 0;
@@ -796,7 +814,9 @@ function placeIn(run: Run, r: Room, tile: number): boolean {
   const spots = rng.shuffle([[r.x, r.y], [r.x + r.w - 1, r.y], [r.x, r.y + r.h - 1], [r.x + r.w - 1, r.y + r.h - 1]]);
   for (let k = 0; k < 8; k++) spots.push([rng.int(r.x, r.x + r.w - 1), rng.int(r.y, r.y + r.h - 1)]);
   const [mx, my] = center(r);
-  return spots.some(([x, y]) => !(x === mx && y === my) && tryBlock(run, x, y, tile));
+  // first with room around it; only if no spot allows that, anywhere that does not block a path
+  const ok = (spaced: boolean) => spots.some(([x, y]) => !(x === mx && y === my) && tryBlock(run, x, y, tile, spaced));
+  return (FEATURES.spacing && ok(true)) || ok(false);
 }
 
 function nextFloor(run: Run) {
@@ -855,10 +875,13 @@ function nextFloor(run: Run) {
     }
     // Säulen in großen Räumen, Fässer verstreut
     if (r.w >= 6 && r.h >= 5 && rng.chance(0.5)) {
-      for (const [px, py] of [[r.x + 1, r.y + 1], [r.x + r.w - 2, r.y + 1], [r.x + 1, r.y + r.h - 2], [r.x + r.w - 2, r.y + r.h - 2]]) tryBlock(run, px, py, T.PILLAR);
+      for (const [px, py] of [[r.x + 1, r.y + 1], [r.x + r.w - 2, r.y + 1], [r.x + 1, r.y + r.h - 2], [r.x + r.w - 2, r.y + r.h - 2]]) tryBlock(run, px, py, T.PILLAR, true);
     }
     if (rng.chance(0.35)) {
-      for (let k = rng.int(1, 2); k > 0; k--) tryBlock(run, rng.int(r.x, r.x + r.w - 1), rng.int(r.y, r.y + r.h - 1), T.BARREL);
+      // a few tries each: barrels keep their distance from other objects and doorways
+      const at = () => tryBlock(run, rng.int(r.x, r.x + r.w - 1), rng.int(r.y, r.y + r.h - 1), T.BARREL, true);
+      if (FEATURES.spacing) { for (let k = rng.int(1, 2), tries = 0; k > 0 && tries < 3; tries++) if (at()) k--; }
+      else for (let k = rng.int(1, 2); k > 0; k--) at();
     }
   }
   // Brüchiger Boden: Abkürzung nach unten, nie an einem Boss vorbei
@@ -1290,22 +1313,25 @@ function hunterTick(run: Run) {
   run.floorTurns = (run.floorTurns ?? 0) + 1;
   const t = run.floorTurns;
   if (t === HUNTER.first - HUNTER.warn) say(run, 'Something is following you ...');
+  // one hunter at a time (hunt pressure): while one lives the clock is held, the next comes `respawn` turns after the kill
+  if (FEATURES.huntPressure && h.n && run.mobs.some(isHunter)) { h.next = Math.max(h.next, t + HUNTER.respawn); return; }
   if (t < h.next) return;
   // aufgeschoben (nicht verloren): in der Rätselkammer, in einem versiegelten Ereignis, bei voller Zahl
   if (inVault(run, run.p.x, run.p.y) || run.ev?.seal?.length) return;
-  // Death answers whoever stays too long – the cap does not hold it back
-  const death = FEATURES.huntPressure && h.n >= HUNTER.deathFrom;
-  if (!death && run.mobs.filter(isHunter).length >= HUNTER.cap) return;
-  // jeder weitere Jäger kommt schneller: 30 → 25 → 20 → 15 Züge
+  if (FEATURES.huntPressure) {
+    // each new hunter is one stage stronger (stage = hunter index on this floor); from deathFrom on, Death comes
+    if (spawnHunter(run, h.n)) { h.n++; h.next = t + HUNTER.respawn; }
+    return;
+  }
+  // legacy rules (huntPressure off): up to `cap` at once, each further one comes faster: 30 → 25 → 20 → 15 turns
+  if (run.mobs.filter(isHunter).length >= HUNTER.cap) return;
   if (spawnHunter(run, h.n)) {
     h.n++;
-    // pressure: from the pairFrom-th hunter on they come in pairs (the second may exceed the cap)
-    if (FEATURES.huntPressure && h.n > HUNTER.pairFrom && h.n <= HUNTER.deathFrom && spawnHunter(run, h.n, true)) h.n++;
     h.next = t + Math.max(HUNTER.minInterval, HUNTER.interval - HUNTER.shrink * (h.n - 1));
   }
 }
 
-function spawnHunter(run: Run, stage = 0, extra = false): boolean {
+function spawnHunter(run: Run, stage = 0): boolean {
   const p = run.p, rng = run.rng;
   // nur Jäger, die auf dieser Tiefe schon vorkommen (auch erzwungene – sonst wartet der Jäger)
   const pool = HUNTER.pool.filter(([k, , f]) => run.floor >= f && (!FEATURES.hunterForce || k === FEATURES.hunterForce));
@@ -1342,8 +1368,6 @@ function spawnHunter(run: Run, stage = 0, extra = false): boolean {
   if (death) {
     say(run, 'You stayed too long. DEATH IS COMING – it brings no reward.');
     run.fx.push({ k: 'banner', title: 'DEATH IS COMING', sub: 'Descend while you still can!', col: '#b13e53' }, { k: 'shake', n: 7 });
-  } else if (extra) {
-    say(run, `A second hunter follows: ${m.name}!`);
   } else {
     say(run, `THE HUNTER IS HERE: ${m.name}!`);
     run.fx.push({ k: 'banner', title: 'THE HUNTER IS HERE', sub: m.name, col: '#b13e53' }, { k: 'shake', n: 5 });
@@ -1667,6 +1691,7 @@ export function hunterInfo(run: Run): { text: string; col: string } | null {
   if (!run.hunt) return null;
   const t = run.floorTurns ?? 0, h = run.hunt;
   if (FEATURES.huntPressure && h.n >= HUNTER.deathFrom) return { text: 'Death hunts you – to the stairs!', col: '#b13e53' };
+  if (FEATURES.huntPressure && run.mobs.some(isHunter)) return { text: 'A hunter is on your trail!', col: '#b13e53' };
   if (h.n) return { text: `Next hunter: ${Math.max(0, h.next - t)} turns`, col: '#b13e53' };
   if (t >= HUNTER.first - 10) return { text: `The hunt begins soon ... ${Math.max(0, HUNTER.first - t)}`, col: '#b13e53' };
   if (t >= HUNTER.first - HUNTER.warn) return { text: 'Something is following you ...', col: '#ef7d57' };
@@ -1972,14 +1997,14 @@ function placeWorld(run: Run, rooms: Room[], bossFloor: boolean) {
     }
   };
   rooms.forEach((r, ri) => {
-    if (rng.chance(DESTR.pot[bio])) for (let k = rng.int(...DESTR.potN), tries = 0; k > 0 && tries < 12; tries++) {
+    if (rng.chance(DESTR.pot[bio])) for (let k = rng.int(...DESTR.potN), tries = 0; k > 0 && tries < 20; tries++) {
       const [x, y] = edge(r);
-      if (ok(x, y) && tryBlock(run, x, y, T.POT)) k--;
+      if (ok(x, y) && tryBlock(run, x, y, T.POT, true)) k--;
     }
     if (ri === 0) return; // the start room stays calm
-    if (DESTR.spore[bio] && rng.chance(DESTR.spore[bio])) for (let k = rng.int(...DESTR.sporeN), tries = 0; k > 0 && tries < 12; tries++) {
+    if (DESTR.spore[bio] && rng.chance(DESTR.spore[bio])) for (let k = rng.int(...DESTR.sporeN), tries = 0; k > 0 && tries < 20; tries++) {
       const x = rng.int(r.x, r.x + r.w - 1), y = rng.int(r.y, r.y + r.h - 1);
-      if (ok(x, y) && tryBlock(run, x, y, T.SPORE)) k--;
+      if (ok(x, y) && tryBlock(run, x, y, T.SPORE, true)) k--;
     }
     if (DESTR.oil[bio]) {
       // oil gathers near barrels: more likely there, and it starts next to one
@@ -2346,7 +2371,7 @@ function gain(p: Player, n: number) { p.res = Math.max(0, Math.min(p.resMax, p.r
 
 function openChest(run: Run, i: number) {
   const p = run.p, cursed = run.tiles[i] === T.CURSED;
-  run.tiles[i] = T.CHEST_OPEN;
+  run.tiles[i] = cursed ? T.CURSED_OPEN : T.CHEST_OPEN;
   if (cursed) { takeItem(run, genItem(run, true), 'Cursed chest'); return; }
   chestLoot(run, 'Chest');
 }
@@ -2782,7 +2807,10 @@ export function act(run: Run, a: Action): void {
           if (mobAt(run, x, y)) return 'block' as const;
           return tt === T.ICE ? 'ice' as const : walkable(tt) ? 'floor' as const : 'block' as const;
         };
-        [p.x, p.y] = slide(kind, p.x, p.y, a.dx, a.dy);
+        const [ex, ey] = slide(kind, p.x, p.y, a.dx, a.dy), path: [number, number][] = [[p.x, p.y]];
+        for (let sx = p.x, sy = p.y; sx !== ex || sy !== ey;) { sx += a.dx; sy += a.dy; path.push([sx, sy]); }
+        if (path.length > 1) run.fx.push({ k: 'slide', path });
+        [p.x, p.y] = [ex, ey];
         used = true;
         afterStep(run);
         stepHazard(run, p);

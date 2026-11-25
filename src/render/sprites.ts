@@ -712,6 +712,53 @@ SPR.spore = [
   '................',
 ];
 
+// Variants so that pots, barrels and spore caps in one room do not all look the same.
+// Tall vase with a narrow neck
+SPR.pot1 = [
+  '................',
+  '................',
+  '......NNNN......',
+  '.....NHhhHN.....',
+  '......NhhN......',
+  '......NhhN......',
+  '.....NhhhhN.....',
+  '....NhhwhhhN....',
+  '....NhwhhhHN....',
+  '....NhhhhhHN....',
+  '....NYYYYYYN....',
+  '....NhhhhhHN....',
+  '.....NhhhHN.....',
+  '.....NhhHHN.....',
+  '......NNNN......',
+  '................',
+];
+// Squat, darker jug with a painted band
+SPR.pot2 = [
+  '................',
+  '................',
+  '................',
+  '................',
+  '................',
+  '......NNNN......',
+  '.....NnHHnN.....',
+  '......NNNN......',
+  '...NNHHHHHHNN...',
+  '..NHHhHHHHHHnN..',
+  '..NYYYYYYYYYYN..',
+  '..NHhHHHHHHHnN..',
+  '..NHHYHHYHHnnN..',
+  '...NnHHHHHnnN...',
+  '....NNNNNNNN....',
+  '................',
+];
+// Barrels: iron-banded and a lighter one with brass hoops (the red mark stays: it still explodes)
+SPR.barrel1 = SPR.barrel.map(r => r.replace(/d/g, 'm').replace(/Y/g, 'i'));
+SPR.barrel2 = SPR.barrel.map(r => r.replace(/n/g, 'H').replace(/d/g, 'Y').replace(/Y(?=Y*n)/g, 'Y'));
+// Spore cap with pale spots
+SPR.spore1 = SPR.spore.map(r => r.replace(/l/g, 'P'));
+// mirrored versions (light from the other side)
+for (const k of ['pot', 'pot1', 'pot2', 'spore', 'spore1']) SPR[`${k}_m`] = SPR[k].map(r => [...r].reverse().join(''));
+
 // Statue der Gegenseite schaut nach links
 SPR.statue_l = SPR.statue.map(r => [...r].reverse().join(''));
 
@@ -731,6 +778,7 @@ RUNES.forEach(([col, pat], k) => {
 
 // Verfluchte Truhe: gleiche Form, violett statt braun
 SPR.cursed = SPR.chest.map(r => r.replace(/n/g, 'p').replace(/N/g, 'k').replace(/Y/g, 'v').replace(/y/g, 'v'));
+SPR.cursed_open = SPR.chest_open.map(r => r.replace(/n/g, 'p').replace(/N/g, 'k').replace(/Y/g, 'v').replace(/y/g, 'v'));
 
 // ---------- Blickrichtungen ----------
 // Vorderansicht ist das Grundbild; Rücken- und Seitenansicht sind eigene Bilder

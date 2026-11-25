@@ -60,43 +60,55 @@ describe('hunt pressure: farming does not pay', () => {
     expect(new Set(paid).size).toBe(1);
   });
 
-  it('staying escalates: pairs from the third hunter, then Death that ignores the cap and pays nothing', () => {
+  // drives the floor clock; each hunter is held in a corner and killed `hold` turns after it appeared
+  function hunt(r: Run, count: number, hold: number) {
+    const got: { m: Actor; t: number; killed: number }[] = [];
+    for (let i = 0; i < 600 && got.length < count; i++) {
+      const before = new Set(r.mobs.map(m => m.id));
+      act(r, { t: 'wait' });
+      for (const m of hunters(r)) if (!before.has(m.id)) got.push({ m, t: r.floorTurns!, killed: -1 });
+      expect(hunters(r).length).toBeLessThanOrEqual(1);
+      for (const m of hunters(r)) { m.x = 2 + (m.id % 3); m.y = 5 + (m.id % 3); m.st.stun = 9; }
+      const last = got[got.length - 1];
+      if (last && last.killed < 0 && got.length < count && r.floorTurns! - last.t >= hold) {
+        slay(r, last.m); last.killed = r.floorTurns!;
+        r.mode = 'play'; // a level-up screen would pause the floor clock
+      }
+    }
+    return got;
+  }
+
+  it('one hunter at a time: the next comes HUNTER.respawn turns after the kill, one stage stronger; then Death', () => {
     FEATURES.hunterForce = 'echse';
     const r = arena(7);
     r.floorTurns = HUNTER.first - 1;
-    const waves: string[][] = [];
-    for (let i = 0; i < 160 && waves.length < 5; i++) {
-      const before = new Set(r.mobs.map(m => m.id));
-      act(r, { t: 'wait' });
-      const fresh = hunters(r).filter(m => !before.has(m.id));
-      if (fresh.length) waves.push(fresh.map(m => m.kind));
-      for (const m of hunters(r)) { m.x = 2 + (m.id % 3); m.y = 5 + (m.id % 3); m.st.stun = 9; }
+    const got = hunt(r, 5, 50);
+    expect(got.map(g => g.m.kind)).toEqual(['echse', 'echse', 'echse', 'echse', 'tod']);
+    // nobody else came during the 50 turns a hunter lived; the next one came exactly `respawn` turns after the kill
+    for (let i = 1; i < got.length; i++) expect(got[i].t - got[i - 1].killed).toBe(HUNTER.respawn);
+    for (let i = 1; i < 4; i++) {
+      expect(got[i].m.st.stage).toBe(i);
+      expect(got[i].m.maxHp).toBeGreaterThanOrEqual(Math.round(got[0].m.maxHp * (1 + HUNTER.growHp2 * i)) - 1);
+      expect(got[i].m.atk).toBeGreaterThan(got[i - 1].m.atk);
     }
-    expect(waves[0]).toEqual(['echse']);
-    expect(waves[1]).toEqual(['echse']);
-    expect(waves[2]).toEqual(['echse', 'echse']);   // a pair
-    expect(waves[3]).toEqual(['tod']);              // Death, although the cap of four is full
-    expect(hunters(r).length).toBeGreaterThan(HUNTER.cap);
-    const death = hunters(r).find(m => m.kind === 'tod')!;
+    const death = got[4].m;
     expect(death.st.noReward).toBe(1);
     expect(slay(r, death)).toBe(0);
   });
 
-  it('later stages grow much stronger and shake off stuns after one turn', () => {
+  it('a hunter left alive blocks the next one for good', () => {
     FEATURES.hunterForce = 'echse';
     const r = arena(7);
     r.floorTurns = HUNTER.first - 1;
-    const got: Actor[] = [];
-    for (let i = 0; i < 120 && got.length < 3; i++) {
-      const before = new Set(r.mobs.map(m => m.id));
-      act(r, { t: 'wait' });
-      for (const m of hunters(r)) if (!before.has(m.id)) got.push(m);
-      for (const m of hunters(r)) { m.x = 2 + (m.id % 3); m.y = 5 + (m.id % 3); m.st.stun = 9; }
-    }
-    expect(got[1].maxHp).toBeGreaterThanOrEqual(Math.round(got[0].maxHp * (1 + HUNTER.growHp2)) - 1);
-    expect(got[2].atk).toBeGreaterThan(got[1].atk);
-    // stage 3: a bash stuns for at most one turn
-    const m = got[2];
+    expect(hunt(r, 2, 10000).length).toBe(1);
+  });
+
+  it('later stages shake off stuns after one turn', () => {
+    FEATURES.hunterForce = 'echse';
+    const r = arena(7);
+    r.floorTurns = HUNTER.first - 1;
+    const m = hunt(r, 3, 5)[2].m;
+    expect(m.st.stage).toBe(2);
     m.st = { stage: 2 }; m.x = 31; m.y = 6; r.p.hp = 100000;
     r.mobs = [m];
     r.p.skillLvl[0] = 2;

@@ -78,6 +78,23 @@ const queue: Item[] = [];
 const holds = new Map<number, number>(); // enemy stays at its old screen position until this time
 let clock = 0, stop = 0, stopCool = 0, speed = 1;
 
+// Ice slide of the hero: plays back tile by tile from `at`; everything after it in the turn waits
+export const SLIDE_TILE = 0.05, SLIDE_BUMP = 0.09;
+let slideRun: { path: [number, number][]; at: number; dur: number } | null = null;
+const slideEnd = () => (slideRun ? slideRun.at + slideRun.dur + SLIDE_BUMP : -Infinity);
+export interface SlideState { x: number; y: number; dx: number; dy: number; phase: 'move' | 'bump'; u: number }
+// Current screen position of the sliding hero (null: no slide playing)
+export function heroSlide(): SlideState | null {
+  const s = slideRun;
+  if (!s) return null;
+  const e = clock - s.at, n = s.path.length - 1, [x0, y0] = s.path[0], [x1, y1] = s.path[n];
+  const dx = Math.sign(x1 - x0), dy = Math.sign(y1 - y0);
+  if (e >= s.dur + SLIDE_BUMP) return null;
+  if (e >= s.dur) return { x: x1, y: y1, dx, dy, phase: 'bump', u: (e - s.dur) / SLIDE_BUMP };
+  const f = Math.max(0, e) / s.dur;
+  return { x: x0 + (x1 - x0) * f, y: y0 + (y1 - y0) * f, dx, dy, phase: 'move', u: f };
+}
+
 // Projectiles: flight time; hits in the same beat (number, flash, death …) appear on impact
 const PROJ = new Set<Fx['k']>(['fireball', 'arrow', 'bolt']);
 const IMPACT = new Set<Fx['k']>(['num', 'flash', 'die', 'pdeath', 'debris', 'boom', 'shake', 'swipe', 'break']);
@@ -88,7 +105,7 @@ export function flightOf(f: Fx): number {
   return Math.min(fire ? 0.3 : 0.18, (fire ? 0.06 : 0.03) + d * (fire ? 0.03 : 0.018));
 }
 
-const queueEnd = () => queue.reduce((m, q) => Math.max(m, q.at), clock);
+const queueEnd = () => queue.reduce((m, q) => Math.max(m, q.at), Math.max(clock, slideEnd()));
 
 // Schedule the effects of a turn. Beats separate the actors.
 export function schedule(list: Fx[]) {
@@ -108,8 +125,18 @@ export function schedule(list: Fx[]) {
   let cur = Math.max(clock, queueEnd());
   acting.forEach((s, i) => {
     if (s.id !== null && s.id >= 0) holds.set(s.id, cur);
-    const land = cur + landOf(s.fx);
-    for (const f of s.fx) queue.push({ f, at: IMPACT.has(f.k) ? land : cur });
+    // an ice slide: what follows it in this segment and all later actors wait until the hero stops
+    let after = 0;
+    for (const f of s.fx) {
+      const t0 = cur + after, land = t0 + landOf(s.fx);
+      queue.push({ f, at: IMPACT.has(f.k) ? land : t0 });
+      if (f.k === 'slide') {
+        const dur = (f.path.length - 1) * SLIDE_TILE;
+        slideRun = { path: f.path, at: t0, dur };
+        after += dur + SLIDE_BUMP;
+      }
+    }
+    cur += after;
     if (i < steps.length) cur += steps[i] * squeeze;
   });
   queue.sort((a, b) => a.at - b.at);
@@ -117,7 +144,7 @@ export function schedule(list: Fx[]) {
 
 // Playback speed: 1 normal, 3 with a pending input, Infinity = show everything now
 export const setPlayback = (s: number) => { speed = s; };
-export const busy = () => queue.length > 0;
+export const busy = () => queue.length > 0 || clock < slideEnd();
 
 // Hitstop: freezes rendering only (input, logic and saving keep running)
 export function hitstop(sec: number) {
@@ -137,6 +164,7 @@ export function advance(dt: number): { sdt: number; out: Fx[] } {
   const out: Fx[] = [];
   while (queue.length && queue[0].at <= clock + 1e-9) out.push(queue.shift()!.f);
   for (const [id, t] of holds) if (t <= clock) holds.delete(id);
+  if (slideRun && clock >= slideEnd()) slideRun = null;
   stepAnims(sdt * (speed === Infinity ? 1 : speed));
   return { sdt, out };
 }
@@ -145,7 +173,7 @@ export function advance(dt: number): { sdt: number; out: Fx[] } {
 export const held = (id: number) => (holds.get(id) ?? -Infinity) > clock;
 
 export function resetTimeline() {
-  queue.length = 0; holds.clear(); anims.clear();
+  queue.length = 0; holds.clear(); anims.clear(); slideRun = null;
   stop = 0; stopCool = 0; speed = 1;
 }
 
