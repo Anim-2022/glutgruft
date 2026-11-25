@@ -78,6 +78,13 @@
   short scrape sound; small bump when stopping at a wall. Input waits until the slide finishes
   (input buffer already exists). Logic stays one turn.
 
+## 10. Crit flash only on the enemy
+
+- Where: `critFlash` / `drawScreenFlash` in `src/render/juice.ts`, called from `src/render/draw.ts`.
+- Problem: a crit whites out the whole screen (like a flashbang).
+- Fix: drop the full-screen white; flash only the hit enemy (white silhouette for 1-2 frames,
+  short star/spark burst and light at its tile). Keep shake and numbers as they are.
+
 ---
 
 # Stages
@@ -85,7 +92,7 @@
 Each stage: implement, `npm test`, `npx tsc --noEmit`, screenshot check, one commit.
 
 1. **Quick fixes** – #8 cursed chest stays purple, #4 hunter countdown out from under the
-   minimap, #1 bigger rune circle.
+   minimap, #1 bigger rune circle, #10 crit flash only on the enemy.
 2. **Hunters** – #3 one hunter at a time, each next one stronger; balance regression.
 3. **Ice slide** – #9 visible sliding on ice.
 4. **Sound** – #2 softer, quieter sounds, compressor, pitch variation, volume slider.
