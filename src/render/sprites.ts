@@ -1072,7 +1072,7 @@ if (SCHUETZE_NEU) ATTACK.schuetze = { f: [
 // Schwebende Wesen laufen nicht – sie wippen nur
 export const FLOATERS = new Set(['fledermaus', 'glutgeist', 'ratte', 'tod']);
 // Wesen, die selbst leuchten: Radius in Feldern und Farbe
-export const GLOW: Record<string, [number, string]> = { glutgeist: [3.4, '#ef7d57'], fuerst: [5, '#ef7d57'], irrlicht: [2.6, '#73eff7'], tod: [2.4, '#9a4fc0'] };
+export const GLOW: Record<string, [number, string]> = { glutgeist: [3.4, '#ef7d57'], fuerst: [5, '#ef7d57'], irrlicht: [2.6, '#73eff7'] };
 
 // Ereignisse: Leuchtpilz, Kühlplatte, Sporenei
 SPR.leuchtpilz = ['................', '................', '................', '.....ssss.......', '...sscwwcss.....', '..scccsscccs....', '..sccscccsccs...', '...ssssssssss...', '......gg........', '......gg....ss..',
@@ -1104,7 +1104,7 @@ export const RECOLORS: [string, string, Record<string, string>][] = [
   ['schlange', 'ratte', { d: '#38b764', h: '#a7f070', g: '#ffcd75' }],
 ];
 
-// ---------- Jäger: eigene große Gestalten, größer als Bosse (Echse 32x26, Drache 32x32, Medusa 28x32, Krake und Tod 24x24) ----------
+// ---------- Jäger: eigene große Gestalten, größer als Bosse (Echse 32x26, Drache 32x32, Medusa 28x32, Tod 32x32, Krake 24x24) ----------
 SPR.echse = [
   '..........uu....................',
   '........uuu..uu.................',
@@ -1228,30 +1228,38 @@ SPR.medusa = [
   '.......GGGFFFFFFFFGGG.......',
 ];
 SPR.tod = [
-  '.........SSwwwwwS.......',
-  '.......Sw.......wSS.....',
-  '......S...kkkk....wS....',
-  '........kkKKKKkk...SS...',
-  '.......kKKKKKKKKk...uS..',
-  '......kKKKKKKKKKKk.uS...',
-  '......kKKKuuuuKKKk..S...',
-  '.....kKKKuuuuuuKKKk.S...',
-  '.....kKKuPKuuKPuKKk.S...',
-  '.....kKKuvKuuKvuKKk.S...',
-  '.....kKKKuuuuuuKKKk.S...',
-  '.....kKKKKuKuKuKKKkuu...',
-  '....kKKKKKKKKKKKKKKuuk..',
-  '...kKKpKKKKKKKKKKKKSKk..',
-  '..kKKpKKKKKKKKKKKKKSKKk.',
-  '..kKpKKKKKKvKKKKKKKSKpk.',
-  '..uukKKKKKKKvKKKKKKSKpk.',
-  '..uu.kKKKKKKKKKKKKKSKk..',
-  '.....kKKpKKKKKKKKpKSKk..',
-  '.....kKKKpKKKKKKpKKSk...',
-  '......kKk.kKKpKKk.kSk...',
-  '.......k...kKk.Kk..S....',
-  '............k...k..S....',
-  '........................',
+  '.............SSSwSSS............',
+  '.........SSSwiiiiiiiwSSS........',
+  '.....mmmSiiiimmmmmmmiiiiwS......',
+  '.....mNmimmmmm.kk..mmmmmiiS.....',
+  '......Nnmm....kDkk.....mmmiSS...',
+  '......Nn.....kDDDkk......mmiS...',
+  '......Nn....kDDDDDkk......mmiS..',
+  '......Nn...kkDDDDDDkk.......iS..',
+  '......Nn...kDDDKKKDDk........i..',
+  '......Nn...kDDKKKKKDk........iS.',
+  '......Nn..kDDKKmmmKKDk..........',
+  '......Nn..kDDKPKmKPKDk..........',
+  '......Nn.kkDDKpmKmpKkkk.........',
+  '......Nn.kkkDKmuKumKkkk.........',
+  '.....SNnSkkkkKmuKumkkkkk........',
+  '.....uNnukkkkkkSuSkkkkDk........',
+  '.....uNnukkpkkkkkkkkkpkDk.......',
+  '......NnkkDpkkkKSkkkkpkkDk......',
+  '......NnkkDpkDkuuukDkpkkkDk.....',
+  '......NnkkDpkDkKSkkDkkpkkkD.....',
+  '......NnkkDpkDKuuukDkkpkmmmmu...',
+  '......NnkDkpkDKKSKkDkkpuku.u.u..',
+  '......NnkDpkkDKuuukDkkuDku.u..u.',
+  '......NnkDpkkDkkSkkDkkSDku.u..S.',
+  '......NnkDpkDkkkkkkkDkpDkS..S...',
+  '......NnDkpkDkkkkkkkDkkpD.......',
+  '......NnDkpkDkkkkkkkDkkpDk......',
+  '......NnDkpkDkkkkkkkDkkpDk......',
+  '......NnDpkkDkpkkkpkDkkpDk......',
+  '......Nnkp.kk.pkk.pkDkkp.kp.....',
+  '......Nnk.vpk..kp..k.pk..p......',
+  '........p...p..pv..p..p.........',
 ];
 // Rückansicht: dunkler, ohne Gesicht; Seitenansicht wie vorn (wird gespiegelt)
 const backOf = (rows: string[], face: string, to: string) => rows.map(r => r.replace(new RegExp(`[${face}]`, 'g'), to));
@@ -1325,7 +1333,40 @@ VIEWS.medusa = { b: [
     '....FFFFFFFFFFFFFFFFFFFF....',
     '.......GGGFFFFFFFFGGG.......',
   ], s: SPR.medusa };
-VIEWS.tod = { b: backOf(SPR.tod, 'uPv', 'K'), s: SPR.tod, alt: ['.'.repeat(24), ...SPR.tod.slice(0, 23)] };
+VIEWS.tod = { b: [
+    '.............SSSwSSS............',
+    '.........SSSwiiiiiiiwSSS........',
+    '.....mmmSiiiimmmmmmmiiiiwS......',
+    '.....mNmimmmmm.kk..mmmmmiiS.....',
+    '......Nnmm....kDkk.....mmmiSS...',
+    '......Nn.....kDDDkk......mmiS...',
+    '......Nn....kDDDDDkk......mmiS..',
+    '......Nn...kkDDDDDDkk.......iS..',
+    '......Nn...kDDDKKKDDk........i..',
+    '......Nn...kDDkkkkkDk........iS.',
+    '......Nn..kDDkkkkkkkDk..........',
+    '......Nn..kDDkkkkkkkDk..........',
+    '......Nn.kkDDkkkkkkkkkk.........',
+    '......Nn.kkkDkkkkkkkkkk.........',
+    '.....SNnSkkkkkkkkkkkkkkk........',
+    '.....uNnukkkkkkkkkkkkkDk........',
+    '.....uNnukkpkkkkDkkkkpkDk.......',
+    '......NnkkDpkkkkDkkkkpkkDk......',
+    '......NnkkDpkDkkDkkDkpkkkDk.....',
+    '......NnkkDpkDkkDkkDkkpkkkD.....',
+    '......NnkkDpkDkkDkkDkkpkmmmmu...',
+    '......NnkDkpkDkkDkkDkkpuku.u.u..',
+    '......NnkDpkkDkkDkkDkkuDku.u..u.',
+    '......NnkDpkkDkkDkkDkkSDku.u..S.',
+    '......NnkDpkDkkkkkkkDkpDkS..S...',
+    '......NnDkpkDkkkkkkkDkkpD.......',
+    '......NnDkpkDkkkkkkkDkkpDk......',
+    '......NnDkpkDkkkkkkkDkkpDk......',
+    '......NnDpkkDkpkkkpkDkkpDk......',
+    '......Nnkp.kk.pkk.pkDkkp.kp.....',
+    '......Nnk.vpk..kp..k.pk..p......',
+    '........p...p..pv..p..p.........',
+  ], s: SPR.tod, alt: ['.'.repeat(32), ...SPR.tod.slice(0, 31)] };
 
 SPR.fountain = [E, E, '.......ss.......', '......scws......', '.....s.ss.s.....', '....s..cc..s....', '...gggggggggg...', '..gccscccscccg..', '..gcccccccccsg..', '..gggggggggggg..',
   '...gddddddddg...', '....gddddddg....', '....gddddddg....', '...gggggggggg...', '..DDDDDDDDDDDD..', E];

@@ -139,6 +139,7 @@ export function drawHunterAura(ctx: CanvasRenderingContext2D, a: Actor, q: { x: 
   ctx.globalAlpha = 1;
   if (!reducedFx() && Math.random() < dt * (rage ? 14 : 6))
     parts.push({ x: q.x * TS + 2 + Math.random() * 12, y: q.y * TS + 10 + Math.random() * 4, vx: (Math.random() - 0.5) * 6, vy: -8 - Math.random() * 10, col: rage ? (Math.random() < 0.5 ? '#b13e53' : '#ef7d57') : (Math.random() < 0.5 ? '#5d275d' : '#6b1d2a'), t: 0, life: 0.9, g: -12, s: Math.random() < 0.3 ? 2 : 1 });
+  if (a.kind === 'tod') lights.push({ x: q.x, y: q.y - 1.1, r: 1.3 + 0.2 * Math.sin(time * 3), col: '#d08cff', a: 0.9 }); // Augenglut in der Kapuze
   lights.push({ x: q.x, y: q.y, r: (rage ? 3 : 2.3) + (armed ? 0.6 * Math.sin(time * 12) : 0), col, a: 0.6 });
 }
 
