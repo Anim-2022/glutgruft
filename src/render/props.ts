@@ -8,7 +8,7 @@ import type { Light } from './light';
 
 const TS = 16;
 type Paint = (g: CanvasRenderingContext2D, f: number) => void;
-const mk = (): [HTMLCanvasElement, CanvasRenderingContext2D] => { const c = document.createElement('canvas'); c.width = TS; c.height = TS; return [c, c.getContext('2d')!]; };
+const mk = (size = TS): [HTMLCanvasElement, CanvasRenderingContext2D] => { const c = document.createElement('canvas'); c.width = size; c.height = size; return [c, c.getContext('2d')!]; };
 const px = (g: CanvasRenderingContext2D, col: string, x: number, y: number, w = 1, h = 1) => { g.fillStyle = col; g.fillRect(x, y, w, h); };
 
 // dunkler Umriss um alles Gezeichnete (wie bei den Figuren), damit kleine Dinge auf dem Boden lesbar sind
@@ -22,23 +22,25 @@ function outline(c: HTMLCanvasElement) {
   g.putImageData(d, 0, 0);
 }
 
-interface Prop { frames: HTMLCanvasElement[]; light?: (f: number) => Omit<Light, 'x' | 'y'>; ly?: number; }
+// span: footprint in tiles (1, or 3 for a floor pattern centred on its tile and drawn slice by slice)
+interface Prop { frames: HTMLCanvasElement[]; light?: (f: number) => Omit<Light, 'x' | 'y'>; ly?: number; span: number; }
 
 // Jede Art hat mehrere Spielarten: Malfunktion mit Spielart v und eigenem Zufall R (fest je Spielart,
 // in allen Bildern gleich), dazu je eine gespiegelte Fassung.
 type R = () => number;
 type VPaint = (g: CanvasRenderingContext2D, f: number, v: number, r: R) => void;
-interface Spec { paint: VPaint; n: number; frames?: number; line?: boolean; light?: (f: number, v: number) => Omit<Light, 'x' | 'y'> | undefined; ly?: number; mirror?: boolean; }
+interface Spec { paint: VPaint; n: number; frames?: number; line?: boolean; light?: (f: number, v: number) => Omit<Light, 'x' | 'y'> | undefined; ly?: number; mirror?: boolean; span?: number; }
 const rng = (seed: number): R => () => { let t = (seed = (seed + 0x6d2b79f5) >>> 0); t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
-const flipped = (c: HTMLCanvasElement) => { const [m, g] = mk(); g.translate(TS, 0); g.scale(-1, 1); g.drawImage(c, 0, 0); return m; };
+const flipped = (c: HTMLCanvasElement) => { const [m, g] = mk(c.width); g.translate(c.width, 0); g.scale(-1, 1); g.drawImage(c, 0, 0); return m; };
 let specSeed = 1;
 function bakeSpec(sp: Spec): Prop[] {
   const out: Prop[] = [], seed = (specSeed += 7919);
   for (let v = 0; v < sp.n; v++) {
-    const frames = Array.from({ length: sp.frames ?? 1 }, (_, f) => { const [c, g] = mk(); sp.paint(g, f, v, rng(seed + v * 104729)); if (sp.line) outline(c); return c; });
+    const span = sp.span ?? 1;
+    const frames = Array.from({ length: sp.frames ?? 1 }, (_, f) => { const [c, g] = mk(TS * span); sp.paint(g, f, v, rng(seed + v * 104729)); if (sp.line) outline(c); return c; });
     const light = sp.light && sp.light(0, v) ? (f: number) => sp.light!(f, v)! : undefined;
-    out.push({ frames, light, ly: sp.ly });
-    if (sp.mirror !== false) out.push({ frames: frames.map(flipped), light, ly: sp.ly });
+    out.push({ frames, light, ly: sp.ly, span });
+    if (sp.mirror !== false) out.push({ frames: frames.map(flipped), light, ly: sp.ly, span });
   }
   return out;
 }
@@ -223,9 +225,38 @@ const wax: VPaint = (g, f, _v, r) => {
   for (let k = 0; k < 3; k++) { const x = I(r, 3, 10), y = I(r, 9, 12); px(g, '#d9cfb4', x, y, I(r, 2, 4), 1); }
   px(g, '#d9cfb4', 7, 9, 1, 3); px(g, f ? '#ffcd75' : '#ef7d57', 7, 8);
 };
-const runeCircle: VPaint = (g, f) => {
-  for (let a = 0; a < 24; a++) { const t = (a / 24) * Math.PI * 2; px(g, (a + f * 2) % 6 ? '#3b5dc9' : '#73eff7', Math.round(8 + Math.cos(t) * 6), Math.round(8 + Math.sin(t) * 4)); }
-  px(g, '#29366f', 6, 7, 4, 1); px(g, '#29366f', 7, 6, 2, 3);
+// Rune circle: engraved into the floor over 3×3 tiles (48×48 px, centre at 24,24).
+// Dark groove with a faint lit lower lip, worn in places; glyphs and inlay in muted blue. No flicker.
+const runeCircle: VPaint = (g, _f, _v, r) => {
+  const C = 24, SQ = 0.86;
+  const groove = (x: number, y: number) => { g.globalAlpha = 0.7; px(g, '#0d0e17', x, y); g.globalAlpha = 0.2; px(g, '#94b0c2', x, y + 1); g.globalAlpha = 1; };
+  const inlay = (x: number, y: number, a = 0.4) => { g.globalAlpha = a; px(g, '#3b5dc9', x, y); g.globalAlpha = 1; };
+  const ring = (rx: number, wear: number, dot: ((x: number, y: number) => void) = groove) => {
+    const seen = new Set<number>(), n = Math.ceil(rx * 8);
+    for (let k = 0; k < n; k++) {
+      const t = (k / n) * Math.PI * 2, x = Math.round(C + Math.cos(t) * rx), y = Math.round(C + Math.sin(t) * rx * SQ);
+      if (seen.has(y * 64 + x)) continue;
+      seen.add(y * 64 + x);
+      if (r() >= wear) dot(x, y);
+    }
+  };
+  ring(21, 0.1); ring(16, 0.08);
+  ring(18.5, 0.55, (x, y) => inlay(x, y, 0.3)); // faded inlay line between the outer grooves
+  ring(8, 0.06);
+  // eight glyphs in the band between the outer rings
+  const GLYPHS = [[[0, -1], [0, 0], [0, 1], [-1, -1], [1, -1]], [[-1, 0], [0, 0], [1, 0], [0, 1]], [[-1, -1], [0, 0], [1, 1], [1, -1]], [[0, -1], [-1, 0], [1, 0], [0, 1]],
+    [[-1, -1], [-1, 0], [-1, 1], [0, 0], [1, 1]], [[0, -1], [0, 0], [1, 1], [-1, 1]], [[-1, 0], [1, 0], [0, -1], [0, 1], [0, 0]], [[-1, -1], [1, -1], [0, 0], [0, 1]]];
+  for (let k = 0; k < 8; k++) {
+    const t = (k / 8) * Math.PI * 2 + Math.PI / 8, gx = Math.round(C + Math.cos(t) * 18.5), gy = Math.round(C + Math.sin(t) * 18.5 * SQ);
+    for (const [dx, dy] of GLYPHS[(k + I(r, 0, 7)) % 8]) { groove(gx + dx, gy + dy); inlay(gx + dx, gy + dy, 0.35); }
+  }
+  // four spokes from the inner ring out to the band, and a small sigil in the middle
+  for (let k = 0; k < 4; k++) {
+    const t = (k / 4) * Math.PI * 2;
+    for (let d = 9; d <= 15; d++) if (r() > 0.12) groove(Math.round(C + Math.cos(t) * d), Math.round(C + Math.sin(t) * d * SQ));
+  }
+  for (const [dx, dy] of [[0, -3], [-1, -2], [1, -2], [-2, -1], [2, -1], [-3, 0], [3, 0], [-2, 1], [2, 1], [-1, 2], [1, 2], [0, 3]]) groove(C + dx, C + dy);
+  inlay(C, C, 0.5); inlay(C - 1, C, 0.3); inlay(C + 1, C, 0.3);
 };
 // cave: glowing vines, egg cluster, scattered stones
 const vines: VPaint = (g, f, _v, r) => {
@@ -278,7 +309,7 @@ function sets(): BiomeProps[] {
     { wall: [...B({ paint: chains, n: 3 }), ...B({ paint: cobweb, n: 2 }), ...B({ paint: banner, n: 3 }), ...B({ paint: skullShelf, n: 2, frames: 2 }), ...B({ paint: wallGrate, n: 2 })],
       foot: [...B({ paint: candles, n: 4, frames: 2, line: true, light: f => ({ r: 1.7 + (f ? 0.15 : 0), col: '#ffcd75', a: 0.8 }), ly: 0.6 }), ...B({ paint: bones, n: 3, line: true }),
         ...B({ paint: urns, n: 2, line: true }), ...B({ paint: wax, n: 2, frames: 2, light: f => ({ r: 1.3 + (f ? 0.1 : 0), col: '#ffcd75', a: 0.7 }), ly: 0.6 })],
-      flat: [...B({ paint: slab, n: 3 }), ...B({ paint: runeCircle, n: 1, frames: 2, light: () => ({ r: 1.6, col: '#3b5dc9', a: 0.5 }), ly: 0.5 })] },
+      flat: [...B({ paint: slab, n: 3 }), ...B({ paint: runeCircle, n: 1, span: 3, mirror: false, light: () => ({ r: 2.6, col: '#3b5dc9', a: 0.22 }), ly: 0.5 })] },
     { wall: [...B({ paint: roots, n: 3 }), ...B({ paint: drips, n: 3, frames: 2 }), ...B({ paint: glowmoss, n: 2, frames: 2, light: () => ({ r: 1.4, col: '#a7f070', a: 0.6 }), ly: 0.3 }),
         ...B({ paint: vines, n: 2, frames: 2, light: () => ({ r: 1.3, col: '#73eff7', a: 0.5 }), ly: 0.4 })],
       foot: [...B({ paint: crystals, n: 3, line: true, light: (_f, v) => ({ r: 2.4, col: CRYSTAL[v % 3][3], a: 0.9 }), ly: 0.5 }),
@@ -373,8 +404,17 @@ export function torchSpots(tiles: Uint8Array, seed: number): number[] {
 export function drawProp(ctx: CanvasRenderingContext2D, bi: number, p: PropSpot, x: number, y: number, dx: number, dy: number, time: number, lights: Light[]) {
   const list = sets()[bi][p.kind], prop = list[p.pick % list.length];
   const f = prop.frames.length > 1 ? Math.floor(time * 4 + x * 0.7 + y) % prop.frames.length : 0;
-  ctx.drawImage(prop.frames[f], dx, dy);
+  if (prop.span > 1) { drawPropSlice(ctx, bi, p, 0, 0, dx, dy, time, x, y); }
+  else ctx.drawImage(prop.frames[f], dx, dy);
   if (prop.light) lights.push({ x, y: y + (prop.ly ?? 0.4) - 0.5, ...prop.light(f) });
+}
+// footprint of a prop in tiles (1 for most, 3 for the rune circle)
+export function propSpan(bi: number, p: PropSpot): number { const list = sets()[bi][p.kind]; return list[p.pick % list.length].span; }
+// one tile of a multi-tile prop: (sx, sy) is this tile's offset from the prop's centre tile
+export function drawPropSlice(ctx: CanvasRenderingContext2D, bi: number, p: PropSpot, sx: number, sy: number, dx: number, dy: number, time: number, cx: number, cy: number) {
+  const list = sets()[bi][p.kind], prop = list[p.pick % list.length], h = prop.span >> 1;
+  const f = prop.frames.length > 1 ? Math.floor(time * 4 + cx * 0.7 + cy) % prop.frames.length : 0;
+  ctx.drawImage(prop.frames[f], (sx + h) * TS, (sy + h) * TS, TS, TS, dx, dy, TS, TS);
 }
 
 // Fackelbild umfärben (Arena des Bosses: Flamme in dessen Farbe)

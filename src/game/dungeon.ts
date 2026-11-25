@@ -8,6 +8,7 @@ export const T = {
   FOUNTAIN: 25, FOUNTAIN_DRY: 26, GATE: 27, BRAZIER: 28, BRAZIER_ON: 29, STATUE: 30, MIMIC: 31,
   // destructible world (FEATURES.destruction): oil and water puddles, cobwebs (walkable); clay pots, spore caps (blocking)
   OIL: 32, WATER: 33, POT: 34, WEB: 35, SPORE: 36,
+  CURSED_OPEN: 37, // opened cursed chest (stays purple)
 } as const;
 
 export interface Room { x: number; y: number; w: number; h: number; }

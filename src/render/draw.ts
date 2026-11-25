@@ -7,7 +7,7 @@ import { drawItemIcon, drawIcon, PERK_ICON } from './icons';
 import { Light, applyLight, AMBIENTS } from './light';
 import { dropShadow, drawAO } from './shade';
 import { softEdged, pickDecal, bakeFloor } from './tiles';
-import { propsFor, drawProp, recolor, torchSpots } from './props';
+import { propsFor, drawProp, drawPropSlice, propSpan, recolor, torchSpots } from './props';
 import { stepAmbient, drawAmbient, drawFog, resetAmbient, postFx } from './ambient';
 import { drawFlames, smoke, drawSmoke, resetFire, trackBurns, drawEmbers, fireAge, pruneFire } from './fire';
 
@@ -17,7 +17,7 @@ const bossTorch: HTMLCanvasElement[][] = [];
 const torchOf = (bi: number, f: number) => (bossTorch[bi] ??= [0, 1].map(k => recolor(sprites[`torch${k}`], { '#ef7d57': BOSS_FLAME[bi][0], '#ffcd75': BOSS_FLAME[bi][1] })))[f];
 import { sfx } from '../core/audio';
 import { schedule, advance, held, anim, peekAnim, startLunge, setPose, hitActor, hitstop, resetTimeline, busy, FLASH_T, RECOIL_T, lungeOffset, weightOf, hurtLean } from './timeline';
-import { addNum, drawNums, addShake, stepShake, critFlash, hurtFlash, drawScreenFlash, splat, drawSpots, tinted, noteKill, resetJuice } from './juice';
+import { addNum, drawNums, addShake, stepShake, hurtFlash, drawScreenFlash, splat, drawSpots, tinted, noteKill, resetJuice } from './juice';
 import { fxScale, fxLevel } from './fxopts';
 import { drawWorldTile, drawGas, MAT_COLS, MAT_SOUND } from './world';
 import { hunterFx, resetHunterFx, isHunter, leaping, leapLift, drawHunterAura, hunterGlow, drawHunterBar, drawHunterMarks, stepHunterFx, stoneOverlay } from './hunters';
@@ -42,6 +42,9 @@ type Shot = { x0: number; y0: number; x1: number; y1: number; col: string; kind:
 const shots: Shot[] = [];
 const rings: { x: number; y: number; r: number; t: number }[] = [];
 const sparks: { x: number; y: number; col: string; big: boolean; t: number }[] = [];
+// critical hits: white silhouette and a short light on the hit actor only (no full-screen flash)
+const CRIT_T = 0.06;
+const critHits: { id: number; x: number; y: number; t: number }[] = [];
 const bashes: { x: number; y: number; dx: number; dy: number; t: number }[] = [];
 const swipes: { x: number; y: number; dx: number; dy: number; big: boolean; t: number }[] = [];
 const auras: { col: string; ult: boolean; t: number }[] = []; // cast glow around the hero
@@ -105,7 +108,7 @@ function buildLight(run: Run) {
 export function resetView() {
   pos.clear(); resetTimeline(); resetJuice();
   bolts.length = 0; bits.length = 0; booms.length = 0;
-  shots.length = 0; rings.length = 0; sparks.length = 0; bashes.length = 0; swipes.length = 0; auras.length = 0; deathT = -1;
+  shots.length = 0; rings.length = 0; sparks.length = 0; critHits.length = 0; bashes.length = 0; swipes.length = 0; auras.length = 0; deathT = -1;
   resetDeaths(); resetAmbient(); resetFire(); resetHunterFx(); fuseTags.length = 0;
 }
 
@@ -129,7 +132,7 @@ function smooth(a: Actor, dt: number) {
 
 // Bodenschatten unter Gegenständen: [Fußzeile im Feld, Breite]
 const OBJ_SHADOW: Record<number, [number, number]> = {
-  [T.PILLAR]: [15, 14], [T.BARREL]: [14, 13], [T.CHEST]: [13, 16], [T.CHEST_OPEN]: [13, 16], [T.ALTAR]: [15, 14], [T.ALTAR_USED]: [15, 14],
+  [T.PILLAR]: [15, 14], [T.BARREL]: [14, 13], [T.CHEST]: [13, 16], [T.CHEST_OPEN]: [13, 16], [T.CURSED_OPEN]: [13, 16], [T.ALTAR]: [15, 14], [T.ALTAR_USED]: [15, 14],
   [T.TRADER]: [15, 14], [T.CRATE]: [15, 16], [T.CRATE_ON]: [15, 16], [T.TABLET]: [15, 14], [T.LEVER]: [14, 10], [T.CURSED]: [14, 15],
   [T.FOUNTAIN]: [15, 15], [T.FOUNTAIN_DRY]: [15, 15], [T.BRAZIER]: [15, 10], [T.BRAZIER_ON]: [15, 10], [T.STATUE]: [15, 14], [T.MIMIC]: [13, 16],
   [T.POT]: [14, 10], [T.SPORE]: [15, 12],
@@ -137,7 +140,7 @@ const OBJ_SHADOW: Record<number, [number, number]> = {
 const FLY = new Set(['fledermaus', 'glutgeist', 'tod']);
 
 const TILE_SPR: Record<number, string> = {
-  [T.STAIRS]: 'stairs', [T.CHEST]: 'chest', [T.CHEST_OPEN]: 'chest_open', [T.ALTAR]: 'altar', [T.ALTAR_USED]: 'altar_used',
+  [T.STAIRS]: 'stairs', [T.CHEST]: 'chest', [T.CHEST_OPEN]: 'chest_open', [T.CURSED_OPEN]: 'cursed_open', [T.ALTAR]: 'altar', [T.ALTAR_USED]: 'altar_used',
   [T.CRATE]: 'crate', [T.CRATE_ON]: 'crate', [T.PLATE]: 'plate', [T.LEVER]: 'lever', [T.TABLET]: 'tablet', [T.GOAL]: 'goal',
   [T.CURSED]: 'cursed', [T.TRADER]: 'trader', [T.FOUNTAIN]: 'fountain', [T.FOUNTAIN_DRY]: 'fountain_dry', [T.GATE]: 'gate', [T.BRAZIER]: 'brazier', [T.BRAZIER_ON]: 'brazier_on', [T.STATUE]: 'statue', [T.MIMIC]: 'chest',
   [T.BARREL]: 'barrel', [T.PILLAR]: 'pillar', [T.RUBBLE]: 'rubble', [T.FRAGILE]: 'crack', [T.FRAGILE2]: 'crack2',
@@ -162,7 +165,8 @@ export function drawRun(ctx: CanvasRenderingContext2D, run: Run, dt: number, tim
         if (f.s === 'missed') sfx('miss');
         else if (/^\d+!$/.test(f.s)) {
           // critical hit: short stop, flash, own sound, ring of sparks
-          hitstop(0.06); critFlash(); sfx('crit');
+          hitstop(0.06); sfx('crit');
+          if (fxLevel() >= 1) critHits.push({ id: a ? a.id : -1, x: f.x, y: f.y, t: 0 });
           sparks.push({ x: f.x * TS + 8, y: f.y * TS + 7, col: '#ffcd75', big: true, t: 0 });
           burstBits(f.x * TS + 8, f.y * TS + 7, Math.round(8 * fxScale()), ['#ffcd75', '#f4f4f4'], 40, 100, 30);
           shake(3, hitDir);
@@ -284,6 +288,12 @@ export function drawRun(ctx: CanvasRenderingContext2D, run: Run, dt: number, tim
   const decalAt = (x: number, y: number) => dcand(x, y) && !dcand(x - 1, y) && !dcand(x, y - 1) && !dcand(x - 1, y - 1) && !dcand(x + 1, y - 1);
   buildLight(run);
   const lights: Light[] = [], floorTiles: number[] = [];
+  for (let k = critHits.length - 1; k >= 0; k--) {
+    const c = critHits[k];
+    if (c.t > CRIT_T + 0.12) { critHits.splice(k, 1); continue; }
+    lights.push({ x: c.x, y: c.y, r: 2.4 * (1 - c.t / (CRIT_T + 0.12)), col: '#ffcd75', a: 0.9 });
+    c.t += dt;
+  }
   const flick = (n: number) => 0.92 + 0.08 * Math.sin(time * 9 + n) + 0.04 * Math.sin(time * 23 + n * 1.7);
   const x0 = Math.max(0, Math.floor(cam.x / TS) - 1), x1 = Math.min(W - 1, x0 + VW / TS + 2);
   const y0 = Math.max(0, Math.floor(cam.y / TS) - 1), y1 = Math.min(H - 1, y0 + Math.ceil(VH / TS) + 2);
@@ -336,12 +346,19 @@ export function drawRun(ctx: CanvasRenderingContext2D, run: Run, dt: number, tim
       const edge = (k: number) => { let e = 0; [[0, -1, 1], [-1, 0, 2], [1, 0, 4], [0, 1, 8]].forEach(([ex, ey, bit]) => { const n = run.tiles[i + ey * W + ex]; if (n !== k && !wallLike(n)) e |= bit; }); return e; };
       if (t === T.ICE) ctx.drawImage(softEdged(sprites.ice, edge(T.ICE)), dx, dy);
       if (t === T.GRASS) ctx.drawImage(softEdged(ts.bed, edge(T.GRASS)), dx, dy);
+      // large floor patterns (rune circle, 3×3): the neighbouring tiles draw their slice of it
+      let covered = false;
+      for (let sy = -1; sy <= 1; sy++) for (let sx = -1; sx <= 1; sx++) {
+        if (!sx && !sy) continue;
+        const cx = x - sx, cy = y - sy, pr = cx >= 0 && cy >= 0 && cx < W && cy < H ? props[cy * W + cx] : null;
+        if (pr && pr.kind === 'flat' && propSpan(bio, pr) > 1) { drawPropSlice(ctx, bio, pr, sx, sy, dx, dy, time, cx, cy); covered = true; }
+      }
       drawAO(ctx, run.tiles, x, y, dx, dy);
       if (t >= T.OIL) drawWorldTile(ctx, run, t, i, x, y, dx, dy, time);
       if (t === T.FLOOR) {
         const pr = props[i];
         if (pr) drawProp(ctx, bio, pr, x, y, dx, dy, time, lights);
-        else if (decalAt(x, y)) ctx.drawImage(pickDecal(ts.decals, bio, hash(x, y, run.seed + run.floor * 7)), dx, dy);
+        else if (!covered && decalAt(x, y)) ctx.drawImage(pickDecal(ts.decals, bio, hash(x, y, run.seed + run.floor * 7)), dx, dy);
       }
       if (t === T.GRASS) ctx.drawImage(ts.grass[(x * 5 + y * 3) % 3], dx, dy);
       else if (t === T.BURNT) {
@@ -621,6 +638,7 @@ export function drawRun(ctx: CanvasRenderingContext2D, run: Run, dt: number, tim
     if (tint && masks[frame]) { ctx.globalAlpha = 0.22 + 0.08 * Math.sin(time * 6 + a.id); blit(tinted(masks[frame], tint)); ctx.globalAlpha = 1; }
     const fl = an?.flash;
     if (fl) { ctx.globalAlpha = Math.min(1, fl / FLASH_T + 0.2); blit(masks[frame]); ctx.globalAlpha = 1; }
+    if (masks[frame] && critHits.some(c => c.id === a.id && c.t < CRIT_T)) { blit(masks[frame]); blit(masks[frame]); }
     statusFx(a, a === p, dx, dy, img.width, img.height, q);
     if (a !== p) warn(a, q, dx, dy, img.width);
     if (run.target && a.id === run.target) {
@@ -926,7 +944,9 @@ function hud(ctx: CanvasRenderingContext2D, run: Run, time: number) {
   }
   // Ziel der Rätselkammer, solange man darin steht (und die laufende Prüfung)
   const goal = puzzleGoal(run);
+  let goalLine = false;
   if (goal) {
+    goalLine = true;
     const z = run.puzzle!, col = z.solved ? '#a7f070' : z.dead ? '#566c86' : z.kind === 'arena' && z.started ? '#b13e53' : '#73eff7', gw = goal.length * 6 + 12;
     ctx.fillStyle = 'rgba(8,9,15,0.7)'; ctx.fillRect(VW / 2 - gw / 2, 56, gw, 14);
     text(ctx, goal, VW / 2, 59, col, 8, 'center');
@@ -934,15 +954,20 @@ function hud(ctx: CanvasRenderingContext2D, run: Run, time: number) {
     // Ziel des laufenden Ereignisses
     const ev = eventGoal(run);
     if (ev) {
+      goalLine = true;
       const s = `${ev.title} – ${ev.goal}`, gw = s.length * 6 + 12;
       ctx.fillStyle = 'rgba(8,9,15,0.7)'; ctx.fillRect(VW / 2 - gw / 2, 56, gw, 14);
       text(ctx, s, VW / 2, 59, ev.col, 8, 'center');
     }
   }
 
-  // Jäger: Zugzähler und Warnung unter der Vorratszeile
+  // Hunters: turn counter and warning at the top centre, under the goal line (never under the minimap)
   const hi = hunterInfo(run);
-  if (hi) text(ctx, hi.text, VW - 6, 20, hi.col, 8, 'right');
+  if (hi) {
+    const hy = goalLine ? 72 : 56, hw = hi.text.length * 6 + 12;
+    ctx.fillStyle = 'rgba(8,9,15,0.6)'; ctx.fillRect(VW / 2 - hw / 2, hy, hw, 14);
+    text(ctx, hi.text, VW / 2, hy + 3, hi.col, 8, 'center');
+  }
 
   // Ebene und Vorräte: eine Zeile oben rechts
   const parts: [string | null, string, string][] = [[null, `[I] ${p.bag.length}/${BAG_MAX}`, p.bag.length >= BAG_MAX ? '#ef7d57' : p.bag.length ? '#ffcd75' : '#566c86']];

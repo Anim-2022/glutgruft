@@ -2346,7 +2346,7 @@ function gain(p: Player, n: number) { p.res = Math.max(0, Math.min(p.resMax, p.r
 
 function openChest(run: Run, i: number) {
   const p = run.p, cursed = run.tiles[i] === T.CURSED;
-  run.tiles[i] = T.CHEST_OPEN;
+  run.tiles[i] = cursed ? T.CURSED_OPEN : T.CHEST_OPEN;
   if (cursed) { takeItem(run, genItem(run, true), 'Cursed chest'); return; }
   chestLoot(run, 'Chest');
 }

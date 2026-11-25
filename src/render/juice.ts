@@ -71,12 +71,10 @@ export function stepShake(dt: number): [number, number] {
 }
 
 // ---------- Screen flashes ----------
-let white = 0, hurtEdge = 0;
-export const critFlash = () => { if (fxLevel() >= 1) white = 0.04; };
+let hurtEdge = 0;
 export const hurtFlash = () => { if (fxLevel() >= 1) hurtEdge = 0.25; };
 // Drawn below numbers and HUD so warnings stay readable
 export function drawScreenFlash(ctx: CanvasRenderingContext2D, vw: number, vh: number, dt: number) {
-  if (white > 0) { ctx.fillStyle = `rgba(244,244,244,${0.22 * white / 0.04})`; ctx.fillRect(0, 0, vw, vh); white = Math.max(0, white - dt); }
   if (hurtEdge > 0) {
     // red border, open inside (dithered in steps of 2)
     const a = hurtEdge / 0.25;
@@ -153,5 +151,5 @@ export function noteKill(now: number): number {
 }
 
 export function resetJuice() {
-  nums.length = 0; spots.length = 0; spotFloor = -1; trauma = 0; kick.x = kick.y = 0; white = 0; hurtEdge = 0; lastKill = -1; chain = 0;
+  nums.length = 0; spots.length = 0; spotFloor = -1; trauma = 0; kick.x = kick.y = 0; hurtEdge = 0; lastKill = -1; chain = 0;
 }

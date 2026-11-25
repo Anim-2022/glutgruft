@@ -731,6 +731,7 @@ RUNES.forEach(([col, pat], k) => {
 
 // Verfluchte Truhe: gleiche Form, violett statt braun
 SPR.cursed = SPR.chest.map(r => r.replace(/n/g, 'p').replace(/N/g, 'k').replace(/Y/g, 'v').replace(/y/g, 'v'));
+SPR.cursed_open = SPR.chest_open.map(r => r.replace(/n/g, 'p').replace(/N/g, 'k').replace(/Y/g, 'v').replace(/y/g, 'v'));
 
 // ---------- Blickrichtungen ----------
 // Vorderansicht ist das Grundbild; Rücken- und Seitenansicht sind eigene Bilder
