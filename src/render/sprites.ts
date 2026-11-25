@@ -1986,6 +1986,8 @@ export const ICONS: Record<string, string[]> = {
   waves: ['....s....', '.s...s...', '..s...s..', 'w..s...s.', 'ww..s..s.', 'w..s...s.', '..s...s..', '.s...s...', '....s....'],
   owl: ['.n.....n.', '.nnnnnnn.', 'nwwnnnwwn', 'nwknnnwkn', 'nnwwywwnn', '.nnnnnnn.', '.nhnhnhn.', '..nnnnn..', '..y...y..'],
   heartplus: ['.........', '.rr...rr.', 'rrrrwrrrr', 'rrrrwrrrr', 'rrwwwwwrr', '.rrrwrrr.', '..rrwrr..', '...rrr...', '....r....'],
+  // Status bar: net / mud (tinted with the status colour)
+  net: ['#...#...#', '.#.#.#.#.', '..#...#..', '.#.#.#.#.', '#...#...#', '.#.#.#.#.', '..#...#..', '.#.#.#.#.', '#...#...#'],
   target: ['....r....', '..rrrrr..', '.r..r..r.', '.r.rrr.r.', 'rrrrwrrrr', '.r.rrr.r.', '.r..r..r.', '..rrrrr..', '....r....'],
 };
 
