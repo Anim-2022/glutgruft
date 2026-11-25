@@ -23,7 +23,7 @@ import { addNum, drawNums, addShake, stepShake, hurtFlash, drawScreenFlash, spla
 import { fxScale, fxLevel } from './fxopts';
 import { drawWorldTile, drawGas, MAT_COLS, MAT_SOUND } from './world';
 import { hunterFx, resetHunterFx, isHunter, leaping, leapLift, drawHunterAura, hunterGlow, drawHunterBar, drawHunterMarks, stepHunterFx, stoneOverlay } from './hunters';
-import { Run, Actor, xpNeed, skillCost, skillReady, spellAt, itemText, itemValue, itemScore, perkInfo, skillModName, shotRange, RANKS, SORT_NAMES, BAG_MAX, RUNE_NAMES, availableNodes, puzzleGoal, eventGoal, hunterWarn, hunterInfo, hunted, dartWarn, inVault, VAULT_NAMES, HAZARD_NAMES } from '../game/run';
+import { Run, Actor, xpNeed, skillCost, skillReady, spellAt, itemText, itemValue, itemScore, perkInfo, skillModName, shotRange, RANKS, SORT_NAMES, BAG_MAX, RUNE_NAMES, availableNodes, puzzleGoal, eventGoal, hunterWarn, hunterInfo, hunted, dartWarn, inVault, VAULT_NAMES, HAZARD_NAMES, aimable, aimName } from '../game/run';
 import { ClassId, treeNodes, NEW_SKILLS, TUNE, BRANCH_NAMES, SKILL_UP, treeNode, nodeText, CLASSES, MOBS, PERKS, RELICS, RARITY, RARITY_COL, BIOME_NAMES, biomeOf, Item, AFFIX, CONSUMABLES, SLOT_NAMES, ULT, ULT_LEVEL, USE_ORDER, SYNERGIES } from '../game/content';
 
 const pos = new Map<number, { x: number; y: number }>();
@@ -723,6 +723,21 @@ export function drawRun(ctx: CanvasRenderingContext2D, run: Run, dt: number, tim
     actor(m, q);
   }
   if (!drawn) actor(p, pp);
+  // Aimed-at object (barrel, pot, ...): the enemy marker's corner brackets in cyan, breathing, with ticks toward the centre
+  if (run.tgt !== undefined && aimable(run, run.tgt)) {
+    const tx = (run.tgt % W) * TS + ox, ty = ((run.tgt / W) | 0) * TS + oy, o = Math.sin(time * 6) > 0 ? 1 : 0;
+    const mark = (sx: number, col: string) => {
+      ctx.fillStyle = col;
+      for (const [cx, cy] of [[0, 0], [13, 0], [0, 13], [13, 13]]) {
+        const qx = tx + sx + cx + (cx ? o : -o), qy = ty + sx + cy + (cy ? o : -o);
+        ctx.fillRect(qx, qy, 3, 1); ctx.fillRect(qx + (cx ? 2 : 0), qy - (cy ? 2 : 0), 1, 3);
+      }
+      ctx.fillRect(tx + sx + 7, ty + sx - 1 - o, 2, 2); ctx.fillRect(tx + sx + 7, ty + sx + 15 + o, 2, 2);
+      ctx.fillRect(tx + sx - 1 - o, ty + sx + 7, 2, 2); ctx.fillRect(tx + sx + 15 + o, ty + sx + 7, 2, 2);
+    };
+    mark(1, '#0d0e17'); mark(0, '#73eff7');
+    lights.push({ x: run.tgt % W, y: (run.tgt / W) | 0, r: 1.4, col: '#73eff7', a: 0.5 });
+  }
   // Bossaura (der Schmiedefürst glüht ohnehin)
   for (const [m, q] of order) if (m.boss && !GLOW[m.kind]) lights.push({ x: q.x, y: q.y, r: 3.2, col: BOSS_FLAME[bio][0], a: 0.5 });
   // Schwebeteilchen: Staub, Sporen, Asche liegen im Lichtschein
@@ -1090,6 +1105,16 @@ function hud(ctx: CanvasRenderingContext2D, run: Run, time: number) {
     ctx.globalAlpha = 1;
   }
 
+  // Chosen target: a short line above the quick bar, on the right (cyan: object, gold: enemy)
+  const aim = run.mode === 'play' ? aimName(run) : null;
+  if (aim) {
+    const s = `Target: ${aim} [Tab]`, w = s.length * 6 + 10, ax = VW - w - 4, ay = y0 - 18, obj = run.tgt !== undefined;
+    ctx.globalAlpha = under(ax, ay, w, 14) ? 0.25 : 1;
+    ctx.fillStyle = 'rgba(8,9,15,0.6)'; ctx.fillRect(ax, ay, w, 14);
+    text(ctx, s, ax + 5, ay + 3, obj ? '#73eff7' : '#ffcd75', 8);
+    ctx.globalAlpha = 1;
+  }
+
   if (loot && run.mode === 'play' && overlay === 'none') lootCard(ctx, run);
 
   if (tutorial && run.mode === 'play') {
@@ -1341,7 +1366,7 @@ function charSheet(ctx: CanvasRenderingContext2D, run: Run) {
 
 const HELP: [string, string][] = [
   ['Arrows / WASD', 'move; walk into enemies to attack'], ['Space', 'wait one turn'], ['1 to 6', 'Skills (4–6: new ones from the tree)'], ['U', 'Ultimate skill from level 5'], ['7 8 9 0', 'use scrolls and potions'], ['R', 'equip the latest find'], ['K', 'Skill tree: spend a point'], ['T', 'Tutorial: skip step'], ['F', 'ranged attack (Mage, Ranger)'],
-  ['Q', 'drink a healing potion'], ['B', 'throw a bomb'], ['E', 'descend the stairs'], ['Click / Tab', 'choose a target'], ['Mouse', 'hover over things for details'],
+  ['Q', 'drink a healing potion'], ['B', 'throw a bomb'], ['E', 'descend the stairs'], ['Click / Tab', 'choose a target: enemies, barrels, pots'], ['Mouse', 'hover over things for details'],
   ['I', 'Backpack: equip, use, sell'], ['C', 'character, relics, boons'], ['N', 'map: small, large, off'], ['M', 'toggle sound'], ['V', 'Fullscreen'], ['J', 'Journal: read all messages'], ['H', 'this help'],
 ];
 
@@ -1377,7 +1402,7 @@ const HAZARD_HELP: Record<string, string> = {
 const TILE_NAMES: Record<number, string> = {
   [T.STAIRS]: 'Stairs down [E]', [T.CHEST]: 'Chest', [T.MIMIC]: 'Chest', [T.CURSED]: 'Cursed chest – strong, but costs health', [T.TRADER]: 'Trader – walk into him to trade',
   [T.FOUNTAIN]: 'Fountain – heals once', [T.FOUNTAIN_DRY]: 'Dry fountain', [T.GATE]: 'Gate – an elite enemy holds the key', [T.ALTAR]: 'Altar: health for a boon', [T.CRACKED]: 'Cracked wall – 3 blows or a bomb',
-  [T.BARREL]: 'Barrel – bump it to light the fuse', [T.PILLAR]: 'Pillar – collapses when blasted', [T.GRASS]: 'Overgrowth – flammable',
+  [T.BARREL]: 'Barrel – bump it or shoot it to light the fuse', [T.PILLAR]: 'Pillar – collapses when blasted', [T.GRASS]: 'Overgrowth – flammable',
   [T.FRAGILE]: 'Brittle floor', [T.FRAGILE2]: 'Brittle floor – breaks on the next step', [T.CRATE]: 'Crate – pushable', [T.CRATE_ON]: 'Crate on plate',
   [T.PLATE]: 'Pressure plate', [T.LEVER]: 'Lever – resets the crates', [T.ICE]: 'Ice – you slide', [T.TABLET]: 'Stone tablet', [T.GOAL]: 'Goal plate',
   [T.BRAZIER]: 'Brazier, unlit – a step toggles it and its neighbours', [T.BRAZIER_ON]: 'Brazier, lit – a step toggles it and its neighbours',
@@ -1477,7 +1502,7 @@ function hint(run: Run): string | null {
     const i = y * W + x;
     if (!run.vis[i]) continue;
     if (run.tiles[i] === T.CRACKED) return 'Cracked wall: walk into it three times or [B] bomb';
-    if (run.tiles[i] === T.BARREL) return 'Barrel: bump it to light the fuse – then keep away';
+    if (run.tiles[i] === T.BARREL) return c.range ? 'Barrel: [Tab] or click to aim, [F] shoots it – then keep away' : 'Barrel: bump it to light the fuse – then keep away';
     if (run.tiles[i] === T.CHEST) return 'Chest: walk into it to open';
   }
   return run.floor === 1 ? 'Find the stairs · hover over things for details' : null;

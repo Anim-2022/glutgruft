@@ -114,6 +114,7 @@ export interface Run {
   gas?: Map<number, number>;   // poison cloud: tile -> turns left (only with FEATURES.destruction)
   puzzle: Puzzle | null; willUsed: boolean;
   shop: Offer[]; target: number; daily: boolean;
+  tgt?: number;              // aimed-at object (tile index): barrel, pot, spore cap, crate, cracked wall; ranged classes only
   log: string[]; fx: Fx[];
   mode: 'play' | 'perk' | 'tree' | 'shop' | 'dead' | 'win';
   perkChoices: string[];
@@ -146,7 +147,7 @@ export type Action =
   | { t: 'wait' } | { t: 'shoot' } | { t: 'potion' } | { t: 'descend' } | { t: 'bomb' } | { t: 'ult' } | { t: 'use'; id: string } | { t: 'drop'; i: number } | { t: 'sort' }
   | { t: 'skill'; i: number } | { t: 'perk'; i: number }
   | { t: 'tree' } | { t: 'learn'; id: string } | { t: 'later' }
-  | { t: 'buy'; i: number } | { t: 'leave' } | { t: 'target'; x: number; y: number }
+  | { t: 'buy'; i: number } | { t: 'leave' } | { t: 'target'; x: number; y: number } | { t: 'cycle' }
   | { t: 'equip'; i: number } | { t: 'unequip'; slot: number } | { t: 'sell'; i: number };
 
 const FOV_R = 8;
@@ -892,6 +893,7 @@ function nextFloor(run: Run) {
   }
   run.shop = [];
   run.target = 0;
+  delete run.tgt;
   if (!bossFloor && rng.chance(0.5)) {
     if (placeIn(run, rng.pick(rooms.slice(1)), T.TRADER)) run.shop = stock(run);
   }
@@ -2367,6 +2369,79 @@ function nearestMob(run: Run, range: number): Actor | undefined {
   return best;
 }
 
+// ---------- Aiming (Tab / click): enemies first, then objects ----------
+// Only ranged classes can aim at objects; melee classes cycle through visible enemies as before.
+// A shot at an object hits it like a blow (hitTile 'smash'): a barrel catches fire, a pot or spore cap
+// bursts, a crate splinters, a cracked wall takes one hit. No run.rng is drawn for it.
+const AIM_TILES: Record<number, string> = { [T.BARREL]: 'Barrel', [T.POT]: 'Clay pot', [T.SPORE]: 'Spore cap', [T.CRATE]: 'Crate', [T.CRACKED]: 'Cracked wall' };
+// Longest reach of the class's aimed attacks (fireball 7, aimed shot 8)
+export const aimRange = (p: Player) => !CLASSES[p.cls].range ? 0 : Math.max(shotRange(p), p.cls === 'magier' ? 7 : 8);
+
+// Can tile i be chosen as a target right now (seen, in reach, in line of sight, reacts to a hit)?
+export function aimable(run: Run, i: number): boolean {
+  const p = run.p, t = run.tiles[i], x = i % W, y = (i / W) | 0;
+  if (!CLASSES[p.cls].range || !(t in AIM_TILES) || !run.vis[i]) return false;
+  if (t !== T.BARREL && !FEATURES.destruction) return false; // without destruction only barrels react
+  if (inVault(run, x, y) || cheb({ x, y }, p) > aimRange(p)) return false;
+  return los(run.tiles, p.x, p.y, x, y);
+}
+
+// Name of the chosen target for the HUD (null: none)
+export function aimName(run: Run): string | null {
+  if (run.tgt !== undefined && aimable(run, run.tgt)) return AIM_TILES[run.tiles[run.tgt]];
+  const m = run.target ? run.mobs.find(q => q.id === run.target) : undefined;
+  return m && run.vis[m.y * W + m.x] ? m.name : null;
+}
+
+// All valid targets in cycle order: visible enemies (nearest first), then objects (nearest first)
+export function aimTargets(run: Run): { x: number; y: number; mob?: number; tile?: number }[] {
+  const p = run.p, r = aimRange(p), ranged = r > 0;
+  const mobs = run.mobs.filter(m => run.vis[m.y * W + m.x] && (!ranged || cheb(m, p) <= r)).sort((a, b) => cheb(a, p) - cheb(b, p) || a.id - b.id);
+  const out: { x: number; y: number; mob?: number; tile?: number }[] = mobs.map(m => ({ x: m.x, y: m.y, mob: m.id }));
+  const tiles: number[] = [];
+  if (ranged) for (let y = Math.max(0, p.y - r); y <= Math.min(H - 1, p.y + r); y++) for (let x = Math.max(0, p.x - r); x <= Math.min(W - 1, p.x + r); x++) if (aimable(run, y * W + x)) tiles.push(y * W + x);
+  tiles.sort((a, b) => cheb({ x: a % W, y: (a / W) | 0 }, p) - cheb({ x: b % W, y: (b / W) | 0 }, p) || a - b);
+  for (const i of tiles) out.push({ x: i % W, y: (i / W) | 0, tile: i });
+  return out;
+}
+
+function setTarget(run: Run, x: number, y: number) {
+  const m = mobAt(run, x, y), i = y * W + x;
+  run.target = m && run.vis[m.y * W + m.x] ? m.id : 0;
+  if (!run.target && x >= 0 && y >= 0 && x < W && y < H && aimable(run, i)) run.tgt = i;
+  else delete run.tgt;
+}
+
+function cycleTarget(run: Run) {
+  const ts = aimTargets(run);
+  if (!ts.length) { run.target = 0; delete run.tgt; return; }
+  const cur = ts.findIndex(q => (q.mob !== undefined && q.mob === run.target) || (q.tile !== undefined && q.tile === run.tgt));
+  const n = ts[(cur + 1) % ts.length];
+  setTarget(run, n.x, n.y);
+}
+
+// The chosen object as seen by one attack: its tile index; -2 out of this attack's reach; -1 none chosen
+function aimed(run: Run, range: number): number {
+  const i = run.tgt;
+  if (i === undefined || !aimable(run, i)) return -1;
+  return cheb({ x: i % W, y: (i / W) | 0 }, run.p) <= range ? i : -2;
+}
+const tooFar = (run: Run) => { say(run, 'The target is out of range.'); return false; };
+
+// A shot or spell hits the chosen object: the same reactions as a blow
+function shootTile(run: Run, i: number) {
+  if (run.tiles[i] === T.BARREL && !FEATURES.destruction) {
+    if (!run.fuses.has(i)) { run.fuses.set(i, 2); say(run, 'The barrel catches fire!'); }
+    return;
+  }
+  hitTile(run, i, 'smash');
+}
+
+// Drop an object target that broke, left sight or reach
+function checkAim(run: Run) {
+  if (run.tgt !== undefined && !aimable(run, run.tgt)) delete run.tgt;
+}
+
 function gain(p: Player, n: number) { p.res = Math.max(0, Math.min(p.resMax, p.res + n)); }
 
 function openChest(run: Run, i: number) {
@@ -2446,9 +2521,12 @@ function useSkill(run: Run, i: number): boolean {
       say(run, 'War cry!');
       break;
     case 'magier0': {
-      const t = nearestMob(run, 7);
+      const ai = aimed(run, 7);
+      if (ai === -2) return tooFar(run);
+      const t = ai >= 0 ? { x: ai % W, y: (ai / W) | 0 } : nearestMob(run, 7);
       if (!t) return noTarget();
       run.fx.push({ k: 'fireball', x0: p.x, y0: p.y, x1: t.x, y1: t.y, r: mod === 1 ? 2 : 1 }, { k: 'shake', n: 3 });
+      if (ai >= 0 && run.tiles[ai] !== T.BARREL) shootTile(run, ai); // a barrel is lit by the flames below
       for (let y = t.y - 1; y <= t.y + 1; y++) for (let x = t.x - 1; x <= t.x + 1; x++) ignite(run, x, y, 2);
       for (const m of run.mobs.filter(m => cheb(m, t) <= (mod === 1 ? 2 : 1))) {
         m.st.brand = burnT(p, 2);
@@ -2491,6 +2569,13 @@ function useSkill(run: Run, i: number): boolean {
       return true;
     }
     case 'waldlaeufer0': {
+      const ai = aimed(run, 8);
+      if (ai === -2) return tooFar(run);
+      if (ai >= 0) {
+        run.fx.push({ k: 'arrow', x0: p.x, y0: p.y, x1: ai % W, y1: (ai / W) | 0, col: '#ffcd75', heavy: true });
+        shootTile(run, ai);
+        break;
+      }
       const t = nearestMob(run, 8);
       if (!t) return noTarget();
       run.fx.push({ k: 'arrow', x0: p.x, y0: p.y, x1: t.x, y1: t.y, col: '#ffcd75', heavy: true });
@@ -2528,7 +2613,9 @@ function useSkill(run: Run, i: number): boolean {
       if (hasNode(p, 'n2_2b') && wasAdj) refund = 1; // Leichtfuß
       // Minenfeld: Falle am Startfeld
       if (hasNode(p, 'n1_5') && !run.traps.some(t => t.x === from.x && t.y === from.y)) { run.traps.push(from); while (run.traps.length > maxTraps(p)) run.traps.shift(); }
-      if (mod === 2) {
+      const ai = mod === 2 ? aimed(run, shotRange(p)) : -1;
+      if (ai >= 0) { run.fx.push({ k: 'arrow', x0: p.x, y0: p.y, x1: ai % W, y1: (ai / W) | 0, col: '#ffcd75', heavy: false }); shootTile(run, ai); }
+      else if (mod === 2 && ai === -1) {
         const t = nearestMob(run, shotRange(p));
         if (t) { run.fx.push({ k: 'arrow', x0: p.x, y0: p.y, x1: t.x, y1: t.y, col: '#ffcd75', heavy: false }); playerHit(run, t, atk * 0.75 * shotBonus(p)); }
       }
@@ -2572,10 +2659,14 @@ function castSpell(run: Run, id: string): boolean {
     return true;
   }
   if (id === 'eislanze') {
-    const t = nearestMob(run, 6);
+    const ai = aimed(run, 6);
+    if (ai === -2) return tooFar(run);
+    const t = ai >= 0 ? { x: ai % W, y: (ai / W) | 0 } : nearestMob(run, 6);
     if (!t) { say(run, 'No target in range.'); return false; }
-    const path = lineFrom(run, t.x, t.y, 6), end = path[path.length - 1] ?? [t.x, t.y];
+    // at an object the lance stops there: it hits whoever stands in between, then the object
+    const path = ai >= 0 ? lineFrom(run, t.x, t.y, cheb(t, p) - 1) : lineFrom(run, t.x, t.y, 6), end = ai >= 0 ? [t.x, t.y] : path[path.length - 1] ?? [t.x, t.y];
     run.fx.push({ k: 'bolt', x0: p.x, y0: p.y, x1: end[0], y1: end[1], col: '#73eff7' });
+    if (ai >= 0) shootTile(run, ai);
     for (const [x, y] of path) {
       const m = mobAt(run, x, y);
       if (!m) continue;
@@ -2660,7 +2751,9 @@ function useUlt(run: Run): boolean {
     run.fx.push({ k: 'boom', x: p.x, y: p.y, r: 2 }, { k: 'shake', n: 6 });
     for (const t of ts) { stun(run, t, 2); playerHit(run, t, atk * 3 * p.pow); }
   } else if (p.cls === 'magier') {
-    const t = nearestMob(run, 8);
+    const ai = aimed(run, 8);
+    if (ai === -2) return tooFar(run);
+    const t = ai >= 0 ? { x: ai % W, y: (ai / W) | 0 } : nearestMob(run, 8);
     if (!t) { say(run, 'No target in range.'); return false; }
     const c = { x: t.x, y: t.y };
     run.fx.push({ k: 'bolt', x0: p.x, y0: p.y - 6, x1: c.x, y1: c.y, col: '#ef7d57' }, { k: 'boom', x: c.x, y: c.y, r: 2 }, { k: 'shake', n: 8 });
@@ -2744,11 +2837,8 @@ export function act(run: Run, a: Action): void {
   if (a.t === 'equip' && p.bag[a.i]?.use) { if (useItem(run, a.i)) endTurn(run); return; }
   if (a.t === 'use') { const i = p.bag.findIndex(it => it.use === a.id); if (i >= 0 && useItem(run, i)) endTurn(run); return; }
   if (manage(run, a)) return;
-  if (a.t === 'target') {
-    const m = mobAt(run, a.x, a.y);
-    run.target = m && run.vis[m.y * W + m.x] ? m.id : 0;
-    return;
-  }
+  if (a.t === 'target') { setTarget(run, a.x, a.y); return; }
+  if (a.t === 'cycle') { cycleTarget(run); return; }
   let used = false;
   playerActing = true; freeTurn = false; shotUsed = false;
   const px = p.x, py = p.y, adj0 = run.mobs.filter(m => cheb(m, p) <= 1);
@@ -2862,6 +2952,15 @@ export function act(run: Run, a: Action): void {
     case 'shoot': {
       const c = CLASSES[p.cls];
       if (!c.range) break;
+      const ai = aimed(run, shotRange(p));
+      if (ai === -2) { tooFar(run); break; }
+      if (ai >= 0) {
+        // aimed at an object: no focus and no on-hit effects, those need an enemy
+        run.fx.push({ k: 'bolt', x0: p.x, y0: p.y, x1: ai % W, y1: (ai / W) | 0, col: c.resCol });
+        shootTile(run, ai);
+        used = true;
+        break;
+      }
       const t = nearestMob(run, shotRange(p));
       if (!t) { say(run, 'No target in range.'); break; }
       run.fx.push({ k: 'bolt', x0: p.x, y0: p.y, x1: t.x, y1: t.y, col: c.resCol });
@@ -2899,7 +2998,9 @@ export function act(run: Run, a: Action): void {
         if (opaque(t) || t === undefined) break;
         tx = x; ty = y;
       }
-      const m = found ? undefined : nearestMob(run, 5);
+      const ai = found ? -1 : aimed(run, 5); // a chosen object within throwing range comes first
+      const m = found || ai >= 0 ? undefined : nearestMob(run, 5);
+      if (ai >= 0) { tx = ai % W; ty = (ai / W) | 0; }
       if (m) { tx = m.x; ty = m.y; }
       p.bombs--;
       run.fx.push({ k: 'bolt', x0: p.x, y0: p.y, x1: tx, y1: ty, col: '#1a1c2c' });
@@ -2919,8 +3020,9 @@ export function act(run: Run, a: Action): void {
   }
   if (used && p.cls === 'waldlaeufer') afterWl(run, a, px, py, adj0);
   playerActing = false;
-  if (used && freeTurn) { freeTurn = false; computeFov(run.tiles, p.x, p.y, fovR(run), run.vis, run.seen); return; }
+  if (used && freeTurn) { freeTurn = false; computeFov(run.tiles, p.x, p.y, fovR(run), run.vis, run.seen); checkAim(run); return; }
   if (used) endTurn(run);
+  checkAim(run);
 }
 
 // ---------- Gegnerzug ----------

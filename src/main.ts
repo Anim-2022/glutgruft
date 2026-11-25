@@ -196,13 +196,7 @@ function onKey(k: string): boolean {
     if (k >= '1' && k <= '9') a = { t: 'buy', i: +k - 1 };
     else if (k === ' ' || k === 'escape' || k === 'enter') a = { t: 'leave' };
   }
-  else if (k === 'tab') {
-    // nächstes sichtbares Ziel anwählen
-    const r = run, vis = r.mobs.filter(m => r.vis[m.y * W + m.x]);
-    if (!vis.length) return true;
-    const n = vis[(vis.findIndex(m => m.id === r.target) + 1) % vis.length];
-    a = { t: 'target', x: n.x, y: n.y };
-  }
+  else if (k === 'tab') a = { t: 'cycle' }; // next target: enemies nearest first, then barrels and other objects (ranged classes)
   else if (MOVES[k]) a = { t: 'move', dx: MOVES[k][0], dy: MOVES[k][1] };
   else if (k === ' ' || k === '.') a = { t: 'wait' };
   else if (k === 'f') a = { t: 'shoot' };
@@ -275,6 +269,7 @@ cv.addEventListener('click', e => {
   }
   const [x, y] = tileAt(mx, my);
   act(run, { t: 'target', x, y });
+  storeRun();
 });
 
 // Turn keys go through the input buffer (core/input.ts): no press is lost, held keys step at a fixed rate
