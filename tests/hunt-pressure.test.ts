@@ -108,7 +108,7 @@ describe('hunt pressure: farming does not pay', () => {
     const mk = (withHunter: boolean) => {
       const r = arena();
       r.p.cls = 'magier'; r.p.res = 0; r.p.resMax = 20;
-      if (withHunter) { const h = put(r, 'echse', 5, 6); h.hp = 999; h.st.stun = 99; }
+      if (withHunter) { const h = put(r, 'echse', 5, 6); h.hp = 999; h.st.stun = 99; h.st.stage = 1; }
       for (let k = 0; k < 9; k++) act(r, { t: 'wait' });
       return r;
     };
@@ -120,6 +120,9 @@ describe('hunt pressure: farming does not pay', () => {
     act(r, { t: 'move', dx: 1, dy: 0 });
     expect(r.tiles[6 * W + 31]).toBe(T.FOUNTAIN);
     expect(r.p.hp).toBe(50);
+    // a single first-stage hunter does not make the floor hostile
+    const r1 = arena(); const h1 = put(r1, 'echse', 5, 6); h1.hp = 999;
+    expect(hunted(r1)).toBe(false);
   });
 
   it('a blocked hunter breaks through a cracked wall; webs do not hold it', () => {

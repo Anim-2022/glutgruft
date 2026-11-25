@@ -1268,8 +1268,9 @@ export function eventGoal(run: Run): { title: string; goal: string; col: string 
 // ---------- Jäger: wer zu lange auf einer Ebene bleibt, wird gejagt ----------
 
 const isHunter = (m: Actor) => !!MOBS[m.kind].hunter;
-// while a hunter is alive the floor turns hostile (no passive regen, fountains and altars refuse)
-export const hunted = (run: Run) => FEATURES.huntPressure && run.mobs.some(isHunter);
+// once the hero lingers (a second-stage hunter or Death is alive) the floor turns hostile:
+// no passive regen, fountains and altars refuse. A single first hunter keeps the old rules.
+export const hunted = (run: Run) => FEATURES.huntPressure && run.mobs.some(m => isHunter(m) && ((m.st.stage ?? 0) >= 1 || !!m.st.noReward));
 function huntReward(run: Run, m: Actor): number {
   if (!FEATURES.huntPressure || !isHunter(m)) return 1;
   if (m.st.noReward) return 0;
