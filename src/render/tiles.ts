@@ -122,18 +122,6 @@ export function capTiles(b: BiomeCols, base: HTMLCanvasElement, edges: HTMLCanva
     return c;
   });
 }
-// ruhigere Oberfläche der Mauerkrone (ohne Ziegelgitter, das wie Frontmauerwerk wirkt)
-export function capBase(b: BiomeCols, bi: number, rnd: () => number): HTMLCanvasElement {
-  const [c, g] = mk(TS, TS);
-  px(g, b.cap, 0, 0, TS, TS);
-  g.fillStyle = 'rgba(0,0,0,0.22)';
-  if (bi === 1) for (let i = 0; i < 7; i++) g.fillRect((rnd() * 13) | 0, (rnd() * 14) | 0, 2 + ((rnd() * 2) | 0), 1 + ((rnd() * 2) | 0));
-  else { g.fillRect(3, 8, 9, 1); g.fillRect(9, 2, 1, 6); g.fillRect(5, 9, 1, 5); }
-  g.fillStyle = 'rgba(255,255,255,0.08)';
-  for (let i = 0; i < 5; i++) g.fillRect((rnd() * 15) | 0, (rnd() * 15) | 0, 1 + ((rnd() * 2) | 0), 1);
-  if (bi === 2) { px(g, '#7d2b45', 4, 4, 1, 3); px(g, '#ef7d57', 4, 5); px(g, '#7d2b45', 12, 11, 2, 1); }
-  return c;
-}
 
 // ---- Sockel der Wandfront: Fuge, dunklere Sockelsteine, Übergang zum Boden ----
 export function plinth(g: CanvasRenderingContext2D, b: BiomeCols) {

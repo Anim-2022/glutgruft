@@ -1,6 +1,6 @@
 // Bildschirmfotos je Biom für den Vorher/Nachher-Vergleich.
 //
-//   node scripts/shots.ts [ausgabeordner]   (Standard: docs/visual-pass-2/after)
+//   node scripts/shots.ts [ausgabeordner]   (Standard: docs/shots)
 //
 // Startet Vite, öffnet das Spiel in Chromium, steigt mit __g.goto() auf die gewünschte Ebene
 // und speichert ein Bild je (Ebene, Seed). Zusätzlich wird die Bildrate gemessen.
@@ -11,7 +11,7 @@ import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
 const { chromium } = require('playwright');
 
-const out = process.argv[2] ?? 'docs/visual-pass-2/after';
+const out = process.argv[2] ?? 'docs/shots';
 mkdirSync(out, { recursive: true });
 const SHOTS: [number, number, string][] = [
   [1, 11, 'krieger'], [3, 23, 'magier'], [5, 11, 'krieger'],

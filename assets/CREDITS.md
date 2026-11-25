@@ -3,15 +3,9 @@
 Alle Sprites stehen als Zeichenmatrizen im Code (`src/render/sprites.ts`, `src/render/poses.ts`, `src/render/gfx.ts`).
 KI-Referenzen werden hier je Sprite eingetragen (Format siehe `docs/asset-pipeline.md`); PNG-Referenzen werden nicht eingecheckt.
 
-## Knochenschütze (`schuetze`, Umschalter `SCHUETZE_NEU` in `src/render/sprites.ts`)
+## Knochenschütze (`schuetze`, `src/render/sprites.ts`)
 
-- Die im Repository eingebaute neue Fassung ist **von Hand gezeichnet, ohne KI-Referenz** (2026-11-17).
-  Beim Zeichnen war das ZeroGPU-Kontingent für `mcp-tools/Z-Image-Turbo` erschöpft, und die Fassung
-  `schuetze_hand` aus der Referenz-Sitzung lag im Repository nicht vor.
-- Referenz aus der Pipeline-Sitzung (nicht in dieser Fassung verwendet): Modell Tongyi-MAI/Z-Image-Turbo
-  (Space `mcp-tools/Z-Image-Turbo`), Lizenz Apache-2.0, Prompt „B“ (Wortlaut liegt hier nicht vor), Seed 42.
-  Wird `schuetze_hand` eingebaut, wird dieser Eintrag mit vollständigem Prompt ergänzt.
-- Alte Fassung bleibt als `schuetze_alt` erhalten – von Hand.
+- Von Hand gezeichnet, ohne KI-Referenz (2026-11-17). Die erste Fassung wurde entfernt.
 
 ## Von Hand gezeichnet (Phase 2)
 
@@ -30,4 +24,4 @@ Keine dieser Grafiken beruht auf einer KI-Referenz.
   Kristalle, Leuchtpilze, Barren, Kohle, Grabplatte, Pfütze, Glutrost (`src/render/props.ts`)
 - Schatten, Licht, Teilchen, Nebel, Vignette (`src/render/shade.ts`, `light.ts`, `ambient.ts`)
 
-Alles im Code gezeichnet, nur Farben aus `PAL`, ohne KI-Referenz. Vergleichsbilder: `docs/visual-pass-2/`.
+Alles im Code gezeichnet, nur Farben aus `PAL`, ohne KI-Referenz.

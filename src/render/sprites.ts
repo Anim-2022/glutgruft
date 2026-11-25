@@ -14,64 +14,10 @@ export const PAL: Record<string, string> = {
 
 export const ACTORS = ['krieger', 'magier', 'waldlaeufer', 'ratte', 'skelett', 'schuetze', 'fledermaus', 'sporling', 'golem', 'glutgeist', 'koenig', 'mutter', 'fuerst', 'mimik',
   'echse', 'krake', 'drache', 'medusa', 'tod'];
-export const NO_OUTLINE = new Set(['stairs', 'trap', 'rubble', 'crack', 'crack2', 'fire_a', 'fire_b', 'plate', 'goal',
+export const NO_OUTLINE = new Set(['stairs', 'trap', 'rubble', 'crack', 'crack2', 'plate', 'goal',
   'rune0', 'rune1', 'rune2', 'rune3', 'rune0_on', 'rune1_on', 'rune2_on', 'rune3_on']);
 
 export const SPR: Record<string, string[]> = {
-  krieger: [
-    '................',
-    '.....dddddd.....',
-    '....dggggggd....',
-    '....dgwggggd..w.',
-    '....dggggggd..w.',
-    '....dhhhhhhd..w.',
-    '.....hkhhkh...w.',
-    '.....hhHHhh...w.',
-    '....rrrrrrrr..w.',
-    '...grrrreerrg.w.',
-    '..bbbbrrrrrrhnnn',
-    '..bcsbrrrrrr..n.',
-    '..bbbbeerree....',
-    '...bb.dd..dd....',
-    '......dd..dd....',
-    '.....DDD..DDD...',
-  ],
-  magier: [
-    '................',
-    '.......bb.......',
-    '......bbbb....s.',
-    '.....bbBbbb..scs',
-    '....bbbBbbbb..s.',
-    '...yyyyyyyyyy.n.',
-    '.....hhhhhh...n.',
-    '.....hkhhkh...n.',
-    '.....hwwwwh...n.',
-    '....bbwwwwbb..n.',
-    '...bbbbwwbbbbhn.',
-    '...bBbbbbbbBb.n.',
-    '...bBbbyybbBb.n.',
-    '....bbbbbbbb..n.',
-    '....bBbbbbBb..n.',
-    '...BBBBBBBBBB.n.',
-  ],
-  waldlaeufer: [
-    '................',
-    '.....GGGGGG.....',
-    '....GGGGGGGG..n.',
-    '....GTGGGGTG.n.w',
-    '....Thhhhhhh.n.w',
-    '.....hkhhkh.n..w',
-    '.....hhHHhh.n..w',
-    '....GGGGGGG.n..w',
-    '...GGGnGGGGGh..w',
-    '...GTGGnGGTG.n.w',
-    '...GTGGGnGTG.n.w',
-    '....GGGGGGG...nw',
-    '....nnnYnnn...n.',
-    '.....TT..TT.....',
-    '.....TT..TT.....',
-    '....NNN..NNN....',
-  ],
   ratte: [
     '................',
     '................',
@@ -107,24 +53,6 @@ export const SPR: Record<string, string[]> = {
     '.....ww..ww.....',
     '.....w....w.....',
     '....ww....ww....',
-  ],
-  schuetze: [
-    '................',
-    '.....eeeeee.....',
-    '....eeeeeeee..n.',
-    '....ewkwwkwe.n.g',
-    '....ewwwwwwe.n.g',
-    '.....wkwkwk.n..g',
-    '......wwww..n..g',
-    '...ww.gwwg..n..g',
-    '...w.wwggwwwh..g',
-    '...w..wwww...n.g',
-    '...w.gwggwg..n.g',
-    '......wwww....ng',
-    '.....ww..ww...n.',
-    '.....w....w.....',
-    '....ww....ww....',
-    '................',
   ],
   fledermaus: [
     '................',
@@ -474,24 +402,6 @@ export const SPR: Record<string, string[]> = {
     '................',
     '................',
   ],
-  fire_a: [
-    '................',
-    '.......o........',
-    '......oo........',
-    '......oyo...o...',
-    '..o..ooyo..oo...',
-    '..oo.oyyoo.oo...',
-    '..oyooyyyooyo...',
-    '.ooyyoyyyyoyoo..',
-    '.oyyyyywyyyyyo..',
-    '.oyywyywwyywyo..',
-    '.oyywwwwwwwwyo..',
-    '..oywwwwwwwwo...',
-    '..ooyywwwwyyoo..',
-    '...oooyyyyooo...',
-    '................',
-    '................',
-  ],
   bomb: ['............', '.......y....', '......o.....', '.....n......', '....DDDD....', '...DDDDDD...', '..DDgDDDDD..', '..DDgDDDDD..', '..DDDDDDDD..', '...DDDDDD...', '....DDDD....', '............'],
   crate: [
     '................',
@@ -763,7 +673,6 @@ export const SPR: Record<string, string[]> = {
   i_waldlaeufer_shot: ['............', '........www.', '.........ww.', '........w.w.', '.......n....', '......n.....', '.....n......', '....n.......', '.l.n........', '.ll.........', '.lll........', '............'],
 };
 
-SPR.fire_b = SPR.fire_a.map(r => [...r].reverse().join(''));
 
 // Statue der Gegenseite schaut nach links
 SPR.statue_l = SPR.statue.map(r => [...r].reverse().join(''));
@@ -794,30 +703,6 @@ const flip = (rows: string[]) => rows.map(r => [...r].reverse().join(''));
 const E = '................';
 
 export const VIEWS: Record<string, { b: string[]; s: string[]; alt?: string[] }> = {
-  krieger: {
-    b: ov(SPR.krieger, {
-      3: '.w..dggggggd....', 4: '.w..dggggggd....', 5: '.w..dggggggd....', 6: '.w...dggggd.....', 7: '.w...dddddd.....',
-      8: '.w..rrrrrrrr....', 9: '.w.grreeeerrg...', 10: 'nnnhrrrrrrrrbbbb', 11: '.n..rrrrrrrrbccb', 12: '....eerreerrbbbb', 13: '......dd..dd.bb.',
-    }),
-    s: [E, '.....ddddd......', '....dgggggd.....', '....dgwgggd.....', '....dggggdd.....', '....dgghhhh.....', '.....gghkh......', '.....gghhh....w.',
-      '.....rrrrr...w..', '....brrrrrg.w...', '...bcbrrrrhn....', '...bbbrrrr.n....', '....b.eerr......', '......ddd.......', '......dd.d......', '.....DDD.DD.....'],
-  },
-  magier: {
-    b: ov(SPR.magier, {
-      2: '.s....bbbb......', 3: 'scs..bbBbbb.....', 4: '.s..bbbBbbbb....', 5: '.n.yyyyyyyyyy...', 6: '.n...bbbbbb.....', 7: '.n...bbbbbb.....', 8: '.n...bbBBbb.....',
-      9: '.n..bbbBBbbb....', 10: '.nhbbbbBBbbbb...', 11: '.n.bBbbBBbbBb...', 12: '.n.bBbbBBbbBb...', 13: '.n..bbbbbbbb....', 14: '.n..bBbbbbBb....', 15: '.n.BBBBBBBBBB...',
-    }),
-    s: [E, '......bb........', '.....bbbb.....s.', '....bbBbbb...scs', '...bbbBbbbb...s.', '..yyyyyyyyyy..n.', '.....bhhhh....n.', '.....bhhkh....n.',
-      '.....bwwwh....n.', '.....bbwww....n.', '....bbbbbbbbhhn.', '....bBbbbbb...n.', '....bBbbybb...n.', '....bbbbbbb...n.', '....bBbbbBb...n.', '...BBBBBBBBB..n.'],
-  },
-  waldlaeufer: {
-    b: ov(SPR.waldlaeufer, {
-      2: '.n..GGGGGGGG....', 3: 'w.n.GGGGGGGG....', 4: 'w.n.GGGGGGGG....', 5: 'w..n.GGGGGG.....', 6: 'w..n.GGTTGG.....', 7: 'w..nGGGGGGGGw...',
-      8: 'w..hGGGGGGnnG...', 9: 'w.n.GTGGGnnTG...', 10: 'w.n.GTGGnnGTG...', 11: 'wn..GGGGGGGG....', 12: '.n..nnnnnnnn....',
-    }),
-    s: [E, '.....GGGGG......', '....GGGGGGG..n..', '....GGGGGTG...n.', '....GGGhhhh...nw', '.....GGhkh....nw', '.....GGhhh....nw', '.....GGGGG....nw',
-      '....nGGGGGGGh.nw', '....nnGGGG....nw', '....nGGGGG....nw', '.....GGGGG...n..', '.....nnYnn..n...', '......TTT.......', '......TT.T......', '.....NNN.NN.....'],
-  },
   // Mimik: aufgedeckt zeigt er von allen Seiten den offenen Rachen
   mimik: { b: SPR.mimik, s: SPR.mimik },
   ratte: {
@@ -830,11 +715,6 @@ export const VIEWS: Record<string, { b: string[]; s: string[]; alt?: string[] }>
     b: ov(SPR.skelett, { 3: '....wwwwwwww....', 4: '....wwwwwwww....', 5: '....wwwwwwww....', 6: '.....wwwwww.....', 9: '...w.wgwwgw.w...', 11: '...w.wgwwgw.w...' }),
     s: [E, '......wwwww.....', '.....wwwwwww....', '.....wwwwkkw....', '.....wwwwkkw....', '.....wwwwwkw....', '......wwkwk.....', '.......www......',
       '.....w.gww......', '.....wwwgw......', '......wwww.w....', '......gwgw......', '.......ww.......', '......ww.w......', '......w..w......', '.....ww..ww.....'],
-  },
-  schuetze: {
-    b: ov(SPR.schuetze, { 3: '....eeeeeeee.n.g', 4: '....eeeeeeee.n.g', 5: '.....eeeeee.n..g', 6: '......eeee..n..g' }),
-    s: [E, '......eeeee.....', '.....eeeeeee..n.', '.....eeewkwe.n.g', '.....eeewwwe.n.g', '......eewkwkn..g', '.......wwww.n..g', '.....w.gww..n..g',
-      '.....wwwgwwwh..g', '......wwww...n.g', '......gwgw...n.g', '.......ww.....ng', '......ww.w....n.', '......w..w......', '.....ww..ww.....', E],
   },
   fledermaus: {
     b: ov(SPR.fledermaus, { 7: '..vpvvppppvvpv..', 9: '.....vppppv.....' }),
@@ -870,9 +750,8 @@ export const VIEWS: Record<string, { b: string[]; s: string[]; alt?: string[] }>
   },
 };
 
-// ---------- Knochenschütze: neue Fassung (Phase 2) ----------
-// Umschalter: true = neue, von Hand gezeichnete Figur (Kapuze R/r, Knochenschatten u); false = alte Figur.
-export const SCHUETZE_NEU = true;
+// ---------- Knochenschütze (Phase 2) ----------
+// Von Hand gezeichnet (Kapuze R/r, Knochenschatten u); ersetzt die erste Fassung.
 const SCHUETZE_HAND = {
   f: [
     '.....eeeeee.....',
@@ -929,14 +808,8 @@ const SCHUETZE_HAND = {
     '....wwu..uww....',
   ],
 };
-// Die alte Fassung bleibt als eigene Figur erhalten (zum Vergleich gebacken als 'schuetze_alt').
-SPR.schuetze_alt = SPR.schuetze;
-VIEWS.schuetze_alt = VIEWS.schuetze;
-ACTORS.push('schuetze_alt');
-if (SCHUETZE_NEU) {
-  SPR.schuetze = SCHUETZE_HAND.f;
-  VIEWS.schuetze = { b: SCHUETZE_HAND.b, s: SCHUETZE_HAND.s };
-}
+SPR.schuetze = SCHUETZE_HAND.f;
+VIEWS.schuetze = { b: SCHUETZE_HAND.b, s: SCHUETZE_HAND.s };
 
 // Angriffsbilder der Gegner, von Hand (Phase 2): je Ansicht eine vollständige Matrix; fehlende Ansichten werden abgeleitet.
 export const ATTACK: Record<string, Partial<Record<'f' | 's' | 'b', string[]>>> = {};
@@ -1050,7 +923,7 @@ ATTACK.glutgeist = { f: [
 ] };
 ATTACK.ratte.s = flip(ATTACK.ratte.f!); // Grundbild der Ratte ist die Seitenansicht
 ATTACK.fledermaus.s = ATTACK.fledermaus.f;
-if (SCHUETZE_NEU) ATTACK.schuetze = { f: [
+ATTACK.schuetze = { f: [
   '.....eeeeee..n..',
   '....errrrrre.ng.',
   '...errrRRrrrn.g.',

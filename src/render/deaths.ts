@@ -214,5 +214,3 @@ export function drawDying(ctx: CanvasRenderingContext2D, run: Run, ox: number, o
   ctx.globalAlpha = 1;
 }
 
-// Für Vorschau und Tests: aktuelle Spuren (nur lesen)
-export const decalCount = () => decals.length;
