@@ -200,6 +200,73 @@ const grate: VPaint = (g, f, v) => {
   }
 };
 
+// ---- added decor (phase 4b): more silhouettes per biome ----
+// crypt: skull shelf in a wall niche, rusty wall grate, broken urns, wax puddle, rune circle
+const skullShelf: VPaint = (g, f, v) => {
+  px(g, '#14172a', 3, 2, 10, 9); px(g, '#333c57', 3, 2, 10, 1); px(g, '#566c86', 2, 11, 12, 1); // niche and ledge
+  const skull = (x: number) => { px(g, '#c9d4dc', x, 7, 3, 3); px(g, '#1a1c2c', x, 8); px(g, '#1a1c2c', x + 2, 8); px(g, '#94b0c2', x, 10, 3, 1); };
+  if (v === 0) { skull(4); skull(9); } else { skull(6); px(g, '#d9cfb4', 10, 9, 1, 2); px(g, f ? '#ffcd75' : '#ef7d57', 10, 8); }
+};
+const wallGrate: VPaint = (g, _f, v) => {
+  px(g, '#1a1c2c', 4, 3, 8, 7); px(g, '#4a4d58', 4, 3, 8, 1); px(g, '#4a4d58', 4, 9, 8, 1);
+  for (let x = 5; x < 12; x += 2) px(g, '#8b8f9c', x, 4, 1, 5);
+  if (v === 1) { px(g, '#7d2b45', 6, 9, 1, 3); px(g, '#7d2b45', 9, 9, 1, 2); } // rust streaks
+};
+const urns: VPaint = (g, _f, v, r) => {
+  const urn = (x: number, y: number) => { px(g, '#8a5a3a', x, y, 4, 4); px(g, '#c48a6a', x, y, 1, 3); px(g, '#5a3a28', x + 1, y - 1, 2, 1); };
+  urn(3, 9);
+  // shards
+  for (let k = 0; k < 5; k++) px(g, k % 2 ? '#c48a6a' : '#8a5a3a', I(r, 6, 13), I(r, 11, 13), I(r, 1, 2), 1);
+  if (v === 1) urn(9, 10);
+};
+const wax: VPaint = (g, f, _v, r) => {
+  for (let k = 0; k < 3; k++) { const x = I(r, 3, 10), y = I(r, 9, 12); px(g, '#d9cfb4', x, y, I(r, 2, 4), 1); }
+  px(g, '#d9cfb4', 7, 9, 1, 3); px(g, f ? '#ffcd75' : '#ef7d57', 7, 8);
+};
+const runeCircle: VPaint = (g, f) => {
+  for (let a = 0; a < 24; a++) { const t = (a / 24) * Math.PI * 2; px(g, (a + f * 2) % 6 ? '#3b5dc9' : '#73eff7', Math.round(8 + Math.cos(t) * 6), Math.round(8 + Math.sin(t) * 4)); }
+  px(g, '#29366f', 6, 7, 4, 1); px(g, '#29366f', 7, 6, 2, 3);
+};
+// cave: glowing vines, egg cluster, scattered stones
+const vines: VPaint = (g, f, _v, r) => {
+  for (let k = 0; k < 3; k++) {
+    let x = I(r, 2, 13);
+    for (let y = 0; y < I(r, 6, 12); y++) { px(g, '#1e6b3a', x, y); if (y % 3 === 2) px(g, (y + f) % 2 ? '#a7f070' : '#73eff7', x + 1, y); if (r() < 0.25) x += r() < 0.5 ? -1 : 1; }
+  }
+};
+const eggs: VPaint = (g, f, _v, r) => {
+  for (let k = 0; k < I(r, 3, 5); k++) {
+    const x = I(r, 2, 11), y = I(r, 8, 11);
+    px(g, '#d9cfb4', x, y, 3, 3); px(g, '#c9d4dc', x, y, 1, 1); px(g, '#9a4fc0', x + 1, y + 2, 2, 1);
+  }
+  px(g, '#5d275d', 2, 13, 12, 1);
+  if (f) px(g, '#a7f070', 7, 10); // something moves inside
+};
+const stones: VPaint = (g, _f, _v, r) => {
+  for (let k = 0; k < 6; k++) { const x = I(r, 2, 12), y = I(r, 4, 12), w = I(r, 1, 3); px(g, '#2f8f85', x, y, w, 2); px(g, '#55b89c', x, y, w, 1); px(g, '#0d2222', x, y + 2, w, 1); }
+};
+// forge: anvil, slag bucket, steam pipes, lava crack at the wall foot
+const anvil: VPaint = (g, f) => {
+  px(g, '#4a4d58', 3, 7, 10, 2); px(g, '#8b8f9c', 3, 7, 10, 1); px(g, '#4a4d58', 1, 7, 2, 1); // horn
+  px(g, '#4a4d58', 6, 9, 4, 3); px(g, '#333c57', 4, 12, 8, 2);
+  if (f) { px(g, '#ffcd75', 8, 6); px(g, '#ef7d57', 10, 5); } // sparks
+};
+const bucket: VPaint = (g, f) => {
+  px(g, '#4a4d58', 4, 8, 7, 5); px(g, '#8b8f9c', 4, 8, 7, 1); px(g, '#1c0f14', 5, 9, 5, 1);
+  px(g, f ? '#ef7d57' : '#b13e53', 6, 9, 3, 1); px(g, '#8b8f9c', 3, 6, 1, 3); px(g, '#8b8f9c', 11, 6, 1, 3); px(g, '#8b8f9c', 4, 5, 7, 1);
+};
+const pipes: VPaint = (g, f, v) => {
+  px(g, '#4a4d58', 2, 3, 12, 2); px(g, '#8b8f9c', 2, 3, 12, 1);
+  px(g, '#4a4d58', v ? 10 : 5, 5, 2, 6); px(g, '#8b8f9c', v ? 10 : 5, 5, 1, 6);
+  px(g, '#5a3a28', 7, 2, 3, 1); // valve
+  // steam puff
+  g.globalAlpha = 0.6; px(g, '#c9d4dc', (v ? 10 : 5) - 1 + f, 11 + f, 3, 1); px(g, '#94b0c2', (v ? 10 : 5) + f, 12 + f, 2, 1); g.globalAlpha = 1;
+};
+const lavaCrack: VPaint = (g, f, _v, r) => {
+  let x = I(r, 3, 6);
+  for (let y = 7; y < 15; y++) { px(g, '#1c0f14', x - 1, y, 3, 1); px(g, (y + f) % 3 ? '#ef7d57' : '#ffcd75', x, y); if (r() < 0.4) x += r() < 0.5 ? -1 : 1; }
+};
+
 const warm = (r: number, a = 0.75) => (f: number) => ({ r: r + (f ? 0.15 : 0), col: '#ef7d57', a });
 
 interface BiomeProps { wall: Prop[]; foot: Prop[]; flat: Prop[]; }
@@ -208,15 +275,20 @@ function sets(): BiomeProps[] {
   if (SETS) return SETS;
   const B = bakeSpec;
   SETS = [
-    { wall: [...B({ paint: chains, n: 3 }), ...B({ paint: cobweb, n: 2 }), ...B({ paint: banner, n: 3 })],
-      foot: [...B({ paint: candles, n: 4, frames: 2, line: true, light: f => ({ r: 1.7 + (f ? 0.15 : 0), col: '#ffcd75', a: 0.8 }), ly: 0.6 }), ...B({ paint: bones, n: 3, line: true })],
-      flat: B({ paint: slab, n: 3 }) },
-    { wall: [...B({ paint: roots, n: 3 }), ...B({ paint: drips, n: 3, frames: 2 }), ...B({ paint: glowmoss, n: 2, frames: 2, light: () => ({ r: 1.4, col: '#a7f070', a: 0.6 }), ly: 0.3 })],
+    { wall: [...B({ paint: chains, n: 3 }), ...B({ paint: cobweb, n: 2 }), ...B({ paint: banner, n: 3 }), ...B({ paint: skullShelf, n: 2, frames: 2 }), ...B({ paint: wallGrate, n: 2 })],
+      foot: [...B({ paint: candles, n: 4, frames: 2, line: true, light: f => ({ r: 1.7 + (f ? 0.15 : 0), col: '#ffcd75', a: 0.8 }), ly: 0.6 }), ...B({ paint: bones, n: 3, line: true }),
+        ...B({ paint: urns, n: 2, line: true }), ...B({ paint: wax, n: 2, frames: 2, light: f => ({ r: 1.3 + (f ? 0.1 : 0), col: '#ffcd75', a: 0.7 }), ly: 0.6 })],
+      flat: [...B({ paint: slab, n: 3 }), ...B({ paint: runeCircle, n: 1, frames: 2, light: () => ({ r: 1.6, col: '#3b5dc9', a: 0.5 }), ly: 0.5 })] },
+    { wall: [...B({ paint: roots, n: 3 }), ...B({ paint: drips, n: 3, frames: 2 }), ...B({ paint: glowmoss, n: 2, frames: 2, light: () => ({ r: 1.4, col: '#a7f070', a: 0.6 }), ly: 0.3 }),
+        ...B({ paint: vines, n: 2, frames: 2, light: () => ({ r: 1.3, col: '#73eff7', a: 0.5 }), ly: 0.4 })],
       foot: [...B({ paint: crystals, n: 3, line: true, light: (_f, v) => ({ r: 2.4, col: CRYSTAL[v % 3][3], a: 0.9 }), ly: 0.5 }),
-        ...B({ paint: shrooms, n: 4, line: true, light: (_f, v) => ({ r: 1.8, col: v % 2 ? '#73eff7' : '#a7f070', a: 0.8 }), ly: 0.6 })],
-      flat: B({ paint: puddle, n: 4, frames: 2 }) },
-    { wall: [...B({ paint: hooks, n: 3 }), ...B({ paint: vent, n: 2, frames: 2, light: warm(1.4, 0.6), ly: 0.3 })],
-      foot: [...B({ paint: ingots, n: 3, frames: 2, line: true, light: warm(1.6), ly: 0.7 }), ...B({ paint: coal, n: 3, frames: 2, line: true, light: warm(1.2, 0.6), ly: 0.7 })],
+        ...B({ paint: shrooms, n: 4, line: true, light: (_f, v) => ({ r: 1.8, col: v % 2 ? '#73eff7' : '#a7f070', a: 0.8 }), ly: 0.6 }),
+        ...B({ paint: eggs, n: 2, frames: 2, line: true })],
+      flat: [...B({ paint: puddle, n: 4, frames: 2 }), ...B({ paint: stones, n: 3 })] },
+    { wall: [...B({ paint: hooks, n: 3 }), ...B({ paint: vent, n: 2, frames: 2, light: warm(1.4, 0.6), ly: 0.3 }), ...B({ paint: pipes, n: 2, frames: 2 })],
+      foot: [...B({ paint: ingots, n: 3, frames: 2, line: true, light: warm(1.6), ly: 0.7 }), ...B({ paint: coal, n: 3, frames: 2, line: true, light: warm(1.2, 0.6), ly: 0.7 }),
+        ...B({ paint: anvil, n: 1, frames: 2, line: true }), ...B({ paint: bucket, n: 1, frames: 2, line: true, light: warm(1.1, 0.5), ly: 0.6 }),
+        ...B({ paint: lavaCrack, n: 2, frames: 2, light: warm(1.5, 0.7), ly: 0.6 })],
       flat: B({ paint: grate, n: 2, frames: 2, light: warm(1.7, 0.7), ly: 0.5 }) },
   ];
   return SETS;
@@ -227,7 +299,7 @@ function sets(): BiomeProps[] {
 // beieinanderliegen, bleibt nur einer (der mit dem größten Hash) – keine Häufchen gleicher Dinge.
 export type PropKind = 'wall' | 'foot' | 'flat';
 export interface PropSpot { kind: PropKind; pick: number; }
-export const SPACING = 4;
+export const SPACING = 3;
 const hp = (x: number, y: number, s: number) => (Math.imul(x, 73856093) ^ Math.imul(y, 19349663) ^ Math.imul(s, 83492791)) >>> 0;
 
 function candidate(tiles: Uint8Array, seed: number, x: number, y: number): (PropSpot & { h: number }) | null {
@@ -239,15 +311,15 @@ function candidate(tiles: Uint8Array, seed: number, x: number, y: number): (Prop
   if (t === T.WALL) {
     // Wandfront auf gerader Strecke: links und rechts ebenfalls Front, kein Durchgang, keine Ecke
     const front = (dx: number) => at(dx, 0) === T.WALL && free(dx, 1);
-    return front(0) && front(-1) && front(1) && h % 6 === 0 ? { kind: 'wall', pick: h >>> 5, h } : null;
+    return front(0) && front(-1) && front(1) && h % 5 === 0 ? { kind: 'wall', pick: h >>> 5, h } : null;
   }
   if (t !== T.FLOOR) return null;
   // am Fuß einer geraden Wand in einem Raum, der mindestens drei Felder tief ist
   if (wallAt(-1, -1) && wallAt(0, -1) && wallAt(1, -1) && free(-1, 0) && free(1, 0) && free(0, 1) && free(-1, 1) && free(1, 1) && free(0, 2))
-    return h % 8 === 0 ? { kind: 'foot', pick: h >>> 5, h } : null;
+    return h % 6 === 0 ? { kind: 'foot', pick: h >>> 5, h } : null;
   // flach im Boden nur in großen Räumen: 5×5 ringsum frei
   for (let dy = -2; dy <= 2; dy++) for (let dx = -2; dx <= 2; dx++) if (!free(dx, dy)) return null;
-  return h % 23 === 0 ? { kind: 'flat', pick: h >>> 5, h } : null;
+  return h % 17 === 0 ? { kind: 'flat', pick: h >>> 5, h } : null;
 }
 
 // Dekor der ganzen Ebene; zwischengespeichert, neu berechnet, sobald sich die Karte ändert

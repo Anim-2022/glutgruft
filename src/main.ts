@@ -1,10 +1,11 @@
 import { drawIcon, UPG_ICON } from './render/icons';
 import { titleScene, drawLogo, drawTitleMenu, menuStep, menuHit } from './render/title';
-import { VW, VH, bake, sprites, tilesets, text, panel, wrap, figure } from './render/gfx';
+import { VW, VH, bake, sprites, tilesets, text, panel, wrap, figure, BIOMES } from './render/gfx';
 import { drawRun, drawCard, setTutStep, drawTree, treeMove, treeFocus, treeCursor, treeHit, resetView, setMouse, toggleMap, setTutorial, tileAt, getOverlay, setOverlay, invMove, invAction, invDrop, invClick, lootIndex, lootDone } from './render/draw';
 import { sfx, soundOn, toggleSound, wakeAudio } from './core/audio';
 import { fxLevel, setFxLevel, shakeEnabled, toggleShake } from './render/fxopts';
 import { loadMeta, saveMeta } from './core/save';
+import { propSets } from './render/props';
 import { InputQueue } from './core/input';
 import { busy, setPlayback, plannedTimes } from './render/timeline';
 import { W } from './game/dungeon';
@@ -568,7 +569,17 @@ function frame(now: number) {
 requestAnimationFrame(frame);
 
 // Für automatisierte Tests
-(window as unknown as { __g: unknown }).__g = { get run() { return run; }, get scene() { return scene; }, meta, sprites, plannedTimes, busy,
+// Props gallery for screenshots (scripts/gallery.ts): every prop of a biome on its floor colour, 4× scaled
+function propGallery(bi: number): string {
+  const set = propSets()[bi], rows = (['wall', 'foot', 'flat'] as const).map(k => set[k]), n = Math.max(...rows.map(r => r.length));
+  const c = document.createElement('canvas'); c.width = n * 20 * 4; c.height = rows.length * 20 * 4;
+  const g = c.getContext('2d')!; g.imageSmoothingEnabled = false;
+  g.fillStyle = BIOMES[bi].floor; g.fillRect(0, 0, c.width, c.height);
+  rows.forEach((list, ry) => list.forEach((p, i) => { g.fillStyle = ry === 0 ? BIOMES[bi].brick : BIOMES[bi].floor; g.fillRect(i * 80 + 8, ry * 80 + 8, 64, 64); g.drawImage(p.frames[0], i * 80 + 8, ry * 80 + 8, 64, 64); }));
+  return c.toDataURL('image/png');
+}
+
+(window as unknown as { __g: unknown }).__g = { get run() { return run; }, propGallery, get scene() { return scene; }, meta, sprites, plannedTimes, busy,
   start(seed: number, cls: 'krieger' | 'magier' | 'waldlaeufer') { resetView(); run = newRun(seed, cls, meta); scene = 'run'; return run; },
   act(a: Action) { if (run) act(run, a); },
   // Abstieg bis Ebene n (für Bildschirmfotos): Treppe unter den Helden legen und hinabsteigen
