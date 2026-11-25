@@ -74,12 +74,12 @@ export const MOBS: Record<string, MobDef> = {
   ei: { name: 'Sporenei', hp: 6, atk: 0, def: 0, xp: 2, ai: 'idle' },
   riesenpilz: { name: 'Riesenpilz', hp: 30, atk: 0, def: 2, xp: 16, ai: 'idle' },
   // Jäger
-  echse: { name: 'Riesenechse', hp: 22, atk: 5, def: 2, xp: 16, ai: 'chase', hunter: true },
-  krake: { name: 'Landkrake', hp: 24, atk: 6, def: 1, xp: 18, ai: 'chase', hunter: true },
-  drache: { name: 'Drache', hp: 34, atk: 7, def: 3, xp: 28, ai: 'chase', hunter: true, burn: true },
-  medusa: { name: 'Medusa', hp: 24, atk: 5, def: 2, xp: 22, ai: 'chase', hunter: true },
-  schlange: { name: 'Schlange', hp: 5, atk: 2, def: 0, xp: 2, ai: 'chase', poison: true },
-  tod: { name: 'Der Tod', hp: 40, atk: 5, def: 3, xp: 36, ai: 'chase', hunter: true },
+  echse: { name: 'Riesenechse', hp: 30, atk: 6, def: 2, xp: 22, ai: 'chase', hunter: true },
+  krake: { name: 'Landkrake', hp: 32, atk: 7, def: 1, xp: 24, ai: 'chase', hunter: true },
+  drache: { name: 'Drache', hp: 46, atk: 8, def: 3, xp: 36, ai: 'chase', hunter: true, burn: true },
+  medusa: { name: 'Medusa', hp: 34, atk: 6, def: 2, xp: 28, ai: 'chase', hunter: true },
+  schlange: { name: 'Schlange', hp: 6, atk: 3, def: 0, xp: 2, ai: 'chase', poison: true },
+  tod: { name: 'Der Tod', hp: 55, atk: 7, def: 3, xp: 45, ai: 'chase', hunter: true },
   fuerst: { name: 'Schmiedefürst', hp: 180, atk: 13, def: 5, xp: 150, ai: 'boss', boss: true, minion: 'glutgeist', burn: true, smash: true },
 };
 
@@ -189,7 +189,9 @@ export const TUNE = { treePtsMax: 6, kryoMana: 2, kryoRegen: 0.75, kCost: 0 };
 export const FEATURES = { hunters: true, hunterForce: '', hazards: true, mimics: true, events: true, eventRate: 1, eventForce: '', eventForceBiome: false };
 // Jäger: erster nach `first` Zügen auf einer Ebene, dann alle `interval` Züge, höchstens `cap` zugleich
 // pool: [Art, Gewicht, ab Ebene]; unter Ebene `weakBelow` sind Jäger schwächer (weak)
-export const HUNTER = { first: 560, interval: 30, cap: 4, warn: 30, pool: [['echse', 50, 1], ['krake', 20, 1], ['drache', 15, 6], ['medusa', 10, 4], ['tod', 5, 11]] as [string, number, number][], snakes: 4, weakBelow: 6, weak: 0.7, todCd: 6, krakeCd: 2,
+export const HUNTER = { first: 560, interval: 30, cap: 4, warn: 30, pool: [['echse', 50, 1], ['krake', 20, 1], ['drache', 15, 6], ['medusa', 10, 4], ['tod', 5, 11]] as [string, number, number][], snakes: 4, weakBelow: 6, weak: 0.8, todCd: 6, krakeCd: 2,
+  // Spezialangriffe: Abklingzeiten, Versteinerung, Raserei unter rageAt Leben (+rageAtk), Betäubung höchstens stunMax Züge
+  leapCd: 4, tailCd: 4, rainCd: 5, gazeCd: 4, blinkCd: 5, stoneTurns: 2, rageAt: 0.4, rageAtk: 2, stunMax: 2,
   // jeder weitere Jäger auf derselben Ebene: +growHp Leben, +growAtk Angriff; Abstand schrumpft um shrink bis minInterval
   growHp: 0.15, growAtk: 1, shrink: 5, minInterval: 15 }; // Angriff +growAtk nur jede zweite Stufe
 // Ereignisse: Ruhe-Auslöser, Zweitereignis bei Rate 1, Obergrenze zusätzlicher Reliquienwahlen je Lauf,

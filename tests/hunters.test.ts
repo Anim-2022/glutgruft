@@ -151,6 +151,7 @@ describe('Jäger', () => {
 
   it('Riesenechse: in einem Zug laufen ODER beißen, nie beides', () => {
     const r = arena(), e = put(r, 'echse', 33, 6);
+    e.cd = 99; // ohne Sprung
     const hp = r.p.hp;
     act(r, { t: 'wait' });
     expect(Math.abs(e.x - r.p.x) + Math.abs(e.y - r.p.y)).toBe(1); // zwei Schritte heran
@@ -165,7 +166,7 @@ describe('Jäger', () => {
     act(r, { t: 'wait' });
     expect(hunterWarn(r)).toContain(r.p.y * W + r.p.x);
     expect(r.p.hp).toBe(hp);
-    act(r, { t: 'move', dx: 0, dy: 1 });
+    act(r, { t: 'move', dx: -1, dy: 0 }); // die Tentakelwand steht quer – zurück weicht aus
     expect(r.p.hp).toBe(hp);
     void k;
   });
@@ -179,6 +180,69 @@ describe('Jäger', () => {
     act(r, { t: 'wait' });
     expect(r.p.hp).toBeLessThan(hp);
     void d;
+  });
+
+  it('Riesenechse: Sprung wird angekündigt; wer bleibt, wird getroffen und weggestoßen, zur Seite weicht aus', () => {
+    let r = arena(), e = put(r, 'echse', 33, 6);
+    const hp = r.p.hp;
+    act(r, { t: 'wait' });
+    expect(e.zk).toBe('leap');
+    expect(hunterWarn(r)).toContain(r.p.y * W + r.p.x);
+    act(r, { t: 'wait' });
+    expect(r.p.hp).toBeLessThan(hp);
+    expect(Math.abs(e.x - 30)).toBeLessThanOrEqual(1);
+    r = arena(); e = put(r, 'echse', 33, 6);
+    act(r, { t: 'wait' });
+    act(r, { t: 'move', dx: 0, dy: 1 });
+    expect(r.p.hp).toBe(hp);
+  });
+
+  it('Landkrake: Tentakeltreffer zieht heran und hält fest', () => {
+    const r = arena(), k = put(r, 'krake', 34, 6);
+    act(r, { t: 'wait' });
+    expect(k.zk).toBe('tent');
+    act(r, { t: 'wait' });
+    expect(Math.abs(r.p.x - k.x) + Math.abs(r.p.y - k.y)).toBe(1);
+    expect(r.p.st.netz).toBeGreaterThan(0);
+  });
+
+  it('Medusa: Blick entlang der Reihe versteinert, ein Schritt zur Seite rettet', () => {
+    let r = arena(), m = put(r, 'medusa', 34, 6);
+    act(r, { t: 'wait' });
+    expect(m.zk).toBe('gaze');
+    act(r, { t: 'wait' });
+    expect(r.p.st.stein).toBeGreaterThan(0);
+    expect(r.p.st.netz).toBeGreaterThan(0);
+    r = arena(); m = put(r, 'medusa', 34, 6);
+    act(r, { t: 'wait' });
+    act(r, { t: 'move', dx: 0, dy: 1 });
+    expect(r.p.st.stein).toBeUndefined();
+  });
+
+  it('Drache: Feuerregen auf Abstand, Kreuzform, orthogonal ausweichbar', () => {
+    const r = arena(), d = put(r, 'drache', 36, 6);
+    const hp = r.p.hp;
+    act(r, { t: 'wait' });
+    expect(d.zk).toBe('rain');
+    act(r, { t: 'move', dx: 0, dy: 1 });
+    expect(r.p.hp).toBe(hp);
+  });
+
+  it('Der Tod: Schattenschritt aus der Ferne direkt hinter den Helden', () => {
+    const r = arena(), t = put(r, 'tod', 40, 6);
+    act(r, { t: 'wait' });
+    expect(Math.abs(t.x - r.p.x) + Math.abs(t.y - r.p.y)).toBe(1);
+  });
+
+  it('Raserei unter 40 % Leben: einmalig mehr Angriff', () => {
+    const r = arena(), e = put(r, 'echse', 31, 6);
+    e.cd = 99; const atk = e.atk;
+    e.hp = Math.floor(e.maxHp * 0.3);
+    act(r, { t: 'wait' });
+    expect(e.st.rage).toBe(1);
+    expect(e.atk).toBe(atk + HUNTER.rageAtk);
+    act(r, { t: 'wait' });
+    expect(e.atk).toBe(atk + HUNTER.rageAtk);
   });
 
   it('Medusa: höchstens eine Schlange je Zug und vier zugleich', () => {

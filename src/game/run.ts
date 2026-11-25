@@ -13,6 +13,7 @@ export interface Actor {
   xp: number; cd: number; awake: boolean; boss?: boolean; arena?: boolean; elite?: boolean;
   f?: [number, number]; // Blickrichtung
   ev?: boolean;          // gehört zu einem laufenden Ereignis
+  zone?: number[]; zk?: string; // Jäger: angekündigter Angriff (Felder, Art) – trifft im nächsten Zug
 }
 
 export interface Player extends Actor {
@@ -71,7 +72,19 @@ export type Fx =
   | { k: 'arrow'; x0: number; y0: number; x1: number; y1: number; col: string; heavy: boolean }
   | { k: 'swipe'; x: number; y: number; dx: number; dy: number; big: boolean }
   | { k: 'pdeath'; x: number; y: number }
-  | { k: 'banner'; title: string; sub: string; col: string };
+  | { k: 'banner'; title: string; sub: string; col: string }
+  // Jäger (nur Darstellung)
+  | { k: 'charge'; id: number; x: number; y: number; kind: string }
+  | { k: 'leap'; id: number; x0: number; y0: number; x1: number; y1: number }
+  | { k: 'quake'; x: number; y: number; col: string }
+  | { k: 'sweep'; x: number; y: number }
+  | { k: 'tentacle'; x: number; y: number }
+  | { k: 'breath'; x: number; y: number; dx: number; dy: number }
+  | { k: 'meteor'; x: number; y: number }
+  | { k: 'gaze'; x0: number; y0: number; x1: number; y1: number }
+  | { k: 'roar'; id: number; x: number; y: number }
+  | { k: 'blink'; x: number; y: number }
+  | { k: 'reap'; x: number; y: number; v: number };
 
 // Versteckte Bodenfalle. seen: der Held hat sie entdeckt (oder sie wurde ausgelöst) – dann ist sie sichtbar.
 export type HazardKind = 'stachel' | 'pfeil' | 'gas' | 'glut';
@@ -1301,13 +1314,21 @@ function stepToward(run: Run, m: Actor, dist: Int16Array): boolean {
 const orth = (run: Run, m: Actor) => Math.abs(run.p.x - m.x) + Math.abs(run.p.y - m.y) === 1;
 const walk = (run: Run, m: Actor, dist: Int16Array, n: number) => { for (let k = 0; k < n && !orth(run, m); k++) if (!stepToward(run, m, dist)) break; };
 
-// Felder, die ein Jäger im nächsten Zug trifft (Tentakel, Feueratem, Sense) – für Anzeige und Bot
+// Felder, die ein Jäger im nächsten Zug trifft (Zonen, Sense) – für Anzeige und Bot
 export function hunterWarn(run: Run): number[] {
   const out: number[] = [];
   for (const m of run.mobs) {
-    if (m.st.tt !== undefined) out.push(m.st.tt);
-    if (m.st.bt) for (const i of breathLine(run, m)) out.push(i);
+    if (m.zone) out.push(...m.zone);
     if (m.st.zt) for (const i of scythe(run, m)) out.push(i);
+  }
+  return out;
+}
+// Für die Anzeige: welche Art Angriff auf welchem Feld droht (Farbe und Bild je Jäger)
+export function hunterMarks(run: Run): { i: number; k: string; x0: number; y0: number }[] {
+  const out: { i: number; k: string; x0: number; y0: number }[] = [];
+  for (const m of run.mobs) {
+    if (m.zone) for (const i of m.zone) out.push({ i, k: m.zk ?? '', x0: m.x, y0: m.y });
+    if (m.st.zt) for (const i of scythe(run, m)) out.push({ i, k: 'scythe', x0: m.x, y0: m.y });
   }
   return out;
 }
@@ -1326,61 +1347,198 @@ function canEscape(run: Run, m: Actor): boolean {
   const p = run.p, zv = Math.abs(p.x - m.x) >= Math.abs(p.y - m.y);
   return DIRS4.some(([dx, dy]) => (zv ? dx !== 0 : dy !== 0) && isFree(run, p.x + dx, p.y + dy));
 }
-function breathLine(run: Run, m: Actor): number[] {
+const inMap = (x: number, y: number) => x >= 0 && y >= 0 && x < W && y < H;
+const open = (run: Run, x: number, y: number) => inMap(x, y) && walkable(run.tiles[y * W + x]);
+// Eine Zone ist nur fair, wenn der Held sie mit einem Schritt verlassen kann
+function escapable(run: Run, zone: number[]): boolean {
+  const p = run.p;
+  return DIRS4.some(([dx, dy]) => isFree(run, p.x + dx, p.y + dy) && !zone.includes((p.y + dy) * W + p.x + dx));
+}
+// Achse vom Jäger zum Helden (die längere Richtung)
+const axis = (m: Actor, p: Actor): [number, number] => Math.abs(p.x - m.x) >= Math.abs(p.y - m.y) ? [Math.sign(p.x - m.x), 0] : [0, Math.sign(p.y - m.y)];
+// Gerade Linie ab dem Jäger, bis Wand oder Länge n
+function ray(run: Run, m: Actor, dx: number, dy: number, n: number): number[] {
   const out: number[] = [];
   let x = m.x, y = m.y;
-  for (let k = 0; k < 3; k++) { x += m.st.bdx; y += m.st.bdy; if (x < 0 || y < 0 || x >= W || y >= H || opaque(run.tiles[y * W + x])) break; out.push(y * W + x); }
+  for (let k = 0; k < n; k++) { x += dx; y += dy; if (!inMap(x, y) || opaque(run.tiles[y * W + x])) break; out.push(y * W + x); }
   return out;
+}
+// Angriff ankündigen: Zone setzen, Text, Ladeeffekt. false, wenn die Zone nicht fair wäre.
+function windUp(run: Run, m: Actor, zk: string, zone: number[], msg: string): boolean {
+  const p = run.p;
+  zone = [...new Set(zone)].filter(i => open(run, i % W, (i / W) | 0));
+  if (!zone.includes(p.y * W + p.x) || !escapable(run, zone)) return false;
+  m.zone = zone; m.zk = zk;
+  m.f = axis(m, p);
+  say(run, msg);
+  run.fx.push({ k: 'charge', id: m.id, x: m.x, y: m.y, kind: zk });
+  return true;
+}
+// Held wegstoßen; gegen die Wand gibt es Extraschaden
+function knock(run: Run, m: Actor, dx: number, dy: number, dmg = 2) {
+  const p = run.p;
+  if (p.hp <= 0) return;
+  if (isFree(run, p.x + dx, p.y + dy)) { p.x += dx; p.y += dy; stepHazard(run, p); }
+  else { damage(run, p, dmg, '#b13e53'); run.fx.push({ k: 'num', x: p.x, y: p.y, s: 'Wand!', col: '#ef7d57' }); }
+}
+// Trefferwert eines Spezialangriffs: Rüstung zählt nur halb
+function special(run: Run, m: Actor, mul: number) {
+  const p = run.p;
+  if (p.st.dodge) { run.fx.push({ k: 'num', x: p.x, y: p.y, s: 'verfehlt', col: '#94b0c2' }); return false; }
+  const atk = m.atk * mul;
+  damage(run, p, Math.max(Math.ceil(atk * 0.5), atk - Math.floor(p.def / 2) - (p.st.wall ? 3 : 0) - (p.st.eis ? 2 : 0)), '#b13e53');
+  run.fx.push({ k: 'shake', n: 6 });
+  return true;
+}
+// Angekündigten Angriff ausführen
+function unleash(run: Run, m: Actor) {
+  const p = run.p, zone = m.zone!, zk = m.zk;
+  delete m.zone; delete m.zk;
+  const hit = zone.includes(p.y * W + p.x), [ax, ay] = axis(m, p);
+  switch (zk) {
+    case 'leap': { // Riesenechse springt auf das Mittelfeld der Linie
+      const cx = m.st.lx, cy = m.st.ly, c = cy * W + cx;
+      let land: number[] | null = null;
+      for (const i of [c, ...zone]) { const x = i % W, y = (i / W) | 0; if (isFree(run, x, y)) { land = [x, y]; break; } }
+      if (!land) for (const [ox, oy] of DIRS4) if (isFree(run, cx + ox, cy + oy)) { land = [cx + ox, cy + oy]; break; }
+      const x0 = m.x, y0 = m.y;
+      if (land) { moveMob(run, m, land[0], land[1]); if (m.hp <= 0) return; }
+      run.fx.push({ k: 'leap', id: m.id, x0, y0, x1: m.x, y1: m.y }, { k: 'quake', x: m.x, y: m.y, col: '#a7f070' });
+      if (hit && special(run, m, 1.6)) { p.st.gift = Math.max(p.st.gift ?? 0, 3); knock(run, m, ax, ay); say(run, `${m.name} reißt dich zu Boden!`); }
+      else say(run, `${m.name} springt ins Leere.`);
+      m.cd = HUNTER.leapCd;
+      return;
+    }
+    case 'tail': { // Schwanzfeger: alles rundherum
+      run.fx.push({ k: 'sweep', x: m.x, y: m.y });
+      if (hit && special(run, m, 1.3)) knock(run, m, Math.sign(p.x - m.x), Math.sign(p.y - m.y), 3);
+      m.cd = HUNTER.tailCd;
+      return;
+    }
+    case 'tent': { // Tentakel brechen aus dem Boden; wer getroffen wird, wird herangezogen und festgehalten
+      for (const i of zone) run.fx.push({ k: 'tentacle', x: i % W, y: (i / W) | 0 });
+      if (hit && special(run, m, 1.1)) {
+        // zum Kraken ziehen: das freie Feld neben ihm auf dem Weg
+        const [dx, dy] = axis(p, m);
+        let x = p.x, y = p.y;
+        while (Math.abs(x - m.x) + Math.abs(y - m.y) > 1 && isFree(run, x + dx, y + dy)) { x += dx; y += dy; }
+        if (x !== p.x || y !== p.y) { p.x = x; p.y = y; say(run, 'Ein Tentakel reißt dich heran!'); }
+        p.st.netz = Math.max(p.st.netz ?? 0, 2);
+        run.fx.push({ k: 'num', x: p.x, y: p.y, s: 'Umschlungen', col: '#9a4fc0' });
+      }
+      m.cd = HUNTER.krakeCd;
+      return;
+    }
+    case 'breath': { // Feuerkegel
+      run.fx.push({ k: 'breath', x: m.x, y: m.y, dx: m.st.bdx ?? ax, dy: m.st.bdy ?? ay });
+      for (const i of zone) ignite(run, i % W, (i / W) | 0, 3);
+      if (hit && special(run, m, 1.4)) p.st.brand = Math.max(p.st.brand ?? 0, 3);
+      for (const o of run.mobs) if (o !== m && zone.includes(o.y * W + o.x)) damage(run, o, m.atk, '#ef7d57');
+      m.cd = 3;
+      return;
+    }
+    case 'rain': { // Feuerregen: Brocken fallen auf das Kreuz der Diagonalen
+      for (const i of zone) { run.fx.push({ k: 'meteor', x: i % W, y: (i / W) | 0 }); ignite(run, i % W, (i / W) | 0, 2); }
+      if (hit && special(run, m, 1.2)) p.st.brand = Math.max(p.st.brand ?? 0, 3);
+      m.cd = HUNTER.rainCd;
+      return;
+    }
+    case 'gaze': { // Versteinernder Blick
+      const last = zone[zone.length - 1];
+      run.fx.push({ k: 'gaze', x0: m.x, y0: m.y, x1: last % W, y1: (last / W) | 0 });
+      if (hit && special(run, m, 0.8)) {
+        p.st.netz = Math.max(p.st.netz ?? 0, HUNTER.stoneTurns);
+        p.st.stein = HUNTER.stoneTurns;
+        say(run, 'Medusas Blick lässt dich zu Stein erstarren!');
+        run.fx.push({ k: 'num', x: p.x, y: p.y, s: 'Versteinert', col: '#c9d4dc' });
+      } else say(run, 'Du wendest den Blick gerade noch ab.');
+      m.cd = HUNTER.gazeCd;
+      return;
+    }
+  }
+}
+
+// Raserei: unter 40 % Leben wird jeder Jäger einmal wild – stärker und sofort wieder bereit
+function enrage(run: Run, m: Actor) {
+  if (m.st.rage || m.hp > m.maxHp * HUNTER.rageAt) return;
+  m.st.rage = 1; m.atk += HUNTER.rageAtk; m.cd = 0; m.st.bc = 0;
+  say(run, `${m.name} gerät in Raserei!`);
+  run.fx.push({ k: 'roar', id: m.id, x: m.x, y: m.y }, { k: 'num', x: m.x, y: m.y, s: 'RASEREI', col: '#b13e53' }, { k: 'shake', n: 6 });
 }
 
 function hunterAct(run: Run, m: Actor, dist: Int16Array) {
   const p = run.p, near = cheb(m, p);
-  if (m.cd > 0 && m.kind !== 'medusa') m.cd--;
+  if (m.cd > 0) m.cd--;
+  if (m.st.bc) m.st.bc--;
+  enrage(run, m);
+  if (m.zone) { unleash(run, m); return; }
+  const line = (p.x === m.x || p.y === m.y), seen = los(run.tiles, m.x, m.y, p.x, p.y);
   switch (m.kind) {
-    case 'echse': // bewegt sich bis zu zwei Felder ODER beißt
-      if (orth(run, m)) { hitPlayer(run, m, true); if (p.hp > 0 && run.rng.chance(0.15)) { p.st.gift = Math.max(p.st.gift ?? 0, 3); run.fx.push({ k: 'num', x: p.x, y: p.y, s: 'Gift', col: '#38b764' }); } }
-      else walk(run, m, dist, 2);
-      return;
-    case 'krake': // Tentakel auf bis zu 3 Felder, einen Zug vorher angekündigt
-      if (m.st.tt !== undefined) {
-        const t = m.st.tt; delete m.st.tt;
-        run.fx.push({ k: 'bolt', x0: m.x, y0: m.y, x1: t % W, y1: (t / W) | 0, col: '#9a4fc0' });
-        if (p.y * W + p.x === t) hitPlayer(run, m, true); else run.fx.push({ k: 'num', x: t % W, y: (t / W) | 0, s: 'verfehlt', col: '#94b0c2' });
-        m.cd = HUNTER.krakeCd;
+    case 'echse': { // Sprung aus der Ferne, Schwanzfeger daneben, sonst Biss oder zwei Schritte
+      if (orth(run, m)) {
+        if (!m.cd && run.rng.chance(0.5)) {
+          const ring: number[] = [];
+          for (let oy = -1; oy <= 1; oy++) for (let ox = -1; ox <= 1; ox++) if (ox || oy) ring.push((m.y + oy) * W + m.x + ox);
+          if (windUp(run, m, 'tail', ring, `${m.name} peitscht mit dem Schwanz aus ...`)) return;
+        }
+        hitPlayer(run, m, true);
+        if (p.hp > 0 && run.rng.chance(0.25)) { p.st.gift = Math.max(p.st.gift ?? 0, 3); run.fx.push({ k: 'num', x: p.x, y: p.y, s: 'Gift', col: '#38b764' }); }
         return;
       }
-      if (orth(run, m)) { hitPlayer(run, m, true); return; } // direkt daneben: zuschlagen statt ausholen
-      if (near <= 3 && !m.cd) { m.st.tt = p.y * W + p.x; run.fx.push({ k: 'num', x: m.x, y: m.y, s: '!', col: '#9a4fc0' }); return; }
+      if (!m.cd && near >= 2 && near <= 4 && seen && m.st.born !== run.turn) {
+        const [dx, dy] = axis(m, p);
+        if (windUp(run, m, 'leap', [(p.y - dy) * W + p.x - dx, p.y * W + p.x, (p.y + dy) * W + p.x + dx], `${m.name} duckt sich zum Sprung!`)) { m.st.lx = p.x; m.st.ly = p.y; return; }
+      }
+      walk(run, m, dist, 2);
+      return;
+    }
+    case 'krake': { // Tentakelwand quer zur Achse auf bis zu 4 Felder; daneben ein Schlag, der festhält
+      if (orth(run, m)) {
+        hitPlayer(run, m, true);
+        if (p.hp > 0 && run.rng.chance(0.3)) { p.st.netz = Math.max(p.st.netz ?? 0, 1); run.fx.push({ k: 'num', x: p.x, y: p.y, s: 'Umschlungen', col: '#9a4fc0' }); }
+        return;
+      }
+      if (near <= 4 && !m.cd && seen) {
+        const [dx, dy] = axis(m, p), qx = dy ? 1 : 0, qy = dx ? 1 : 0;
+        if (windUp(run, m, 'tent', [p.y * W + p.x, (p.y + qy) * W + p.x + qx, (p.y - qy) * W + p.x - qx], 'Der Boden unter dir bebt ...')) return;
+      }
       walk(run, m, dist, 1);
       return;
-    case 'drache': // fliegt bis zu drei Felder ODER beißt ODER speit Feuer (einen Zug vorher angekündigt)
-      if (m.st.bt) {
-        delete m.st.bt;
-        run.fx.push({ k: 'boom', x: m.x + m.st.bdx, y: m.y + m.st.bdy, r: 1 });
-        for (const i of breathLine(run, m)) {
-          const x = i % W, y = (i / W) | 0;
-          ignite(run, x, y, 3);
-          if (p.x === x && p.y === y) damage(run, p, m.atk, '#ef7d57');
-        }
-        m.cd = 3;
-        return;
-      }
+    }
+    case 'drache': { // Feuerkegel nah, Feuerregen fern, Biss daneben, fliegt drei Felder
       if (orth(run, m)) { hitPlayer(run, m, true); return; }
-      if (!m.cd && near <= 3 && near >= 2 && (p.x === m.x || p.y === m.y || Math.abs(p.x - m.x) === Math.abs(p.y - m.y))) {
-        m.st.bt = 1; m.st.bdx = Math.sign(p.x - m.x); m.st.bdy = Math.sign(p.y - m.y);
-        if (breathLine(run, m).includes(p.y * W + p.x)) { say(run, `${m.name} holt tief Luft ...`); return; }
-        delete m.st.bt;
+      if (!m.cd && near >= 2 && near <= 4 && line && seen) {
+        const [dx, dy] = axis(m, p), qx = dy ? 1 : 0, qy = dx ? 1 : 0, cone: number[] = [];
+        for (const i of ray(run, m, dx, dy, 4)) {
+          cone.push(i);
+          const x = i % W, y = (i / W) | 0;
+          if (Math.abs(x - m.x) + Math.abs(y - m.y) >= 3) cone.push((y + qy) * W + x + qx, (y - qy) * W + x - qx);
+        }
+        m.st.bdx = dx; m.st.bdy = dy;
+        if (windUp(run, m, 'breath', cone, `${m.name} holt tief Luft ...`)) return;
+      }
+      if (!m.cd && near >= 3 && near <= 7 && seen && m.st.born !== run.turn) {
+        const x = p.x, y = p.y;
+        if (windUp(run, m, 'rain', [y * W + x, (y - 1) * W + x - 1, (y - 1) * W + x + 1, (y + 1) * W + x - 1, (y + 1) * W + x + 1], `${m.name} brüllt – Feuer regnet herab!`)) return;
       }
       walk(run, m, dist, 3);
       return;
-    case 'medusa':
-      if (orth(run, m)) hitPlayer(run, m, true); else walk(run, m, dist, 1);
+    }
+    case 'medusa': { // Versteinernder Blick entlang Reihe oder Spalte, gleitet zwei Felder
+      if (orth(run, m) && (p.st.stein || m.cd)) { hitPlayer(run, m, true); if (p.st.stein && p.hp > 0) damage(run, p, 2, '#c9d4dc'); return; }
+      if (!m.cd && line && near <= 6 && seen && !p.st.stein) {
+        const [dx, dy] = axis(m, p);
+        if (windUp(run, m, 'gaze', ray(run, m, dx, dy, 7), 'Medusas Augen beginnen zu glühen ...')) return;
+      }
+      if (orth(run, m)) { hitPlayer(run, m, true); return; }
+      walk(run, m, dist, 2);
       return;
-    case 'tod': // Sense: Zone um den Helden, einen Zug vorher angekündigt; wer drinbleibt, stirbt
+    }
+    case 'tod': { // Sense: Zone um den Helden, einen Zug vorher angekündigt; wer drinbleibt, stirbt
       if (m.st.zt) {
         delete m.st.zt;
         const inZone = scythe(run, m).includes(p.y * W + p.x);
-        run.fx.push({ k: 'swipe', x: m.st.zx, y: m.st.zy, dx: 1, dy: 0, big: true });
+        run.fx.push({ k: 'reap', x: m.st.zx, y: m.st.zy, v: m.st.zv });
         m.cd = HUNTER.todCd;
         if (inZone) {
           say(run, 'Die Sense trifft. Der Tod holt dich.');
@@ -1394,14 +1552,36 @@ function hunterAct(run: Run, m: Actor, dist: Int16Array) {
       if (m.st.born !== run.turn && !m.cd && near <= 2 && canEscape(run, m)) {
         m.st.zt = 1; m.st.zx = p.x; m.st.zy = p.y; m.st.zv = Math.abs(p.x - m.x) >= Math.abs(p.y - m.y) ? 1 : 0;
         say(run, 'DER TOD HOLT AUS! Raus aus dem Feld!');
-        run.fx.push({ k: 'banner', title: 'DER TOD HOLT AUS', sub: 'Verlasse das rote Feld!', col: '#b13e53' });
+        run.fx.push({ k: 'banner', title: 'DER TOD HOLT AUS', sub: 'Verlasse das rote Feld!', col: '#b13e53' }, { k: 'charge', id: m.id, x: m.x, y: m.y, kind: 'scythe' });
         return;
       }
-      if (orth(run, m)) { hitPlayer(run, m, true); return; }
+      // Schattenschritt: aus der Ferne direkt hinter den Helden
+      if (!m.st.bc && near >= 4 && m.st.born !== run.turn) {
+        const [dx, dy] = axis(m, p);
+        const spots = [[p.x + dx, p.y + dy], [p.x + dy, p.y + dx], [p.x - dy, p.y - dx]];
+        const s = spots.find(([x, y]) => isFree(run, x, y));
+        if (s) {
+          run.fx.push({ k: 'blink', x: m.x, y: m.y }, { k: 'blink', x: s[0], y: s[1] });
+          m.x = s[0]; m.y = s[1]; m.f = axis(m, p);
+          m.st.bc = HUNTER.blinkCd;
+          say(run, 'Der Tod tritt aus den Schatten hinter dich.');
+          return;
+        }
+      }
+      if (orth(run, m)) {
+        const hp0 = p.hp;
+        hitPlayer(run, m, true);
+        // Seelenraub: was er nimmt, heilt ihn
+        const got = Math.max(0, hp0 - p.hp);
+        if (got && m.hp < m.maxHp) { m.hp = Math.min(m.maxHp, m.hp + got); run.fx.push({ k: 'num', x: m.x, y: m.y, s: `+${got}`, col: '#9a4fc0' }); }
+        return;
+      }
       walk(run, m, dist, 3);
       return;
+    }
   }
 }
+
 
 // Medusa: wer sie trifft, weckt Schlangen (höchstens eine je Zug, vier zugleich)
 function medusaHurt(run: Run, m: Actor) {
@@ -1522,8 +1702,9 @@ function tickWorld(run: Run) {
 function stun(run: Run, a: Actor, turns: number) {
   if (a.st.immun) return;
   // betäubte Jäger brechen ihren angekündigten Angriff ab
-  if (a.st.zt || a.st.bt || a.st.tt !== undefined) { delete a.st.zt; delete a.st.bt; delete a.st.tt; }
-  a.st.stun = (a.boss ? 1 : turns) + (has(run.p, 'frostkern') ? 1 : 0);
+  if (a.st.zt || a.zone) { delete a.st.zt; delete a.zone; delete a.zk; run.fx.push({ k: 'num', x: a.x, y: a.y, s: 'unterbrochen', col: '#73eff7' }); }
+  // Jäger schütteln Betäubung schneller ab
+  a.st.stun = (a.boss ? 1 : MOBS[a.kind]?.hunter ? Math.min(turns, HUNTER.stunMax) : turns) + (has(run.p, 'frostkern') ? 1 : 0);
 }
 
 
@@ -2538,6 +2719,7 @@ function endTurn(run: Run) {
     else if (--z.timer <= 0) { z.dead = true; say(run, 'Die Zeit ist um – die Prüfung ist gescheitert.'); }
   }
   if (p.st.netz) p.st.netz--;
+  if (p.st.stein && !--p.st.stein) delete p.st.stein;
   if (run.ev || run.evQ?.length) evTick(run);
   if (run.hunt) hunterTick(run);
   fatal(run);
