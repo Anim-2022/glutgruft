@@ -49,7 +49,7 @@ describe('Jäger', () => {
     expect(Math.max(Math.abs(h[0].x - r.p.x), Math.abs(h[0].y - r.p.y))).toBeGreaterThanOrEqual(4);
     expect(distMap(r.tiles, r.p.x, r.p.y)[h[0].y * W + h[0].x]).toBeGreaterThan(0);
     expect(r.fx.some(f => f.k === 'banner')).toBe(true);
-    expect(r.hunt!.next).toBe(HUNTER.first + HUNTER.interval);
+    expect(r.hunt!.next).toBe(HUNTER.first + HUNTER.respawn); // with hunt pressure: re-armed each turn while it lives
   });
 
   it('nie mehr als HUNTER.cap zugleich; der Rest wartet, statt zu verfallen', () => {

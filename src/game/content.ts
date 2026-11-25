@@ -207,9 +207,10 @@ export const HUNTER = { first: 560, interval: 30, cap: 4, warn: 30, pool: [['ech
   // jeder weitere Jäger auf derselben Ebene: +growHp Leben, +growAtk Angriff; Abstand schrumpft um shrink bis minInterval
   growHp: 0.15, growAtk: 1, shrink: 5, minInterval: 15, // Angriff +growAtk nur jede zweite Stufe
   // Anti-farming (FEATURES.huntPressure): the k-th hunter killed on a floor gives reward × rewardDecay[k] (last value
-  // for all later ones); from pairFrom spawned hunters on they come in pairs, from deathFrom on Death comes, reward-free;
-  // stronger growth per stage; stun at most 1 turn from stage stun1From; no passive regen while one is alive
-  rewardDecay: [1, 0.4, 0.15, 0], pairFrom: 2, deathFrom: 4, growHp2: 0.3, growAtk2: 1, stun1From: 2 };
+  // for all later ones); only one hunter alive at a time, the next one comes `respawn` turns after the previous died,
+  // one stage stronger; from deathFrom on Death comes, reward-free; stronger growth per stage (growHp2/growAtk2);
+  // stun at most 1 turn from stage stun1From; no passive regen while a stage-2+ hunter is alive
+  rewardDecay: [1, 0.4, 0.15, 0], respawn: 12, deathFrom: 4, growHp2: 0.3, growAtk2: 1, stun1From: 2 };
 // Ereignisse: Ruhe-Auslöser, Zweitereignis bei Rate 1, Obergrenze zusätzlicher Reliquienwahlen je Lauf,
 // Schattenzwilling als Anteil der Heldenwerte (nur Grundangriff)
 export const EVENT = { biomeShare: 0.6, calmMin: 25, calmMax: 40, calmChance: 0.15, second: 0.45, relicCap: 2, relicChance: 0.2,
