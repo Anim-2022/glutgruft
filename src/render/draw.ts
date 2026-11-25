@@ -240,7 +240,7 @@ export function drawRun(ctx: CanvasRenderingContext2D, run: Run, dt: number, tim
         break;
       }
       case 'die': {
-        shake(onDeath(run, f.kind, f.x, f.y), hitDir); sfx('kill');
+        shake(onDeath(run, f.kind, f.x, f.y, f.cause), hitDir); sfx('kill');
         const big = !!(MOBS[f.kind]?.boss || MOBS[f.kind]?.hunter);
         hitstop(big ? 0.12 : 0.07);
         splat(f.kind, f.x, f.y, hitDir, big ? 14 : 7);

@@ -2,13 +2,16 @@
 // Reine Darstellung: Zustand lebt nur hier (nicht im Lauf), Zufall nur über Math.random,
 // die Spielart der Spur über einen Hash aus Feld und Art – sie flimmert nicht.
 import { TS, sprites, masks } from './gfx';
-import type { Run } from '../game/run';
+import type { Run, DeathCause } from '../game/run';
+import { corpseCanvas, corpseVariant, materialOf } from './corpses';
 import { W } from '../game/dungeon';
+import { MOBS } from '../game/content';
 
 interface Light { x: number; y: number; r: number; col?: string; a?: number; }
 type Part = { x: number; y: number; vx: number; vy: number; col: string; t: number; life: number; g: number; s: number };
-type Dying = { kind: string; x: number; y: number; t: number; dur: number; key: string; dir: number; decal: string | null; done: boolean; extra: number };
-type Decal = { x: number; y: number; key: string; big: boolean; age: number; fade: number; ember: boolean };
+type Dying = { kind: string; x: number; y: number; t: number; dur: number; key: string; dir: number; decal: string | null; done: boolean; extra: number; cause?: DeathCause; anim: string };
+// corpse: a cause-of-death corpse (to-do #6) instead of the kind's stain
+type Decal = { x: number; y: number; key: string; big: boolean; age: number; fade: number; ember: boolean; corpse?: { kind: string; src: string; cause: DeathCause; v: number } };
 
 const parts: Part[] = [];
 const dying: Dying[] = [];
@@ -55,13 +58,20 @@ function shatter(key: string, tx: number, ty: number, step = 2, life = 0.55) {
 }
 
 // Wird vom fx-Ereignis 'die' aufgerufen; liefert die gewünschte Bildschirmerschütterung
-export function onDeath(run: Run, kind: string, x: number, y: number): number {
-  if (!KINDS.includes(kind)) { shatter(`${kind}:f0`, x, y); return 0; }
+export function onDeath(run: Run, kind: string, x: number, y: number, cause?: DeathCause): number {
   const boss = kind === 'koenig' || kind === 'mutter' || kind === 'fuerst';
   const key = boss && sprites[`${kind}2:f0`] ? `${kind}2:f0` : `${kind}:f0`;
+  // with a known cause: the kind's own death plays, then a corpse matching the cause stays
+  const corpse = !!cause && !!sprites[key];
+  if (corpse) causeBurst(key, kind, cause!, x, y);
+  if (!KINDS.includes(kind)) {
+    if (!corpse) { shatter(`${kind}:f0`, x, y); return 0; }
+    dying.push({ kind, x, y, t: 0, dur: 0.35, key, dir: 1, decal: null, done: false, extra: 0, cause, anim: 'fall' });
+    return MOBS[kind]?.hunter ? (reduced ? 0 : 4) : 0;
+  }
   const cx = x * TS + 8, cy = y * TS + 8;
   const blood = reduced ? [] : ['#b13e53', '#7d2b45', '#6b1d2a'];
-  dying.push({ kind, x, y, t: 0, dur: DUR[kind], key, dir: Math.random() < 0.5 ? -1 : 1, decal: DECAL_OF[kind], done: false, extra: 0 });
+  dying.push({ kind, x, y, t: 0, dur: DUR[kind], key, dir: Math.random() < 0.5 ? -1 : 1, decal: DECAL_OF[kind], done: false, extra: 0, cause: corpse ? cause : undefined, anim: kind });
   switch (kind) {
     case 'ratte': if (blood.length) burst(cx, cy + 2, 10, blood, 30, 80, { up: 50 }); return 0;
     case 'skelett': shatter(key, x, y, 2, 0.5); return 0;
@@ -96,10 +106,10 @@ export function onDeath(run: Run, kind: string, x: number, y: number): number {
   return 0;
 }
 
-function addDecal(run: Run, kind: string, x: number, y: number, name: string) {
+function addDecal(run: Run, kind: string, x: number, y: number, name: string, corpse?: Decal['corpse']) {
   const big = name === 'koenig' || name === 'mutter' || name === 'fuerst';
   const v = hsh(x, y, KINDS.indexOf(kind) + 1) % 2;
-  decals.push({ x, y, key: `${name}_${v}`, big, age: 0, fade: 0, ember: name === 'embers' });
+  decals.push({ x, y, key: `${name}_${v}`, big, age: 0, fade: 0, ember: corpse ? corpse.cause === 'fire' : name === 'embers', corpse });
   // Höchstens 40 Spuren je Ebene: die ältesten blenden aus
   const live = decals.filter(d => !d.fade);
   for (let k = 0; k < live.length - MAX_DECALS; k++) live[k].fade = 1e-6;
@@ -114,6 +124,7 @@ export function drawDecals(ctx: CanvasRenderingContext2D, run: Run, ox: number, 
     d.age += dt;
     if (d.fade) { d.fade += dt; if (d.fade >= DECAL_FADE) { decals.splice(i, 1); continue; } }
     if (!run.seen[d.y * W + d.x]) continue;
+    if (d.corpse) { drawCorpse(ctx, d, ox, oy, lights, time); continue; }
     let key = `${reduced ? 'dcr' : 'dc'}_${d.key}`;
     // Glutgeist: Glut glimmt etwa drei Sekunden, dann bleibt Asche
     const glowing = d.ember && d.age < EMBER_T;
@@ -133,7 +144,10 @@ export function drawDying(ctx: CanvasRenderingContext2D, run: Run, ox: number, o
     m.t += dt;
     const f = Math.min(1, m.t / m.dur), img = sprites[m.key];
     if (m.t >= m.dur) {
-      if (m.decal && run.floor === decalFloor) addDecal(run, m.kind, m.x, m.y, m.decal);
+      if (run.floor === decalFloor) {
+        if (m.cause) addDecal(run, m.kind, m.x, m.y, 'corpse', { kind: m.kind, src: m.key, cause: m.cause, v: corpseVariant(m.kind, m.x, m.y) });
+        else if (m.decal) addDecal(run, m.kind, m.x, m.y, m.decal);
+      }
       dying.splice(i, 1);
       continue;
     }
@@ -145,7 +159,10 @@ export function drawDying(ctx: CanvasRenderingContext2D, run: Run, ox: number, o
       ctx.drawImage(src, Math.round(bx - w / 2 + dx), Math.round(by - h + dy), w, h);
       ctx.globalAlpha = 1;
     };
-    switch (m.kind) {
+    switch (m.anim) {
+      case 'fall': // generic: the body sinks and topples (a corpse follows)
+        blit(0, f * 3, 1, 1 - f * 0.7);
+        break;
       case 'ratte': // Hüpfer, dann fällt sie um und vergeht
         blit(0, -Math.sin(f * Math.PI) * 7, 1, f < 0.6 ? 1 : 1 - (f - 0.6) / 0.4);
         break;
@@ -214,3 +231,42 @@ export function drawDying(ctx: CanvasRenderingContext2D, run: Run, ox: number, o
   ctx.globalAlpha = 1;
 }
 
+
+// Corpse decal: fades in, fire corpses glow and smoke for a few seconds (the image itself is cached)
+function drawCorpse(ctx: CanvasRenderingContext2D, d: Decal, ox: number, oy: number, lights: Light[], time: number) {
+  const c = d.corpse!, glowing = d.ember && d.age < EMBER_T;
+  const img = corpseCanvas(sprites[c.src], c.kind, c.cause, c.v, reduced, glowing);
+  if (!img) return;
+  const a = d.fade ? 1 - d.fade / DECAL_FADE : Math.min(1, d.age * 6);
+  ctx.globalAlpha = a;
+  ctx.drawImage(img, Math.round(d.x * TS + 8 - img.width / 2 + ox), d.y * TS + TS + 2 - img.height + oy);
+  ctx.globalAlpha = 1;
+  if (glowing) {
+    lights.push({ x: d.x, y: d.y, r: 1.4 * (1 - d.age / EMBER_T) + 0.4, col: '#ef7d57', a: 0.6 + 0.1 * Math.sin(time * 9 + d.x) });
+    if (!reduced && Math.random() < 0.08 * (1 - d.age / EMBER_T)) parts.push({ x: d.x * TS + 4 + Math.random() * 8, y: d.y * TS + 9, vx: (Math.random() - 0.5) * 6, vy: -12, col: Math.random() < 0.5 ? '#566c86' : '#333c57', t: 0, life: 1.1, g: -6, s: 2 });
+  }
+  if (c.cause === 'frost' && d.age < 1.2) lights.push({ x: d.x, y: d.y, r: 1.2 * (1 - d.age / 1.2), col: '#73eff7', a: 0.4 });
+}
+
+// A short burst that tells the cause at the moment of death (particles only, Math.random is fine here)
+function causeBurst(key: string, kind: string, cause: DeathCause, x: number, y: number) {
+  const cx = x * TS + 8, cy = y * TS + 8, mat = materialOf(kind);
+  const bleeds = mat === 'flesh' && !reduced, goo = mat === 'slime';
+  const red = ['#b13e53', '#7d2b45', '#6b1d2a'], green = ['#38b764', '#1e6b3a', '#a7f070'];
+  switch (cause) {
+    case 'slash': if (bleeds) burst(cx, cy, 8, red, 30, 70, { up: 30 }); else if (goo) burst(cx, cy, 8, green, 30, 70, { up: 30 }); break;
+    case 'arrow': if (bleeds) burst(cx, cy - 2, 4, red, 20, 50, { up: 20 }); break;
+    case 'fire':
+      burst(cx, cy, 10, ['#ef7d57', '#ffcd75', '#b13e53'], 10, 40, { up: 30, g: -40, s: 1, life: 0.8 });
+      if (!reduced) burst(cx, cy - 2, 10, ['#566c86', '#333c57'], 5, 15, { up: 15, g: -15, s: 2, life: 1.4 });
+      break;
+    case 'frost': burst(cx, cy, 12, ['#73eff7', '#f4f4f4', '#41a6f6'], 30, 80, { up: 40, s: 1, life: 0.6 }); break;
+    case 'magic': burst(cx, cy, 10, ['#d08cff', '#9a4fc0', '#f4f4f4'], 30, 70, { up: 20, g: 0, s: 1, life: 0.5 }); break;
+    case 'blast':
+      shatter(key, x, y, 3, 0.5);
+      if (bleeds) burst(cx, cy, 10, red, 50, 110, { up: 40 });
+      break;
+    case 'poison': burst(cx, cy - 2, 12, ['#a7f070', '#38b764', '#1e6b3a'], 5, 20, { up: 8, g: -12, s: 2, life: 1.4 }); break;
+    case 'crush': burst(cx, cy + 4, 10, ['#94b0c2', '#566c86'], 20, 50, { up: 5, g: 40, s: 1, life: 0.5 }); if (bleeds) burst(cx, cy + 4, 6, red, 30, 60, { up: 5 }); break;
+  }
+}

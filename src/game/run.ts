@@ -58,6 +58,10 @@ export const VAULT_NAMES: Record<PuzzleKind, string> = {
 // material of a destroyed object (rendering only)
 export type Mat = 'wood' | 'stone' | 'clay' | 'fungus' | 'web' | 'ice' | 'metal' | 'oil';
 
+// What dealt the killing blow (render-only: picks the corpse variant, never read by game logic)
+export type DeathCause = 'slash' | 'arrow' | 'fire' | 'frost' | 'magic' | 'blast' | 'poison' | 'crush';
+export const DEATH_CAUSES: DeathCause[] = ['slash', 'arrow', 'fire', 'frost', 'magic', 'blast', 'poison', 'crush'];
+
 export type Fx =
   | { k: 'num'; x: number; y: number; s: string; col: string; dot?: boolean }
   // beat: from here on the next enemy (id) or the world (id -1) acts; only used to sequence rendering
@@ -69,7 +73,7 @@ export type Fx =
   | { k: 'shake'; n: number }
   | { k: 'lunge'; id: number; dx: number; dy: number }
   | { k: 'flash'; id: number }
-  | { k: 'die'; x: number; y: number; kind: string }
+  | { k: 'die'; x: number; y: number; kind: string; cause?: DeathCause } // cause: render-only (corpse variant)
   | { k: 'boom'; x: number; y: number; r: number; barrel?: boolean }
   | { k: 'debris'; x: number; y: number }
   | { k: 'loot'; item: Item; how: 'worn' | 'bag' | 'sold' }
@@ -496,7 +500,7 @@ function afterWl(run: Run, a: Action, px: number, py: number, adj0: Actor[]) {
   }
   if (a.t === 'move' && hasNode(p, 'n2_5') && run.mode === 'play' && (p.x !== px || p.y !== py) && adj0.some(m => m.hp > 0 && cheb(m, p) >= 2)) {
     const t = nearestMob(run, shotRange(p));
-    if (t) { run.fx.push({ k: 'arrow', x0: p.x, y0: p.y, x1: t.x, y1: t.y, col: '#a7f070', heavy: false }); playerHit(run, t, playerAtk(p) * 0.7); }
+    if (t) { run.fx.push({ k: 'arrow', x0: p.x, y0: p.y, x1: t.x, y1: t.y, col: '#a7f070', heavy: false }); playerHit(run, t, playerAtk(p) * 0.7, false, 'arrow'); }
   }
 }
 // Rauchbombe: der Spieler steht im Rauch
@@ -713,7 +717,7 @@ function fireLane(run: Run, z: Puzzle, l: DartLane) {
   }
   const ex = hit ? x : x - dir;
   if (inVault(run, run.p.x, run.p.y)) run.fx.push({ k: 'arrow', x0: sx, y0: y, x1: ex, y1: y, col: '#c9d4dc', heavy: false });
-  if (hit) damage(run, hit, 3 + Math.floor(run.floor / 3), hit === run.p ? '#b13e53' : '#c9d4dc');
+  if (hit) damage(run, hit, 3 + Math.floor(run.floor / 3), hit === run.p ? '#b13e53' : '#c9d4dc', false, 'arrow');
 }
 
 // Pfeilgang: Reihen, die im nächsten Gegnerzug schießen (für die Warnung). Nur lesend.
@@ -972,7 +976,7 @@ function stepHazard(run: Run, a: Actor) {
   switch (h.kind) {
     case 'stachel':
       if (shown) say(run, isP ? `${name}! Spikes shoot out of the floor.` : `${a.name} steps into a ${name}!`);
-      damage(run, a, Math.round((3 + run.floor / 2) * DIFF.trapDmg), isP ? '#b13e53' : '#c9d4dc');
+      damage(run, a, Math.round((3 + run.floor / 2) * DIFF.trapDmg), isP ? '#b13e53' : '#c9d4dc', false, 'crush');
       break;
     case 'pfeil': {
       // Der Pfeil kommt aus der nächsten Wand in einer der vier Richtungen
@@ -983,7 +987,7 @@ function stepHazard(run: Run, a: Actor) {
       }
       if (src && shown) run.fx.push({ k: 'arrow', x0: src[0], y0: src[1], x1: a.x, y1: a.y, col: '#c9d4dc', heavy: false });
       if (shown) say(run, isP ? `${name}! A dart hisses out of the wall.` : `${a.name} triggers a ${name}!`);
-      damage(run, a, Math.round((2 + run.floor / 2) * DIFF.trapDmg), isP ? '#b13e53' : '#c9d4dc');
+      damage(run, a, Math.round((2 + run.floor / 2) * DIFF.trapDmg), isP ? '#b13e53' : '#c9d4dc', false, 'arrow');
       break;
     }
     case 'gas':
@@ -1136,7 +1140,7 @@ function evApi(run: Run): EvApi {
         const a = p.x === x && p.y === y ? p : mobAt(run, x, y);
         if (!a || a.hp <= 0) continue;
         if (kind === 'gas') { a.st.gift = Math.max(a.st.gift ?? 0, 3); run.fx.push({ k: 'num', x, y, s: 'Poison', col: '#38b764' }); }
-        if (dmg > 0) damage(run, a, dmg, '#b13e53');
+        if (dmg > 0) damage(run, a, dmg, '#b13e53', false, kind === 'fire' ? 'fire' : kind === 'gas' ? 'poison' : 'crush');
       }
       tele(run, 'evStrike');
     },
@@ -1526,7 +1530,7 @@ function unleash(run: Run, m: Actor) {
       run.fx.push({ k: 'breath', x: m.x, y: m.y, dx: m.st.bdx ?? ax, dy: m.st.bdy ?? ay });
       for (const i of zone) ignite(run, i % W, (i / W) | 0, 3);
       if (hit && special(run, m, 1.4)) p.st.brand = Math.max(p.st.brand ?? 0, 3);
-      for (const o of run.mobs) if (o !== m && zone.includes(o.y * W + o.x)) damage(run, o, m.atk, '#ef7d57');
+      for (const o of run.mobs) if (o !== m && zone.includes(o.y * W + o.x)) damage(run, o, m.atk, '#ef7d57', false, 'fire');
       m.cd = 3;
       return;
     }
@@ -1746,7 +1750,7 @@ export function explode(run: Run, x: number, y: number, r = 1, barrel = false) {
   }
   const dmg = 6 + Math.round(2.5 * run.floor), at = (q: { x: number; y: number }) => blast.has(q.y * W + q.x);
   const dmgAt = (q: { x: number; y: number }) => (ring(q.x, q.y) <= 1 ? dmg : Math.round(dmg * 0.6));
-  for (const m of run.mobs.filter(at)) damage(run, m, dmgAt(m), '#ef7d57');
+  for (const m of run.mobs.filter(at)) damage(run, m, dmgAt(m), '#ef7d57', false, 'blast');
   if (!has(p, 'pulverfass') && at(p)) damage(run, p, Math.ceil(dmgAt(p) * 0.3), '#b13e53');
   for (const h of traps) {
     if (h.kind === 'gas') poisonCloud(run, h.x, h.y);
@@ -1780,7 +1784,7 @@ function collapse(run: Run, x: number, y: number) {
   say(run, 'A pillar collapses!');
   for (const [ox, oy] of DIRS4) {
     const m = mobAt(run, x + ox, y + oy);
-    if (m) { stun(run, m, 2); damage(run, m, 8 + run.floor, '#94b0c2'); }
+    if (m) { stun(run, m, 2); damage(run, m, 8 + run.floor, '#94b0c2', false, 'crush'); }
     else if (run.p.x === x + ox && run.p.y === y + oy) damage(run, run.p, 4 + Math.floor(run.floor / 2), '#b13e53');
   }
 }
@@ -2086,7 +2090,8 @@ let playerActing = false;
 // true while poison/burn tick: damage numbers are drawn small (rendering only)
 let dotTick = false;
 
-function damage(run: Run, dst: Actor, amt: number, col = '#f4f4f4', crit = false) {
+// why: what deals the damage; only passed on to the 'die' fx (corpse look), no effect on the game
+function damage(run: Run, dst: Actor, amt: number, col = '#f4f4f4', crit = false, why?: DeathCause) {
   const p = run.p;
   if (dst.st.sproede) amt *= 1.5;
   if (dst !== p && dst.st.stun && hasNode(p, 'n1_2a') && p.cls === 'magier') amt *= 1.25; // Raureif
@@ -2103,7 +2108,7 @@ function damage(run: Run, dst: Actor, amt: number, col = '#f4f4f4', crit = false
   dst.hp -= amt;
   run.fx.push({ k: 'flash', id: dst.id });
   run.fx.push({ k: 'num', x: dst.x, y: dst.y, s: crit ? `${amt}!` : `${amt}`, col: crit ? '#ffcd75' : col, ...(dotTick ? { dot: true } : {}) });
-  if (dst !== run.p && dst.hp <= 0) kill(run, dst);
+  if (dst !== run.p && dst.hp <= 0) kill(run, dst, why);
   else if (dst.kind === 'medusa' && playerActing) medusaHurt(run, dst);
   // Schutzrune: einmal je Ebene ein Blinzeln, wenn das Leben knapp wird
   if (dst === p && p.hp > 0 && p.hp < p.maxHp * 0.3 && p.cls === 'magier' && hasNode(p, 'n2_2b') && !run.runeUsed) {
@@ -2130,7 +2135,7 @@ function blinkSpot(run: Run): [number, number] | null {
   return best;
 }
 
-function playerHit(run: Run, dst: Actor, base: number, sure = false) {
+function playerHit(run: Run, dst: Actor, base: number, sure = false, why: DeathCause = 'slash') {
   const p = run.p, a = p.aff;
   if (a.hexen && (dst.st.brand || dst.st.gift)) base *= 1.3;
   if (p.st.konter) { sure = true; delete p.st.konter; }
@@ -2142,27 +2147,27 @@ function playerHit(run: Run, dst: Actor, base: number, sure = false) {
   if (a.gift && run.rng.chance(a.gift / 100)) dst.st.gift = 3;
   if (a.brand && run.rng.chance(a.brand / 100)) dst.st.brand = 3;
   if (a.frost && run.rng.chance(Math.min(35, a.frost) / 100)) stun(run, dst, 1);
-  damage(run, dst, (crit ? base * 2 : base) - dst.def, '#f4f4f4', crit);
+  damage(run, dst, (crit ? base * 2 : base) - dst.def, '#f4f4f4', crit, why);
   if (has(p, 'donnerfaust') && ++p.hits % 5 === 0) {
     run.fx.push({ k: 'shake', n: 4 });
-    for (const m of run.mobs.filter(m => m !== dst && cheb(m, dst) <= 1)) damage(run, m, base * 0.6, '#ffcd75');
+    for (const m of run.mobs.filter(m => m !== dst && cheb(m, dst) <= 1)) damage(run, m, base * 0.6, '#ffcd75', false, 'magic');
   }
 }
 
 // Nebenwirkungen einfacher Angriffe: Spalten, Durchstoßen, Überspringen
-function sideHits(run: Run, dst: Actor, base: number, col: string) {
+function sideHits(run: Run, dst: Actor, base: number, col: string, why: DeathCause = 'slash') {
   const p = run.p, a = p.aff;
-  if (a.spalt) for (const m of run.mobs.filter(m => m !== dst && cheb(m, p) <= 1)) damage(run, m, (base * a.spalt) / 100 - m.def, col);
+  if (a.spalt) for (const m of run.mobs.filter(m => m !== dst && cheb(m, p) <= 1)) damage(run, m, (base * a.spalt) / 100 - m.def, col, false, 'slash');
   if (a.stoss) {
     const m = mobAt(run, dst.x + Math.sign(dst.x - p.x), dst.y + Math.sign(dst.y - p.y));
-    if (m && m !== dst) damage(run, m, (base * a.stoss) / 100 - m.def, col);
+    if (m && m !== dst) damage(run, m, (base * a.stoss) / 100 - m.def, col, false, why);
   }
   if (a.kette) {
     let best: Actor | undefined, bd = 3;
     for (const m of run.mobs) { const d = cheb(m, dst); if (m !== dst && d < bd && run.vis[m.y * W + m.x]) { bd = d; best = m; } }
     if (best) {
       run.fx.push({ k: 'bolt', x0: dst.x, y0: dst.y, x1: best.x, y1: best.y, col });
-      damage(run, best, (base * a.kette) / 100 - best.def, col);
+      damage(run, best, (base * a.kette) / 100 - best.def, col, false, 'magic');
     }
   }
 }
@@ -2178,10 +2183,10 @@ function fatal(run: Run) {
   say(run, 'You have fallen.');
 }
 
-function kill(run: Run, m: Actor) {
+function kill(run: Run, m: Actor, why?: DeathCause) {
   const p = run.p;
   run.mobs = run.mobs.filter(o => o !== m);
-  run.fx.push({ k: 'die', x: m.x, y: m.y, kind: m.kind });
+  run.fx.push({ k: 'die', x: m.x, y: m.y, kind: m.kind, ...(why ? { cause: why } : {}) });
   run.kills++;
   // hunters stop paying out when farmed: the k-th kill on a floor gives less, Death called by staying gives nothing
   const rm = huntReward(run, m);
@@ -2191,7 +2196,7 @@ function kill(run: Run, m: Actor) {
   if (p.aff.ausdauer) gain(p, p.aff.ausdauer);
   if (p.aff.asche && !m.boss) {
     run.fx.push({ k: 'boom', x: m.x, y: m.y, r: 1 });
-    for (const o of run.mobs.filter(o => cheb(o, m) <= 1)) damage(run, o, 4 + p.lvl, '#ef7d57');
+    for (const o of run.mobs.filter(o => cheb(o, m) <= 1)) damage(run, o, 4 + p.lvl, '#ef7d57', false, 'blast');
   }
   if (m.st.mark && p.cls === 'waldlaeufer') gain(p, 2); // Markieren
   // Klingenrausch: ein Sieg gibt einen freien Zug, höchstens alle 3 Züge
@@ -2202,7 +2207,7 @@ function kill(run: Run, m: Actor) {
     for (const o of run.mobs.filter(o => cheb(o, m) <= 1)) {
       if (o.hp <= 0) continue;
       o.st.brand = Math.max(o.st.brand ?? 0, burnT(p, 2));
-      damage(run, o, 4 + p.lvl, '#ef7d57');
+      damage(run, o, 4 + p.lvl, '#ef7d57', false, 'fire');
     }
   }
   if (run.target === m.id) run.target = 0;
@@ -2488,13 +2493,13 @@ function useSkill(run: Run, i: number): boolean {
       if (!t) return noTarget();
       stun(run, t, L ? 3 : 2);
       run.fx.push({ k: 'lunge', id: 0, dx: Math.sign(t.x - p.x), dy: Math.sign(t.y - p.y) }, { k: 'bash', x: t.x, y: t.y, dx: Math.sign(t.x - p.x), dy: Math.sign(t.y - p.y) });
-      playerHit(run, t, atk * 1.3 * sp + 1);
+      playerHit(run, t, atk * 1.3 * sp + 1, false, 'crush');
       if (mod === 2 && t.hp > 0) {
         // Rammstoß: bis zu zwei Felder zurück, ein Hindernis tut weh
         const dx = Math.sign(t.x - p.x), dy = Math.sign(t.y - p.y);
         let k = 0;
         while (k < 2 && isFree(run, t.x + dx, t.y + dy)) { moveMob(run, t, t.x + dx, t.y + dy); k++; if (t.hp <= 0) break; }
-        if (k < 2 && t.hp > 0) { damage(run, t, 4 + p.lvl, '#ffcd75'); hitTile(run, (t.y + dy) * W + t.x + dx, 'knock'); }
+        if (k < 2 && t.hp > 0) { damage(run, t, 4 + p.lvl, '#ffcd75', false, 'crush'); hitTile(run, (t.y + dy) * W + t.x + dx, 'knock'); }
       }
       // Vergelter: betäubt alle Nachbarn
       if (hasNode(p, 'n0_5')) for (const o of around(1)) if (o !== t) stun(run, o, 2);
@@ -2530,14 +2535,14 @@ function useSkill(run: Run, i: number): boolean {
       for (let y = t.y - 1; y <= t.y + 1; y++) for (let x = t.x - 1; x <= t.x + 1; x++) ignite(run, x, y, 2);
       for (const m of run.mobs.filter(m => cheb(m, t) <= (mod === 1 ? 2 : 1))) {
         m.st.brand = burnT(p, 2);
-        damage(run, m, (m === t ? atk * 0.8 + p.lvl * 0.3 : 3) * sp - m.def, '#ef7d57');
+        damage(run, m, (m === t ? atk * 0.8 + p.lvl * 0.3 : 3) * sp - m.def, '#ef7d57', false, 'fire');
       }
       if (mod === 2) {
         const o = run.mobs.filter(m => m !== t && run.vis[m.y * W + m.x] && cheb(m, p) <= 7).sort((a, b) => cheb(a, p) - cheb(b, p))[0];
         if (o) {
           run.fx.push({ k: 'fireball', x0: p.x, y0: p.y, x1: o.x, y1: o.y, r: 0 });
           o.st.brand = burnT(p, 2);
-          damage(run, o, (atk * 0.8 + p.lvl * 0.3) * sp * 0.6 - o.def, '#ef7d57');
+          damage(run, o, (atk * 0.8 + p.lvl * 0.3) * sp * 0.6 - o.def, '#ef7d57', false, 'fire');
         }
       }
       break;
@@ -2547,7 +2552,7 @@ function useSkill(run: Run, i: number): boolean {
       if (!ts.length) return noTarget();
       run.fx.push({ k: 'nova', x: p.x, y: p.y, r: mod === 1 ? 3 : 2 });
       for (const i of [...run.fire.keys()]) if (cheb({ x: i % W, y: (i / W) | 0 }, p) <= 2) run.fire.delete(i);
-      for (const t of ts) { stun(run, t, L ? 2 : 1); delete t.st.brand; damage(run, t, 3 * sp, '#73eff7'); if (mod === 2 && t.hp > 0) t.st.sproede = 4; }
+      for (const t of ts) { stun(run, t, L ? 2 : 1); delete t.st.brand; damage(run, t, 3 * sp, '#73eff7', false, 'frost'); if (mod === 2 && t.hp > 0) t.st.sproede = 4; }
       if (hasNode(p, 'n1_2b')) p.st.eis = 2; // Eisrüstung
       break;
     }
@@ -2560,7 +2565,7 @@ function useSkill(run: Run, i: number): boolean {
       if (mod === 2) { gain(p, 3); p.st.dodge = 2; }
       if (mod === 1) {
         run.fx.push({ k: 'boom', x: from.x, y: from.y, r: 1 });
-        for (const m of run.mobs.filter(m => cheb(m, from) <= 1)) damage(run, m, 5 * p.pow, '#9a4fc0');
+        for (const m of run.mobs.filter(m => cheb(m, from) <= 1)) damage(run, m, 5 * p.pow, '#9a4fc0', false, 'magic');
       }
       if (hasNode(p, 'n2_2a')) p.st.nachhall = 1;
       // Zeitriss: kein Zug, danach Abklingzeit
@@ -2580,11 +2585,11 @@ function useSkill(run: Run, i: number): boolean {
       if (!t) return noTarget();
       run.fx.push({ k: 'arrow', x0: p.x, y0: p.y, x1: t.x, y1: t.y, col: '#ffcd75', heavy: true });
       const weak = hasNode(p, 'n0_2b') && run.rng.chance(0.15); // Schwachstelle
-      playerHit(run, t, atk * 1.8 * sp * shotBonus(p), (mod === 2 && t.hp >= t.maxHp) || weak);
+      playerHit(run, t, atk * 1.8 * sp * shotBonus(p), (mod === 2 && t.hp >= t.maxHp) || weak, 'arrow');
       if (weak && t.hp > 0) stun(run, t, 1);
       if (mod === 1) {
         const b = mobAt(run, t.x + Math.sign(t.x - p.x), t.y + Math.sign(t.y - p.y));
-        if (b && b !== t) damage(run, b, atk * 1.1 * sp - b.def, '#ffcd75');
+        if (b && b !== t) damage(run, b, atk * 1.1 * sp - b.def, '#ffcd75', false, 'arrow');
       }
       break;
     }
@@ -2617,7 +2622,7 @@ function useSkill(run: Run, i: number): boolean {
       if (ai >= 0) { run.fx.push({ k: 'arrow', x0: p.x, y0: p.y, x1: ai % W, y1: (ai / W) | 0, col: '#ffcd75', heavy: false }); shootTile(run, ai); }
       else if (mod === 2 && ai === -1) {
         const t = nearestMob(run, shotRange(p));
-        if (t) { run.fx.push({ k: 'arrow', x0: p.x, y0: p.y, x1: t.x, y1: t.y, col: '#ffcd75', heavy: false }); playerHit(run, t, atk * 0.75 * shotBonus(p)); }
+        if (t) { run.fx.push({ k: 'arrow', x0: p.x, y0: p.y, x1: t.x, y1: t.y, col: '#ffcd75', heavy: false }); playerHit(run, t, atk * 0.75 * shotBonus(p), false, 'arrow'); }
       }
       break;
     }
@@ -2671,7 +2676,7 @@ function castSpell(run: Run, id: string): boolean {
       const m = mobAt(run, x, y);
       if (!m) continue;
       const stunned = !!m.st.stun;
-      damage(run, m, (atk * 0.9 + p.lvl * 0.4) * p.pow * (stunned ? 2 : 1) - m.def, '#73eff7');
+      damage(run, m, (atk * 0.9 + p.lvl * 0.4) * p.pow * (stunned ? 2 : 1) - m.def, '#73eff7', false, 'frost');
       if (stunned && m.hp > 0) { delete m.st.stun; m.st.immun = 3; } // "Zerschmettern"
     }
     return true;
@@ -2686,7 +2691,7 @@ function castSpell(run: Run, id: string): boolean {
     const t = nearestMob(run, 4);
     if (!t) { say(run, 'No target in range.'); return false; }
     run.fx.push({ k: 'arrow', x0: p.x, y0: p.y, x1: t.x, y1: t.y, col: '#94b0c2', heavy: true });
-    playerHit(run, t, atk * 0.9 * p.pow);
+    playerHit(run, t, atk * 0.9 * p.pow, false, 'crush');
     return true;
   }
   if (id === 'sturmangriff') {
@@ -2759,11 +2764,11 @@ function useUlt(run: Run): boolean {
     run.fx.push({ k: 'bolt', x0: p.x, y0: p.y - 6, x1: c.x, y1: c.y, col: '#ef7d57' }, { k: 'boom', x: c.x, y: c.y, r: 2 }, { k: 'shake', n: 8 });
     if (FEATURES.destruction) blastTiles(run, c.x, c.y, 1); // the meteor smashes walls, pillars and objects
     for (let y = c.y - 1; y <= c.y + 1; y++) for (let x = c.x - 1; x <= c.x + 1; x++) ignite(run, x, y, 2);
-    for (const m of run.mobs.filter(m => cheb(m, c) <= 2)) { m.st.brand = 3; damage(run, m, (14 + p.lvl * 1.5) * p.pow - m.def, '#ef7d57'); }
+    for (const m of run.mobs.filter(m => cheb(m, c) <= 2)) { m.st.brand = 3; damage(run, m, (14 + p.lvl * 1.5) * p.pow - m.def, '#ef7d57', false, 'fire'); }
   } else {
     const ts = run.mobs.filter(m => cheb(m, p) <= 9 && seen(m));
     if (!ts.length) { say(run, 'No target in range.'); return false; }
-    for (const t of ts) { run.fx.push({ k: 'bolt', x0: p.x, y0: p.y, x1: t.x, y1: t.y, col: '#ffcd75' }); playerHit(run, t, atk * 0.9 * p.pow); }
+    for (const t of ts) { run.fx.push({ k: 'bolt', x0: p.x, y0: p.y, x1: t.x, y1: t.y, col: '#ffcd75' }); playerHit(run, t, atk * 0.9 * p.pow, false, 'arrow'); }
   }
   say(run, `${u.name}!`);
   p.ultCd = u.cost;
@@ -2965,8 +2970,9 @@ export function act(run: Run, a: Action): void {
       if (!t) { say(run, 'No target in range.'); break; }
       run.fx.push({ k: 'bolt', x0: p.x, y0: p.y, x1: t.x, y1: t.y, col: c.resCol });
       const base = playerAtk(p) * (p.cls === 'waldlaeufer' ? (hasNode(p, 'n1_5') ? 0.49 : 0.7) * shotBonus(p) : 1); // Minenfeld –30 %
-      playerHit(run, t, base);
-      sideHits(run, t, base, c.resCol);
+      const why = p.cls === 'waldlaeufer' ? 'arrow' : 'magic';
+      playerHit(run, t, base, false, why);
+      sideHits(run, t, base, c.resCol, why);
       if (p.cls === 'magier' && hasNode(p, 'n0_2a') && t.hp > 0 && run.rng.chance(0.3)) t.st.brand = Math.max(t.st.brand ?? 0, burnT(p, 2)); // Zunder
       if (c.fokusOnHit) {
         p.resAcc = (p.resAcc ?? 0) + c.fokusOnHit;
@@ -3045,7 +3051,7 @@ function hitPlayer(run: Run, m: Actor, melee: boolean) {
   }
   if (d.poison && run.rng.chance(0.5)) p.st.gift = 4;
   if (d.burn && run.rng.chance(0.5)) p.st.brand = 3;
-  if (melee && p.thorns) damage(run, m, p.thorns * (p.aff.stachel ? 2 : 1), '#a7f070');
+  if (melee && p.thorns) damage(run, m, p.thorns * (p.aff.stachel ? 2 : 1), '#a7f070', false, 'slash');
 }
 
 function moveMob(run: Run, m: Actor, x: number, y: number) {
@@ -3059,7 +3065,7 @@ function moveMob(run: Run, m: Actor, x: number, y: number) {
     const L = run.p.skillLvl[1];
     stun(run, m, run.p.skillMod[1] === 1 ? 3 : 2);
     say(run, `${m.name} steps into the trap!`);
-    damage(run, m, (8 * run.p.pow + run.p.lvl) * (1 + 0.3 * L), '#ffcd75');
+    damage(run, m, (8 * run.p.pow + run.p.lvl) * (1 + 0.3 * L), '#ffcd75', false, 'crush');
     if (hasNode(run.p, 'n1_2a') && m.hp > 0) m.st.gift = 3; // Stacheldraht
   }
 }
@@ -3151,12 +3157,12 @@ function tickDots(run: Run, a: Actor) {
   try { tickDots0(run, a); } finally { dotTick = false; }
 }
 function tickDots0(run: Run, a: Actor) {
-  if (a.st.gift) { a.st.gift--; damage(run, a, 1, '#38b764'); }
+  if (a.st.gift) { a.st.gift--; damage(run, a, 1, '#38b764', false, 'poison'); }
   if (a.hp > 0 && a.st.brand) {
     a.st.brand--;
     if (a === run.p && has(run.p, 'glutherz')) {
       if (a.hp < a.maxHp) { a.hp++; run.fx.push({ k: 'num', x: a.x, y: a.y, s: '+1', col: '#a7f070' }); }
-    } else damage(run, a, a !== run.p && run.p.cls === 'magier' && hasNode(run.p, 'n0_2b') ? 3 : 2, '#ef7d57');
+    } else damage(run, a, a !== run.p && run.p.cls === 'magier' && hasNode(run.p, 'n0_2b') ? 3 : 2, '#ef7d57', false, 'fire');
   }
 }
 
