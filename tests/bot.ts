@@ -31,7 +31,7 @@ function search(run: Run, goal: (x: number, y: number, i: number) => boolean, av
       const nx = cx + ox, ny = cy + oy, n = ny * W + nx;
       if (nx < 0 || ny < 0 || nx >= W || ny >= H || from[n] !== -1) continue;
       const t = run.tiles[n];
-      const passable = walkable(t) && (brittle || t !== T.FRAGILE2) && !(avoidFire && (run.fire.has(n) || warned?.has(n))) && !(knownTraps && knownTraps.has(n));
+      const passable = walkable(t) && (brittle || t !== T.FRAGILE2) && !(avoidFire && (run.fire.has(n) || warned?.has(n) || run.gas?.has(n))) && !(knownTraps && knownTraps.has(n));
       // Ziele dürfen auch nicht begehbar sein (Gegner, Truhen)
       if (!passable || run.mobs.some(m => m.x === nx && m.y === ny && run.vis[n])) { if (goal(nx, ny, n) && from[n] === -1) { from[n] = c; q.push(n); } continue; }
       from[n] = c;

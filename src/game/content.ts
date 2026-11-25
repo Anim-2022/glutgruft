@@ -186,7 +186,19 @@ export const NEW_SKILLS: Record<string, SkillDef & { branch: number }> = {
 export const TUNE = { treePtsMax: 6, kryoMana: 2, kryoRegen: 0.75, kCost: 0 };
 // Schalter für neue Systeme (Messungen: tests/balance.ts mit HAZARDS=off, MIMICS=off). Aus heißt:
 // keine Zufallszahl und keine Änderung am Lauf – das Ergebnis gleicht dann Bit für Bit dem Stand davor.
-export const FEATURES = { hunters: true, hunterForce: '', hazards: true, mimics: true, events: true, eventRate: 1, eventForce: '', eventForceBiome: false };
+export const FEATURES = { hunters: true, hunterForce: '', hazards: true, mimics: true, events: true, eventRate: 1, eventForce: '', eventForceBiome: false, destruction: true };
+// Destructible world (FEATURES.destruction). Placement uses its own RNG seeded from seed + floor, so the main
+// stream (monsters, loot, events) is unchanged; with the switch off nothing is placed and no rule applies.
+// Per room: chance of a group and its size; per biome [crypt, cave, forge]. Pots: share of gold / potion / rat.
+export const DESTR = {
+  pot: [0.45, 0.35, 0.4], potN: [1, 3] as [number, number], potGold: 0.3, potPotion: 0.06, potRat: 0.1,
+  oil: [0.18, 0, 0.3], oilBarrel: 0.55, oilN: [3, 7] as [number, number],
+  water: [0, 0.3, 0], waterN: [3, 7] as [number, number],
+  web: [0.3, 0.25, 0], webN: [1, 3] as [number, number],
+  spore: [0, 0.35, 0], sporeN: [1, 2] as [number, number],
+  gasTurns: 2, gasPoison: 3, oilBurn: 3,
+  secret: [1, 2] as [number, number], secretMinGain: 10, // way around must be at least this much longer
+};
 // Jäger: erster nach `first` Zügen auf einer Ebene, dann alle `interval` Züge, höchstens `cap` zugleich
 // pool: [Art, Gewicht, ab Ebene]; unter Ebene `weakBelow` sind Jäger schwächer (weak)
 export const HUNTER = { first: 560, interval: 30, cap: 4, warn: 30, pool: [['echse', 50, 1], ['krake', 20, 1], ['drache', 15, 6], ['medusa', 10, 4], ['tod', 5, 11]] as [string, number, number][], snakes: 4, weakBelow: 6, weak: 0.8, todCd: 6, krakeCd: 2,

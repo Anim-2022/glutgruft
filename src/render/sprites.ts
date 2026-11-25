@@ -674,6 +674,44 @@ export const SPR: Record<string, string[]> = {
 };
 
 
+// Destructible world: clay pot and spore cap (hand-drawn, palette only)
+SPR.pot = [
+  '................',
+  '................',
+  '................',
+  '......NNNN......',
+  '.....NHhhHN.....',
+  '......NNNN......',
+  '.....NhhhhN.....',
+  '....NhhwhhHN....',
+  '...NhhwhhhhHN...',
+  '...NhhhhhhhHN...',
+  '...NhYYYYYYHN...',
+  '...NhhhhhhHHN...',
+  '....NHhhhHHN....',
+  '.....NNNNNN.....',
+  '................',
+  '................',
+];
+SPR.spore = [
+  '................',
+  '................',
+  '................',
+  '.....pvvvvp.....',
+  '...pvvlvvvvvp...',
+  '..pvlllvvvlvvp..',
+  '..vvvlvvvvlllv..',
+  '.pvvvvvvlvvlvvp.',
+  '.pppvvvvvvvvppp.',
+  '...ppppppppp....',
+  '......SgS.......',
+  '.....SSgSS......',
+  '.....SgSSS......',
+  '....GSSSSSG.....',
+  '...GG.GGG.GG....',
+  '................',
+];
+
 // Statue der Gegenseite schaut nach links
 SPR.statue_l = SPR.statue.map(r => [...r].reverse().join(''));
 

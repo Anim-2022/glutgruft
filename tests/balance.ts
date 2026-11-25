@@ -2,7 +2,7 @@
 // Umgebung: N (Seeds je Zelle, 40), SEEDS=0,1,2 (Sätze), BUILD=heur,eis,eis-nokey (Varianten; -nokey ohne T5),
 // Stellschrauben je Variante: BUILD=heur:treePtsMax=6:kryoRegen=0.75 (siehe TUNE in content.ts)
 // CLASS=magier (CLS geht auch), META=neu|max, PAR (Prozesse, Vorgabe Kerne − 1; 1 = alles hier nacheinander)
-// HAZARDS=on|off, MIMICS=on|off (neue Systeme; alle aus = Bit für Bit wie vorher), ECON=1 (Wirtschaftszeile auch ohne sie)
+// HAZARDS=on|off, MIMICS=on|off, DESTRUCTION=on|off (neue Systeme; alle aus = Bit für Bit wie vorher), ECON=1 (Wirtschaftszeile auch ohne sie)
 import { defaultMeta } from '../src/core/save';
 import { newRun, act, Run, playerAtk, spellAt } from '../src/game/run';
 import { CLASS_ORDER, MOBS, treeNodes, ClassId, TUNE, FEATURES, HUNTER, EVENT, DIFF, HAZARD } from '../src/game/content';
@@ -28,6 +28,7 @@ FEATURES.hazards = ENV.HAZARDS !== 'off';
 FEATURES.mimics = ENV.MIMICS !== 'off';
 FEATURES.events = ENV.EVENTS !== 'off';
 FEATURES.hunters = ENV.HUNTERS !== 'off';
+FEATURES.destruction = ENV.DESTRUCTION !== 'off'; // DESTRUCTION=off: world without pots, oil, webs, passages
 FEATURES.hunterForce = ENV.HUNTER_FORCE ?? '';
 if (ENV.HUNTER_INTERVAL) HUNTER.interval = +ENV.HUNTER_INTERVAL;
 if (ENV.HUNTER_FIRST) HUNTER.first = +ENV.HUNTER_FIRST;

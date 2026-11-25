@@ -92,6 +92,13 @@ const EN: Record<string, string> = {
   'Die Kisten rumpeln zurück an ihren Platz.': 'The crates rumble back into place.',
   'Etwas Mächtiges lauert hier ...': 'Something mighty lurks here ...',
   'Die Wand bricht ein!': 'The wall collapses!', 'Eine Säule stürzt ein!': 'A pillar collapses!',
+  // destructible world
+  'Der Sporenpilz platzt – eine Giftwolke!': 'The spore cap bursts – a poison cloud!', 'Das Fass fängt Feuer!': 'The barrel catches fire!',
+  'Das Öl geht in Flammen auf!': 'The oil bursts into flames!', 'Im Krug liegen ': 'The pot holds ', 'Im Krug steckt ein Heiltrank!': 'A healing potion is in the pot!',
+  'Eine Ratte springt aus dem Krug!': 'A rat leaps out of the pot!', 'Du verfängst dich im Spinnennetz!': 'You get caught in a cobweb!',
+  ' bricht durch den Boden!': ' falls through the floor!',
+  'Tonkrug – zerschlagen; vielleicht steckt etwas darin': 'Clay pot – smash it; something may be inside', 'Sporenpilz – platzt zu einer Giftwolke, die alle trifft': 'Spore cap – bursts into a poison cloud that hits everyone',
+  'Öllache – brennt sofort als Ganzes': 'Oil puddle – burns all at once', 'Wasser – löscht Brand, Feuer kommt nicht hinüber': 'Water – puts out burning, fire cannot cross', 'Spinnennetz – hält einen Zug fest, brennt': 'Cobweb – holds for a turn, burns', 'gelöscht': 'doused', 'verfangen': 'caught',
   'Eisenwille hält dich am Leben!': 'Iron Will keeps you alive!', 'Du bist gefallen.': 'You have fallen.',
   ' ist besiegt!': ' is defeated!',
   ' lässt einen Schlüssel und einen Heiltrank fallen.': ' drops a key and a healing potion.',

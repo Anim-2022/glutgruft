@@ -19,6 +19,7 @@ import { sfx } from '../core/audio';
 import { schedule, advance, held, anim, peekAnim, startLunge, setPose, hitActor, hitstop, resetTimeline, busy, LUNGE_T, FLASH_T, RECOIL_T } from './timeline';
 import { addNum, drawNums, addShake, stepShake, critFlash, hurtFlash, drawScreenFlash, splat, drawSpots, tinted, noteKill, resetJuice } from './juice';
 import { fxScale, fxLevel } from './fxopts';
+import { drawWorldTile, drawGas, MAT_COLS, MAT_SOUND } from './world';
 import { hunterFx, resetHunterFx, isHunter, leaping, leapLift, drawHunterAura, hunterGlow, drawHunterBar, drawHunterMarks, stepHunterFx, stoneOverlay } from './hunters';
 import { tr } from '../core/i18n';
 import { Run, Actor, xpNeed, skillCost, skillReady, spellAt, itemText, itemValue, itemScore, perkInfo, skillModName, shotRange, RANKS, SORT_NAMES, BAG_MAX, RUNE_NAMES, availableNodes, puzzleGoal, eventGoal, hunterWarn, hunterInfo, dartWarn, inVault, VAULT_NAMES, HAZARD_NAMES } from '../game/run';
@@ -121,6 +122,7 @@ const OBJ_SHADOW: Record<number, [number, number]> = {
   [T.PILLAR]: [15, 14], [T.BARREL]: [14, 13], [T.CHEST]: [13, 16], [T.CHEST_OPEN]: [13, 16], [T.ALTAR]: [15, 14], [T.ALTAR_USED]: [15, 14],
   [T.TRADER]: [15, 14], [T.CRATE]: [15, 16], [T.CRATE_ON]: [15, 16], [T.TABLET]: [15, 14], [T.LEVER]: [14, 10], [T.CURSED]: [14, 15],
   [T.FOUNTAIN]: [15, 15], [T.FOUNTAIN_DRY]: [15, 15], [T.BRAZIER]: [15, 10], [T.BRAZIER_ON]: [15, 10], [T.STATUE]: [15, 14], [T.MIMIC]: [13, 16],
+  [T.POT]: [14, 10], [T.SPORE]: [15, 12],
 };
 const FLY = new Set(['fledermaus', 'glutgeist', 'tod']);
 
@@ -129,6 +131,7 @@ const TILE_SPR: Record<number, string> = {
   [T.CRATE]: 'crate', [T.CRATE_ON]: 'crate', [T.PLATE]: 'plate', [T.LEVER]: 'lever', [T.TABLET]: 'tablet', [T.GOAL]: 'goal',
   [T.CURSED]: 'cursed', [T.TRADER]: 'trader', [T.FOUNTAIN]: 'fountain', [T.FOUNTAIN_DRY]: 'fountain_dry', [T.GATE]: 'gate', [T.BRAZIER]: 'brazier', [T.BRAZIER_ON]: 'brazier_on', [T.STATUE]: 'statue', [T.MIMIC]: 'chest',
   [T.BARREL]: 'barrel', [T.PILLAR]: 'pillar', [T.RUBBLE]: 'rubble', [T.FRAGILE]: 'crack', [T.FRAGILE2]: 'crack2',
+  [T.POT]: 'pot', [T.SPORE]: 'spore',
 };
 
 export function drawRun(ctx: CanvasRenderingContext2D, run: Run, dt: number, time: number) {
@@ -224,6 +227,15 @@ export function drawRun(ctx: CanvasRenderingContext2D, run: Run, dt: number, tim
         shake(8);
         break;
       }
+      case 'break': {
+        // destroyed object: debris in its material, dust for stone, a puff of flame for oil
+        const bx = f.x * TS + 8, by = f.y * TS + 9;
+        sfx(MAT_SOUND[f.mat]);
+        burstBits(bx, by, Math.round((f.mat === 'web' ? 6 : 12) * Math.max(0.5, fxScale())), MAT_COLS[f.mat], 25, f.mat === 'oil' ? 60 : 90, f.mat === 'oil' ? 40 : 45, f.mat === 'oil' ? -30 : undefined);
+        if (!reducedFx() && (f.mat === 'stone' || f.mat === 'oil' || f.mat === 'fungus')) smoke(bx, by - 2, f.mat === 'oil' ? 6 : 3, f.mat === 'oil');
+        if (f.mat === 'stone' || f.mat === 'metal') shake(2);
+        break;
+      }
       case 'debris':
         sfx('crack');
         for (let k = 0; k < 14; k++) {
@@ -307,6 +319,7 @@ export function drawRun(ctx: CanvasRenderingContext2D, run: Run, dt: number, tim
       if (t === T.ICE) ctx.drawImage(softEdged(sprites.ice, edge(T.ICE)), dx, dy);
       if (t === T.GRASS) ctx.drawImage(softEdged(ts.bed, edge(T.GRASS)), dx, dy);
       drawAO(ctx, run.tiles, x, y, dx, dy);
+      if (t >= T.OIL) drawWorldTile(ctx, run, t, i, x, y, dx, dy, time);
       if (t === T.FLOOR) {
         const pr = props[i];
         if (pr) drawProp(ctx, bio, pr, x, y, dx, dy, time, lights);
@@ -327,6 +340,7 @@ export function drawRun(ctx: CanvasRenderingContext2D, run: Run, dt: number, tim
   // Spuren am Boden liegen über dem Boden, aber unter Gegenständen, Fallen und Figuren
   drawDecals(ctx, run, ox, oy, lights, time, dt);
   drawSpots(ctx, run, ox, oy, dt);
+  drawGas(ctx, run, ox, oy, time);
   if (fx) drawFog(ctx, bio, run.tiles, run.vis, x0, y0, x1, y1, ox, oy, time, VW, VH);
   for (const i of floorTiles) {
     const x = i % W, y = (i / W) | 0, t = run.tiles[i], dx = x * TS + ox, dy = y * TS + oy;
@@ -1224,6 +1238,8 @@ const TILE_NAMES: Record<number, string> = {
   [T.PLATE]: 'Druckplatte', [T.LEVER]: 'Hebel – setzt die Kisten zurück', [T.ICE]: 'Eis – du rutschst', [T.TABLET]: 'Steintafel', [T.GOAL]: 'Zielplatte',
   [T.BRAZIER]: 'Glutschale, erloschen – Tritt schaltet sie und die Nachbarn um', [T.BRAZIER_ON]: 'Glutschale, brennt – Tritt schaltet sie und die Nachbarn um',
   [T.STATUE]: 'Pfeilstatue – schießt quer durch ihre Reihe',
+  [T.POT]: 'Tonkrug – zerschlagen; vielleicht steckt etwas darin', [T.SPORE]: 'Sporenpilz – platzt zu einer Giftwolke, die alle trifft',
+  [T.OIL]: 'Öllache – brennt sofort als Ganzes', [T.WATER]: 'Wasser – löscht Brand, Feuer kommt nicht hinüber', [T.WEB]: 'Spinnennetz – hält einen Zug fest, brennt',
 };
 
 function tooltip(ctx: CanvasRenderingContext2D, run: Run, ox: number, oy: number) {
@@ -1276,7 +1292,7 @@ function minimap(ctx: CanvasRenderingContext2D, run: Run, time: number) {
     if (t === T.WALL) {
       if (!big) continue;
       ctx.fillStyle = '#262b44';
-    } else ctx.fillStyle = t === T.STAIRS || t === T.GATE ? '#ffcd75' : t === T.CHEST || t === T.CURSED || t === T.MIMIC ? '#c98a3a' : t === T.FOUNTAIN ? '#73eff7' : t === T.TRADER ? '#38b764' : t === T.CRACKED ? '#b13e53'
+    } else ctx.fillStyle = t === T.STAIRS || t === T.GATE ? '#ffcd75' : t === T.CHEST || t === T.CURSED || t === T.MIMIC ? '#c98a3a' : t === T.FOUNTAIN ? '#73eff7' : t === T.TRADER ? '#38b764' : t === T.CRACKED ? '#b13e53' : t === T.POT ? '#c48a6a' : t === T.SPORE ? '#9a4fc0' : t === T.WATER ? '#3b5dc9' : t === T.OIL ? '#333c57'
       : ((t >= T.CRATE && t <= T.GOAL) || (t >= T.BRAZIER && t <= T.STATUE)) ? '#41a6f6' : run.fire.has(i) ? '#ef7d57' : run.vis[i] ? '#94b0c2' : '#566c86';
     ctx.fillRect(x0 + x * s, y0 + y * s, s, s);
   }

@@ -64,7 +64,7 @@ let clock = 0, stop = 0, stopCool = 0, speed = 1;
 
 // Projectiles: flight time; hits in the same beat (number, flash, death …) appear on impact
 const PROJ = new Set<Fx['k']>(['fireball', 'arrow', 'bolt']);
-const IMPACT = new Set<Fx['k']>(['num', 'flash', 'die', 'pdeath', 'debris', 'boom', 'shake', 'swipe']);
+const IMPACT = new Set<Fx['k']>(['num', 'flash', 'die', 'pdeath', 'debris', 'boom', 'shake', 'swipe', 'break']);
 export function flightOf(f: Fx): number {
   if (f.k === 'bolt') return 0.12;
   if (f.k !== 'fireball' && f.k !== 'arrow') return 0;
