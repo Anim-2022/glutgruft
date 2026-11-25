@@ -1106,7 +1106,6 @@ export const RECOLORS: [string, string, Record<string, string>][] = [
 
 // ---------- Jäger: eigene große Gestalten, größer als Bosse (Echse 32x26, Drache 32x32, Medusa 28x32, Tod 32x32, Krake 24x24) ----------
 SPR.echse = [
-  '.......uu..............uu.......',
   '........uu............uu........',
   '.........uu...uYYu...uu.........',
   '..........uTTTTTTTTTTu..........',
