@@ -1,4 +1,4 @@
-import { VW, VH, TS, sprites, masks, tilesets, text, panel, bar, heroLook, figure } from './gfx';
+import { VW, VH, TS, sprites, masks, tilesets, text, panel, bar, heroLook, figure, BIOMES as FLOOR_COLS } from './gfx';
 import { GLOW } from './sprites';
 import { W, H, T, wallLike, walkable } from '../game/dungeon';
 import { threatOf, statusMarks } from './warn';
@@ -6,7 +6,7 @@ import { onDeath, drawDecals, drawDying, resetDeaths, reducedFx } from './deaths
 import { drawItemIcon, drawIcon, PERK_ICON } from './icons';
 import { Light, applyLight, AMBIENTS } from './light';
 import { dropShadow, drawAO } from './shade';
-import { floorTint, softEdged, pickDecal } from './tiles';
+import { softEdged, pickDecal, bakeFloor } from './tiles';
 import { propsFor, drawProp, recolor, torchSpots } from './props';
 import { stepAmbient, drawAmbient, drawFog, resetAmbient, postFx } from './ambient';
 import { drawFlames, smoke, drawSmoke, resetFire, trackBurns, drawEmbers, fireAge, pruneFire } from './fire';
@@ -31,7 +31,7 @@ const booms: { x: number; y: number; r: number; t: number }[] = [];
 const fuseTags: { x: number; y: number; n: number }[] = [];
 const fireBlocks = new Map<number, { x: number; y: number; n: number; k: number }>(); // fire lights merged per 3×3 block // Zähler über brennenden Lunten (nach dem Licht gezeichnet)
 // Particles; fy: floor height where heavy particles come to rest (then fade slowly)
-const bits: { x: number; y: number; vx: number; vy: number; col: string; t: number; g?: number; fy?: number; rest?: number }[] = [];
+const bits: { x: number; y: number; vx: number; vy: number; col: string; t: number; g?: number; fy?: number; rest?: number; rl?: number }[] = [];
 const BIT_MAX = 400, BIT_T = 0.55, REST_T = 1.5;
 const shake = (n: number, dir: [number, number] | null = null) => addShake(n, dir);
 // Direction of the last blow or shot (for recoil, splatter, camera kick)
@@ -84,6 +84,14 @@ export function drawCard(ctx: CanvasRenderingContext2D, card: { title: string; l
 const torches = new Set<number>();
 let lightKey = '';
 const hash = (x: number, y: number, s: number) => (Math.imul(x, 73856093) ^ Math.imul(y, 19349663) ^ Math.imul(s, 83492791)) >>> 0;
+
+// whole floor of the level, baked once per level (tiles.ts)
+let floorBake: { key: string; c: HTMLCanvasElement } | null = null;
+function floorOf(run: Run, bio: number): HTMLCanvasElement {
+  const key = `${run.seed}:${run.floor}`;
+  if (floorBake?.key !== key) floorBake = { key, c: bakeFloor(FLOOR_COLS[bio], bio, tilesets[bio].floorM, (run.seed + run.floor * 7919) >>> 0, W, H) };
+  return floorBake.c;
+}
 
 function buildLight(run: Run) {
   const key = `${run.seed}:${run.floor}`;
@@ -232,7 +240,10 @@ export function drawRun(ctx: CanvasRenderingContext2D, run: Run, dt: number, tim
         // destroyed object: debris in its material, dust for stone, a puff of flame for oil
         const bx = f.x * TS + 8, by = f.y * TS + 9;
         sfx(MAT_SOUND[f.mat]);
+        const n0 = bits.length;
         burstBits(bx, by, Math.round((f.mat === 'web' ? 6 : 12) * Math.max(0.5, fxScale())), MAT_COLS[f.mat], 25, f.mat === 'oil' ? 60 : 90, f.mat === 'oil' ? 40 : 45, f.mat === 'oil' ? -30 : undefined);
+        // splinters and shards stay on the floor for a while
+        if (f.mat === 'wood' || f.mat === 'clay' || f.mat === 'stone') for (let k = n0; k < bits.length; k++) bits[k].rl = 10;
         if (!reducedFx() && (f.mat === 'stone' || f.mat === 'oil' || f.mat === 'fungus')) smoke(bx, by - 2, f.mat === 'oil' ? 6 : 3, f.mat === 'oil');
         if (f.mat === 'stone' || f.mat === 'metal') shake(2);
         break;
@@ -310,11 +321,8 @@ export function drawRun(ctx: CanvasRenderingContext2D, run: Run, dt: number, tim
         if (pr) drawProp(ctx, bio, pr, x, y, dx, dy, time, lights);
       }
     } else {
-      // Boden: Muster über 2×2 Felder, selten eine Sonderplatte; dazu eine weiche Helligkeitswelle
-      const hf = hash(x, y, 303);
-      ctx.drawImage(bio && hf % 9 === 0 ? ts.floorX[(hf >>> 4) % ts.floorX.length] : ts.floorM[hash(x >> 1, y >> 1, 404) % ts.floorM.length][(y & 1) * 2 + (x & 1)], dx, dy);
-      const tv = floorTint(x, y);
-      ctx.fillStyle = tv > 0 ? `rgba(255,255,255,${(tv * 0.045).toFixed(3)})` : `rgba(0,0,0,${(-tv * 0.11).toFixed(3)})`; ctx.fillRect(dx, dy, TS, TS);
+      // floor from the per-level bake: pattern and brightness wave run across tile borders
+      ctx.drawImage(floorOf(run, bio), x * TS, y * TS, TS, TS, dx, dy, TS, TS);
       // Ränder von Eis, Rasen und Brandfläche laufen gerastert in den Boden aus
       const edge = (k: number) => { let e = 0; [[0, -1, 1], [-1, 0, 2], [1, 0, 4], [0, 1, 8]].forEach(([ex, ey, bit]) => { const n = run.tiles[i + ey * W + ex]; if (n !== k && !wallLike(n)) e |= bit; }); return e; };
       if (t === T.ICE) ctx.drawImage(softEdged(sprites.ice, edge(T.ICE)), dx, dy);
@@ -620,8 +628,9 @@ export function drawRun(ctx: CanvasRenderingContext2D, run: Run, dt: number, tim
     // heavy particles land on the floor, rest briefly and fade
     if (b.rest !== undefined) {
       b.rest += dt;
-      if (b.rest > REST_T) { bits.splice(i, 1); continue; }
-      ctx.globalAlpha = b.rest > REST_T - 0.6 ? (REST_T - b.rest) / 0.6 * 0.8 : 0.8;
+      const life = b.rl ?? REST_T;
+      if (b.rest > life) { bits.splice(i, 1); continue; }
+      ctx.globalAlpha = b.rest > life - 0.6 ? (life - b.rest) / 0.6 * 0.8 : 0.8;
       ctx.fillStyle = b.col; ctx.fillRect(Math.round(b.x) + ox, Math.round(b.y) + oy, 1, 1);
       continue;
     }

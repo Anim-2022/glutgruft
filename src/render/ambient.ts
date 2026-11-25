@@ -2,6 +2,7 @@
 // Staub und Sporen werden vor dem Licht gezeichnet und sind daher nur im Lichtschein zu sehen;
 // Glutfunken leuchten selbst und liegen über der Dunkelheit.
 import { W, H, wallLike } from '../game/dungeon';
+import { edgeMask } from './tiles';
 
 const TS = 16;
 interface Mote { x: number; y: number; vx: number; vy: number; t: number; life: number; col: string; glow: boolean; ph: number; }
@@ -70,33 +71,55 @@ function fogTex(bi: number): HTMLCanvasElement {
   if (fogs[bi]) return fogs[bi];
   const c = document.createElement('canvas'); c.width = N; c.height = N;
   const g = c.getContext('2d')!;
-  const G = 8, grid = Array.from({ length: G * G }, () => Math.random());
-  const at = (i: number, j: number) => grid[(j % G) * G + (i % G)];
+  // three octaves whose cells are not multiples of the 16 px tile, so the fog has no square grid
+  const oct = [4, 7, 13].map(G => ({ G, grid: Array.from({ length: G * G }, () => Math.random()) }));
   const BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5];
+  const s = (t: number) => t * t * (3 - 2 * t);
+  const vn = (o: { G: number; grid: number[] }, x: number, y: number) => {
+    const at = (i: number, j: number) => o.grid[(j % o.G) * o.G + (i % o.G)];
+    const fx = (x / N) * o.G, fy = (y / N) * o.G, i = Math.floor(fx), j = Math.floor(fy), u = s(fx - i), v = s(fy - j);
+    return (at(i, j) * (1 - u) + at(i + 1, j) * u) * (1 - v) + (at(i, j + 1) * (1 - u) + at(i + 1, j + 1) * u) * v;
+  };
   g.fillStyle = FOG[bi].col;
   for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
-    const fx = (x / N) * G, fy = (y / N) * G, i = Math.floor(fx), j = Math.floor(fy), u = fx - i, v = fy - j;
-    const s = (t: number) => t * t * (3 - 2 * t);
-    const n = (at(i, j) * (1 - s(u)) + at(i + 1, j) * s(u)) * (1 - s(v)) + (at(i, j + 1) * (1 - s(u)) + at(i + 1, j + 1) * s(u)) * s(v);
+    const n = vn(oct[0], x, y) * 0.5 + vn(oct[1], x, y) * 0.32 + vn(oct[2], x, y) * 0.18;
     if ((n - 0.35) * 2.2 * 16 > BAYER[(y & 3) * 4 + (x & 3)]) g.fillRect(x, y, 1, 1);
   }
   return (fogs[bi] = c);
 }
 // nur über sichtbarem Boden – nicht über Fels und nicht im Dunkel jenseits der Karte
+let fogCv: HTMLCanvasElement | null = null, maskCv: HTMLCanvasElement | null = null;
 export function drawFog(ctx: CanvasRenderingContext2D, bi: number, tiles: Uint8Array, vis: Uint8Array, x0: number, y0: number, x1: number, y1: number, ox: number, oy: number, time: number, vw: number, vh: number) {
   const tex = fogTex(bi), f = FOG[bi];
-  ctx.save();
-  ctx.beginPath();
-  for (let y = Math.max(0, y0); y <= Math.min(H - 1, y1); y++) for (let x = Math.max(0, x0); x <= Math.min(W - 1, x1); x++) {
-    const i = y * W + x;
-    if (vis[i] && !wallLike(tiles[i])) ctx.rect(x * TS + ox, y * TS + oy, TS, TS);
+  if (!fogCv || fogCv.width !== vw || fogCv.height !== vh) {
+    fogCv = document.createElement('canvas'); fogCv.width = vw; fogCv.height = vh;
+    maskCv = document.createElement('canvas'); maskCv.width = vw; maskCv.height = vh;
   }
-  ctx.clip();
+  const g = fogCv.getContext('2d')!;
+  g.globalCompositeOperation = 'source-over';
+  g.clearRect(0, 0, vw, vh);
   const sx = (((Math.round(ox + time * f.speed) % N) + N) % N) - N, sy = (((Math.round(oy + time * f.speed * 0.4) % N) + N) % N) - N;
+  for (let y = sy; y < vh; y += N) for (let x = sx; x < vw; x += N) g.drawImage(tex, x, y);
+  // keep the fog only over visible floor; toward the edge of sight it frays out (dithered mask, no tile steps)
+  g.globalCompositeOperation = 'destination-in';
+  const mask = maskCv!, mg = mask.getContext('2d')!;
+  mg.clearRect(0, 0, vw, vh);
+  const fl = (i: number) => vis[i] && !wallLike(tiles[i]);
+  for (let y = Math.max(1, y0); y <= Math.min(H - 2, y1); y++) for (let x = Math.max(1, x0); x <= Math.min(W - 2, x1); x++) {
+    const i = y * W + x;
+    if (!fl(i)) continue;
+    let bits = 0;
+    if (!fl(i - W) && !wallLike(tiles[i - W])) bits |= 1;
+    if (!fl(i - 1) && !wallLike(tiles[i - 1])) bits |= 2;
+    if (!fl(i + 1) && !wallLike(tiles[i + 1])) bits |= 4;
+    if (!fl(i + W) && !wallLike(tiles[i + W])) bits |= 8;
+    if (bits) mg.drawImage(edgeMask(bits), x * TS + ox, y * TS + oy);
+    else { mg.fillStyle = '#fff'; mg.fillRect(x * TS + ox, y * TS + oy, TS, TS); }
+  }
+  g.drawImage(mask, 0, 0);
   ctx.globalAlpha = f.a;
-  for (let y = sy; y < vh; y += N) for (let x = sx; x < vw; x += N) ctx.drawImage(tex, x, y);
+  ctx.drawImage(fogCv, 0, 0);
   ctx.globalAlpha = 1;
-  ctx.restore();
 }
 
 // ---- Nachbearbeitung: Farbstimmung je Biom und Vignette ----

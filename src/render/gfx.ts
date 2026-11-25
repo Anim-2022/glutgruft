@@ -22,7 +22,7 @@ export function hex(col: string): [number, number, number] {
 }
 
 export interface TileSet {
-  floor: HTMLCanvasElement[]; floorX: HTMLCanvasElement[]; walls: HTMLCanvasElement[]; wall: HTMLCanvasElement; top: HTMLCanvasElement; hi: string; grass: HTMLCanvasElement[]; decals: HTMLCanvasElement[][]; // Bodenspuren je Art, viele Spielarten
+  floor: HTMLCanvasElement[]; walls: HTMLCanvasElement[]; wall: HTMLCanvasElement; top: HTMLCanvasElement; hi: string; grass: HTMLCanvasElement[]; decals: HTMLCanvasElement[][]; // Bodenspuren je Art, viele Spielarten
   floorM: HTMLCanvasElement[][]; // Bodenmuster 2×2: Spielart → vier Viertel
   caps: HTMLCanvasElement[][]; capEdge: HTMLCanvasElement[]; // Mauerkrone: Spielart → je offene Seiten (Bit 1 oben, 2 links, 4 rechts); Kanten
   wallsX: HTMLCanvasElement[]; // Wandfront mit Riss, Abplatzer oder Biomstück (walls: schlichte Spielarten)
@@ -33,7 +33,7 @@ export interface TileSet {
 }
 export const tilesets: TileSet[] = [];
 
-const BIOMES = [
+export const BIOMES = [
   { floor: '#343a5c', speck: '#434a70', brick: '#6b82a0', hi: '#8ea4bf', mortar: '#333c5c', top: '#14172a', cap: '#4b5a7c', capHi: '#a9bdd6', g1: '#3f7a5c', g2: '#5fa06a' },
   { floor: '#22443f', speck: '#2f6a55', brick: '#2f8f85', hi: '#55b89c', mortar: '#174a4c', top: '#0d2222', cap: '#1e6a62', capHi: '#7fd6b4', g1: '#38b764', g2: '#a7f070' },
   { floor: '#40262b', speck: '#6a3530', brick: '#9a4a3c', hi: '#c96f45', mortar: '#47222b', top: '#1c0f14', cap: '#6e3a36', capHi: '#e08a55', g1: '#1f1418', g2: '#6b4a3a' },
@@ -205,23 +205,9 @@ export function bake(): void {
     // Bodenspuren: Risse, Kiesel, Knochen, Flecken, Biomflecken – je viele Spielarten, gedreht und gespiegelt
     const decals = floorDecals(b, bi, rnd);
     // Phase 2: Spielarten von Wand und Boden
-    const copy = (src: HTMLCanvasElement, f: (g: CanvasRenderingContext2D) => void) => { const [c, g] = mk(TS, TS); g.drawImage(src, 0, 0); f(g); return c; };
-    const px = (g: CanvasRenderingContext2D, col: string, pts: number[][]) => { g.fillStyle = col; for (const [x, y, w = 1, h = 1] of pts) g.fillRect(x, y, w, h); };
     // Wandfront: schlichte Spielarten und besondere (Riss, Abplatzer, Biomstück) – alle zufällig erzeugt
     const { plain: walls, special: wallsX } = wallVariants(b, bi, wall, rnd);
-    // Spielarten (nur Höhle und Schmiede; die Gruft hat Plattenmuster in floorM)
-    const floorX = bi === 0
-      ? []
-      : bi === 1
-        ? [ // Höhle: Moosflecken, Kiesel
-          copy(floor[0], g => { px(g, b.g1, [[2, 3, 4, 2], [3, 2, 2, 1], [10, 10, 3, 2]]); px(g, b.g2, [[3, 3, 1, 1], [11, 10, 1, 1]]); }),
-          copy(floor[2], g => { px(g, b.brick, [[4, 4, 2, 2], [9, 7, 2, 1], [6, 11, 3, 2]]); px(g, b.hi, [[4, 4, 1, 1], [6, 11, 1, 1]]); }),
-        ]
-        : [ // Schmiede: Ruß und glimmende Fugen
-          copy(floor[0], g => { px(g, '#1c0f14', [[3, 4, 5, 3], [4, 3, 3, 5]]); px(g, '#7d2b45', [[10, 9, 3, 1], [12, 10, 1, 2]]); }),
-          copy(floor[1], g => { px(g, '#7d2b45', [[2, 8, 5, 1], [6, 9, 1, 2], [7, 11, 4, 1]]); px(g, '#ef7d57', [[4, 8, 1, 1], [8, 11, 1, 1]]); }),
-        ];
-    tilesets.push({ floor, floorX, walls, wall, top, hi: b.capHi, grass, decals, floorM: floorMacro(b, bi, rnd), caps, capEdge, wallsX, wallCrack: wallCracks(rnd), veins: bi === 2 ? lavaVeins(rnd) : null, bed: grassBed(b), ...(({ scorch, core, char }) => ({ scorch, scorchCore: core, char }))(scorchTiles(rnd)) });
+    tilesets.push({ floor, walls, wall, top, hi: b.capHi, grass, decals, floorM: floorMacro(b, bi, rnd), caps, capEdge, wallsX, wallCrack: wallCracks(rnd), veins: bi === 2 ? lavaVeins(rnd) : null, bed: grassBed(b), ...(({ scorch, core, char }) => ({ scorch, scorchCore: core, char }))(scorchTiles(rnd)) });
   }
 }
 
