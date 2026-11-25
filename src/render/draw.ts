@@ -5,6 +5,7 @@ import { VS } from '../game/puzzles';
 import { threatOf, statusMarks } from './warn';
 import { onDeath, drawDecals, drawDying, resetDeaths, reducedFx } from './deaths';
 import { drawItemIcon, drawIcon, PERK_ICON } from './icons';
+import { statusList, groupPassives, type StatusEntry } from './status';
 import { Light, applyLight, AMBIENTS } from './light';
 import { dropShadow, drawAO } from './shade';
 import { softEdged, pickDecal, bakeFloor } from './tiles';
@@ -985,7 +986,70 @@ function slots(run: Run): Slot[] {
   return out;
 }
 
-const STATUS: [string, string, string][] = [['netz', 'Net', '#c9d4dc'], ['brand', 'Burn', '#ef7d57'], ['gift', 'Poison', '#38b764'], ['stark', 'War Cry', '#b13e53'], ['wall', 'Bulwark', '#41a6f6'], ['dodge', 'Dodging', '#94b0c2'], ['konter', 'Riposte', '#ffcd75']];
+// ---- Status bar: effects and buffs in the first row, passives in the second (under the health bar) ----
+const SB = { x: 3, y: 23, cell: 11, step: 12, width: 202 };
+interface StatusCell { e: StatusEntry; x: number; y: number; }
+// Icon positions; the same layout serves drawing, hover and the tile tooltip guard
+// The second row may meet the centred tutorial/hint panel (top y 36): it then stops left of it
+let sbRight = VW;
+function centreLeft(run: Run): number {
+  if (!tutorial || run.mode !== 'play') return VW;
+  if (tutStep) return (VW - (Math.max(`Tutorial ${tutStep.k}/${tutStep.n}`.length + 18, tutStep.text.length) * 6 + 20)) >> 1;
+  const h = hint(run);
+  return h ? (VW - (h.length * 6 + 16)) >> 1 : VW;
+}
+export function statusCells(run: Run): StatusCell[] {
+  const all = statusList(run), per = Math.floor(SB.width / SB.step), out: StatusCell[] = [];
+  const per2 = Math.max(4, Math.min(per, Math.floor((sbRight - 4 - SB.x + 1) / SB.step)));
+  const temps = all.filter(e => e.kind !== 'passive').slice(0, per), pass = all.filter(e => e.kind === 'passive');
+  // one row of effects (there are far fewer at once), then one row of passives; too many passives fold into a group icon
+  temps.forEach((e, k) => out.push({ e, x: SB.x + k * SB.step, y: SB.y }));
+  const y2 = SB.y + (temps.length ? SB.step : 0);
+  groupPassives(pass, y2 > SB.y ? per2 : per).forEach((e, k) => out.push({ e, x: SB.x + k * SB.step, y: y2 }));
+  return out;
+}
+const statusAt = (cells: StatusCell[]) => cells.find(c => mouse.x >= c.x && mouse.x < c.x + SB.cell && mouse.y >= c.y && mouse.y < c.y + SB.cell) ?? null;
+// 3x5 digits for the turn counter on an icon
+const DIG = ['111101101101111', '010110010010111', '111001111100111', '111001111001111', '101101111001001', '111100111001111', '111100111101111', '111001010010010', '111101111101111', '111101111001111'];
+function tinyNum(ctx: CanvasRenderingContext2D, n: number, right: number, bottom: number, col: string) {
+  const s = String(Math.min(99, n)), w = s.length * 4 - 1, x0 = right - w, y0 = bottom - 5;
+  ctx.fillStyle = 'rgba(8,9,15,0.85)'; ctx.fillRect(x0 - 1, y0 - 1, w + 2, 7);
+  ctx.fillStyle = col;
+  [...s].forEach((ch, k) => { const bits = DIG[+ch]; for (let i = 0; i < 15; i++) if (bits[i] === '1') ctx.fillRect(x0 + k * 4 + (i % 3), y0 + ((i / 3) | 0), 1, 1); });
+}
+const STATUS_BORDER = { bad: '#b13e53', good: '#a7f070' };
+function statusBar(ctx: CanvasRenderingContext2D, run: Run, time: number): StatusCell | null {
+  const cells = statusCells(run), hot = run.mode === 'play' && overlay === 'none' && mapMode !== 2 ? statusAt(cells) : null;
+  for (const c of cells) {
+    const { e, x, y } = c, S = SB.cell;
+    ctx.fillStyle = 'rgba(8,9,15,0.75)'; ctx.fillRect(x, y, S, S);
+    // effects about to run out blink softly
+    const border = c === hot ? '#f4f4f4' : e.kind === 'passive' ? e.col : STATUS_BORDER[e.kind];
+    ctx.globalAlpha = e.turns === 1 && e.kind === 'good' && c !== hot ? 0.6 + 0.4 * Math.sin(time * 8) : 1;
+    ctx.fillStyle = border; ctx.fillRect(x, y, S, 1); ctx.fillRect(x, y + S - 1, S, 1); ctx.fillRect(x, y, 1, S); ctx.fillRect(x + S - 1, y, 1, S);
+    ctx.globalAlpha = 1;
+    drawIcon(ctx, e.icon, x + 1, y + 1, e.col);
+    const n = e.turns ?? e.count;
+    if (n) tinyNum(ctx, n, x + S, y + S, e.turns ? '#f4f4f4' : '#ffcd75');
+  }
+  return hot;
+}
+const STATUS_TAG: Record<string, string> = { perk: 'Boon', relic: 'Relic', synergy: 'Synergy', item: 'Equipment', group: 'Passives' };
+function statusTip(ctx: CanvasRenderingContext2D, run: Run, c: StatusCell) {
+  const e = c.e, n = 46;
+  const tag = e.src === 'status' ? `${e.kind === 'bad' ? 'Harmful' : 'Helpful'} effect${e.turns ? ` · ${e.turns} turn${e.turns === 1 ? '' : 's'} left` : ''}` : STATUS_TAG[e.src];
+  const lines: [string, string][] = [];
+  if (e.items) for (const it of e.items) { lines.push([it.name, '#f4f4f4']); for (const l of wrapText(it.desc, n - 2)) lines.push([`  ${l}`, '#94b0c2']); }
+  else for (const l of wrapText(e.desc, n)) lines.push([l, '#94b0c2']);
+  const bottom = Math.max(...statusCells(run).map(q => q.y)) + SB.cell + 3;
+  const maxRows = Math.floor((VH - 40 - bottom - 26) / 10), shown = lines.slice(0, maxRows);
+  const w = Math.max(e.name.length * 6, tag.length * 6, ...shown.map(l => l[0].length * 6)) + 14, h = 26 + shown.length * 10;
+  const x = Math.max(2, Math.min(VW - w - 4, c.x - 4));
+  panel(ctx, x, bottom, w, h, e.kind === 'passive' ? e.col : STATUS_BORDER[e.kind]);
+  text(ctx, e.name, x + 6, bottom + 4, e.kind === 'bad' ? '#ef7d57' : '#ffcd75', 8);
+  text(ctx, tag, x + 6, bottom + 14, '#566c86', 8);
+  shown.forEach(([l, col], k) => text(ctx, l, x + 6, bottom + 25 + k * 10, col, 8));
+}
 
 let logSeen = '', logAt = 0;
 
@@ -1008,15 +1072,9 @@ function hud(ctx: CanvasRenderingContext2D, run: Run, time: number) {
     panel(ctx, 208, 2, w, 18, '#a7f070', `rgba(13,14,23,${0.75 + 0.2 * Math.sin(time * 4)})`);
     text(ctx, label, 213, 7, '#a7f070', 8);
   }
-  // Zustände als kleine Marken
-  let sx = 3;
-  for (const [id, name, col] of STATUS) {
-    if (!p.st[id]) continue;
-    const label = `${name} ${p.st[id]}`, w = label.length * 6 + 8;
-    panel(ctx, sx, 24, w, 13, col);
-    text(ctx, label, sx + 4, 27, col, 8);
-    sx += w + 3;
-  }
+  // Effects, buffs and passives as small icons; the tooltip comes last so it lies above the HUD
+  sbRight = centreLeft(run);
+  const statusHot = statusBar(ctx, run, time);
   // Ziel der Rätselkammer, solange man darin steht (und die laufende Prüfung)
   const goal = puzzleGoal(run);
   let goalLine = false;
@@ -1136,6 +1194,7 @@ function hud(ctx: CanvasRenderingContext2D, run: Run, time: number) {
     text(ctx, boss.name, VW / 2, 7, '#ffcd75', 8, 'center');
     bar(ctx, VW / 2 - 82, 18, 164, 4, boss.hp / boss.maxHp, '#b13e53');
   }
+  if (statusHot) statusTip(ctx, run, statusHot);
 }
 
 // ---- Gegenstände ----
@@ -1412,7 +1471,7 @@ const TILE_NAMES: Record<number, string> = {
 };
 
 function tooltip(ctx: CanvasRenderingContext2D, run: Run, ox: number, oy: number) {
-  if (mouse.x < 0 || run.mode !== 'play') return;
+  if (mouse.x < 0 || run.mode !== 'play' || statusAt(statusCells(run))) return;
   const tx = Math.floor((mouse.x - ox) / TS), ty = Math.floor((mouse.y - oy) / TS), i = ty * W + tx;
   if (tx < 0 || ty < 0 || tx >= W || ty >= H || !run.seen[i]) return;
   const m = run.vis[i] ? run.mobs.find(o => o.x === tx && o.y === ty) : undefined;

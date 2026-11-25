@@ -3,7 +3,7 @@ import { ICONS, PAL } from './sprites';
 import type { Item } from '../game/content';
 
 // Motiv und optionale Umfärbung (Zeichen -> Zeichen)
-type Ref = [string, Record<string, string>?];
+export type Ref = [string, Record<string, string>?];
 
 const WEAPON_ICON: Record<string, Ref[]> = {
   krieger: [['sword'], ['axe'], ['spear']],
