@@ -3,7 +3,8 @@
 //   npx vite-node scripts/corpse-shots.ts [out]   (default: docs/corpses)
 //
 // Writes corpses-1x.png, corpses-2x.png, corpses-4x.png (gallery), variants-2x.png (the four variants
-// per cause for a few kinds) and ingame.png / ingame-fresh.png (a fight after several kills).
+// per cause for a few kinds), ingame.png / ingame-fresh.png (a fight after several kills) and walls.png
+// (corpses in a narrow corridor and bosses dying right next to walls: nothing may spill over a wall).
 import { createServer } from 'vite';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
@@ -44,7 +45,7 @@ const shots: Record<string, string> = await page.evaluate(async () => {
       row.forEach(([kind, cause, v, alive], i) => {
         const X = lw + i * cw, Y = th + ry * ch;
         x.fillStyle = ['#343a5c', '#22443f', '#40262b'][ry % 3]; x.fillRect((X + 1) * k, (Y + 1) * k, (cw - 2) * k, (ch - 2) * k);
-        const img = alive ? src(kind) : C.corpseCanvas(src(kind), kind, cause, v, false, true);
+        const img = alive ? src(kind) : C.corpseCanvas(src(kind), kind, cause, v, false, true)?.img;
         if (!img) return;
         x.drawImage(img, (X + ((cw - img.width) >> 1)) * k, (Y + ch - 3 - img.height) * k, img.width * k, img.height * k);
       });
@@ -58,7 +59,7 @@ const shots: Record<string, string> = await page.evaluate(async () => {
   const vk = ['ratte', 'skelett', 'golem', 'glutgeist', 'sporling'];
   const vrows: [string, string, number, boolean][][] = [];
   const vlab: string[] = [];
-  for (const kind of vk) for (let v = 0; v < 4; v++) { vrows.push(DEATH_CAUSES.map((c: string) => [kind, c, v, false])); vlab.push(`${kind} v${v}`); }
+  for (const kind of vk) for (let v = 0; v < C.VARIANTS; v++) { vrows.push(DEATH_CAUSES.map((c: string) => [kind, c, v, false])); vlab.push(`${kind} v${v}`); }
   res['variants-2x.png'] = sheet(vrows, 40, 32, DEATH_CAUSES, vlab, 2);
   return res;
 });
@@ -88,5 +89,23 @@ await page.locator('canvas').screenshot({ path: `${out}/ingame-fresh.png` });
 await page.waitForTimeout(3500);
 await page.locator('canvas').screenshot({ path: `${out}/ingame.png` });
 console.log(`${out}/ingame.png`);
+// Walls: a room with a one-tile corridor; normal enemies in the corridor and along the walls, two bosses in corners
+await page.evaluate(() => {
+  const g = (window as any).__g;
+  const r = g.start(5, 'krieger');
+  r.mobs = []; r.puzzle = null;
+  const p = r.p, W = 64;
+  for (let y = p.y - 6; y <= p.y + 6; y++) for (let x = p.x - 10; x <= p.x + 10; x++) { r.tiles[y * W + x] = 0; r.seen[y * W + x] = 1; }
+  for (let y = p.y - 3; y <= p.y + 3; y++) for (let x = p.x - 3; x <= p.x + 7; x++) r.tiles[y * W + x] = 1; // room
+  for (let y = p.y - 5; y <= p.y + 5; y++) r.tiles[y * W + p.x - 6] = 1;                               // corridor
+  for (let x = p.x - 6; x <= p.x - 3; x++) r.tiles[p.y * W + x] = 1;                                   // link
+  const die = (dx: number, dy: number, kind: string, cause: string) => r.fx.push({ k: 'die', x: p.x + dx, y: p.y + dy, kind, cause });
+  die(-6, -4, 'skelett', 'slash'); die(-6, -2, 'goblin', 'arrow'); die(-6, 2, 'ratte', 'blast'); die(-6, 4, 'schuetze', 'crush');
+  die(-3, -3, 'drache', 'slash'); die(7, 3, 'koenig', 'blast'); die(7, -3, 'golem', 'fire');
+  die(2, -3, 'goblin', 'poison'); die(4, 3, 'echse', 'frost'); die(-3, 3, 'sporling', 'magic'); die(2, 0, 'dieb', 'arrow');
+});
+await page.waitForTimeout(4000);
+await page.locator('canvas').screenshot({ path: `${out}/walls.png` });
+console.log(`${out}/walls.png`);
 await browser.close();
 await server.close();

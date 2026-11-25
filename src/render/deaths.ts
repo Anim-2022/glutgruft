@@ -4,14 +4,14 @@
 import { TS, sprites, masks } from './gfx';
 import type { Run, DeathCause } from '../game/run';
 import { corpseCanvas, corpseVariant, materialOf } from './corpses';
-import { W } from '../game/dungeon';
+import { W, H, wallLike } from '../game/dungeon';
 import { MOBS } from '../game/content';
 
 interface Light { x: number; y: number; r: number; col?: string; a?: number; }
 type Part = { x: number; y: number; vx: number; vy: number; col: string; t: number; life: number; g: number; s: number };
 type Dying = { kind: string; x: number; y: number; t: number; dur: number; key: string; dir: number; decal: string | null; done: boolean; extra: number; cause?: DeathCause; anim: string };
 // corpse: a cause-of-death corpse (to-do #6) instead of the kind's stain
-type Decal = { x: number; y: number; key: string; big: boolean; age: number; fade: number; ember: boolean; corpse?: { kind: string; src: string; cause: DeathCause; v: number } };
+type Decal = { x: number; y: number; key: string; big: boolean; age: number; fade: number; ember: boolean; corpse?: { kind: string; src: string; cause: DeathCause; v: number; vert: boolean } };
 
 const parts: Part[] = [];
 const dying: Dying[] = [];
@@ -124,7 +124,7 @@ export function drawDecals(ctx: CanvasRenderingContext2D, run: Run, ox: number, 
     d.age += dt;
     if (d.fade) { d.fade += dt; if (d.fade >= DECAL_FADE) { decals.splice(i, 1); continue; } }
     if (!run.seen[d.y * W + d.x]) continue;
-    if (d.corpse) { drawCorpse(ctx, d, ox, oy, lights, time); continue; }
+    if (d.corpse) { drawCorpse(ctx, run, d, ox, oy, lights, time); continue; }
     let key = `${reduced ? 'dcr' : 'dc'}_${d.key}`;
     // Glutgeist: Glut glimmt etwa drei Sekunden, dann bleibt Asche
     const glowing = d.ember && d.age < EMBER_T;
@@ -145,7 +145,7 @@ export function drawDying(ctx: CanvasRenderingContext2D, run: Run, ox: number, o
     const f = Math.min(1, m.t / m.dur), img = sprites[m.key];
     if (m.t >= m.dur) {
       if (run.floor === decalFloor) {
-        if (m.cause) addDecal(run, m.kind, m.x, m.y, 'corpse', { kind: m.kind, src: m.key, cause: m.cause, v: corpseVariant(m.kind, m.x, m.y) });
+        if (m.cause) addDecal(run, m.kind, m.x, m.y, 'corpse', { kind: m.kind, src: m.key, cause: m.cause, v: corpseVariant(m.kind, m.x, m.y), vert: narrowNS(run, m.x, m.y) });
         else if (m.decal) addDecal(run, m.kind, m.x, m.y, m.decal);
       }
       dying.splice(i, 1);
@@ -232,15 +232,44 @@ export function drawDying(ctx: CanvasRenderingContext2D, run: Run, ox: number, o
 }
 
 
-// Corpse decal: fades in, fire corpses glow and smoke for a few seconds (the image itself is cached)
-function drawCorpse(ctx: CanvasRenderingContext2D, d: Decal, ox: number, oy: number, lights: Light[], time: number) {
+// A north–south corridor one tile wide: the corpse lies along it instead of across it
+const wallAt = (run: Run, x: number, y: number) => x < 0 || y < 0 || x >= W || y >= H || wallLike(run.tiles[y * W + x]);
+function narrowNS(run: Run, x: number, y: number): boolean {
+  return wallAt(run, x - 1, y) && wallAt(run, x + 1, y) && !wallAt(run, x, y - 1) && !wallAt(run, x, y + 1);
+}
+
+// Where a corpse may lie, in map pixels: its own tile plus each neighbouring tile that is not a wall
+// (pure, tested). The picture is shifted into this box; whatever still sticks out is clipped away.
+export function corpseRoom(run: Run, x: number, y: number): { x0: number; y0: number; x1: number; y1: number } {
+  return {
+    x0: (wallAt(run, x - 1, y) ? x : x - 1) * TS, x1: (wallAt(run, x + 1, y) ? x + 1 : x + 2) * TS,
+    y0: (wallAt(run, x, y - 1) ? y : y - 1) * TS, y1: (wallAt(run, x, y + 1) ? y + 1 : y + 2) * TS,
+  };
+}
+// Shift a span [a, a + len) into [lo, hi) as far as possible (centred if it is longer)
+export const fitSpan = (a: number, len: number, lo: number, hi: number) => len >= hi - lo ? Math.round((lo + hi - len) / 2) : Math.min(Math.max(a, lo), hi - len);
+
+// Corpse decal: fades in, fire corpses glow and smoke for a few seconds (the image itself is cached).
+// It stays on the floor: moved away from walls, and clipped to floor tiles where it would still overlap one.
+function drawCorpse(ctx: CanvasRenderingContext2D, run: Run, d: Decal, ox: number, oy: number, lights: Light[], time: number) {
   const c = d.corpse!, glowing = d.ember && d.age < EMBER_T;
-  const img = corpseCanvas(sprites[c.src], c.kind, c.cause, c.v, reduced, glowing);
-  if (!img) return;
+  const ci = corpseCanvas(sprites[c.src], c.kind, c.cause, c.v, reduced, glowing, c.vert);
+  if (!ci) return;
+  // anchor of the full grid: centred on the tile; lying across, the body's bottom 2 px below the tile
+  const gx = d.x * TS + 8 - (ci.gw >> 1), gy = c.vert ? d.y * TS + 8 - (ci.gh >> 1) : d.y * TS + TS + 2 - ci.gh;
+  const room = corpseRoom(run, d.x, d.y), w = ci.img.width, h = ci.img.height;
+  const px = fitSpan(gx + ci.x, w, room.x0, room.x1), py = fitSpan(gy + ci.y, h, room.y0, room.y1);
   const a = d.fade ? 1 - d.fade / DECAL_FADE : Math.min(1, d.age * 6);
+  ctx.save();
+  ctx.beginPath();
+  // floor tiles under the picture (walls cut it off)
+  for (let ty = Math.floor(py / TS); ty <= Math.floor((py + h - 1) / TS); ty++) for (let tx = Math.floor(px / TS); tx <= Math.floor((px + w - 1) / TS); tx++) {
+    if (!wallAt(run, tx, ty)) ctx.rect(tx * TS + ox, ty * TS + oy, TS, TS);
+  }
+  ctx.clip();
   ctx.globalAlpha = a;
-  ctx.drawImage(img, Math.round(d.x * TS + 8 - img.width / 2 + ox), d.y * TS + TS + 2 - img.height + oy);
-  ctx.globalAlpha = 1;
+  ctx.drawImage(ci.img, px + ox, py + oy);
+  ctx.restore();
   if (glowing) {
     lights.push({ x: d.x, y: d.y, r: 1.4 * (1 - d.age / EMBER_T) + 0.4, col: '#ef7d57', a: 0.6 + 0.1 * Math.sin(time * 9 + d.x) });
     if (!reduced && Math.random() < 0.08 * (1 - d.age / EMBER_T)) parts.push({ x: d.x * TS + 4 + Math.random() * 8, y: d.y * TS + 9, vx: (Math.random() - 0.5) * 6, vy: -12, col: Math.random() < 0.5 ? '#566c86' : '#333c57', t: 0, life: 1.1, g: -6, s: 2 });
