@@ -16,7 +16,7 @@ const BOSS_FLAME: [string, string][] = [['#9a4fc0', '#c9d4dc'], ['#38b764', '#a7
 const bossTorch: HTMLCanvasElement[][] = [];
 const torchOf = (bi: number, f: number) => (bossTorch[bi] ??= [0, 1].map(k => recolor(sprites[`torch${k}`], { '#ef7d57': BOSS_FLAME[bi][0], '#ffcd75': BOSS_FLAME[bi][1] })))[f];
 import { sfx } from '../core/audio';
-import { schedule, advance, held, anim, peekAnim, startLunge, setPose, hitActor, hitstop, resetTimeline, busy, FLASH_T, RECOIL_T, lungeOffset, weightOf, hurtLean } from './timeline';
+import { schedule, advance, held, anim, peekAnim, startLunge, setPose, hitActor, hitstop, resetTimeline, busy, FLASH_T, RECOIL_T, lungeOffset, weightOf, hurtLean, heroSlide } from './timeline';
 import { addNum, drawNums, addShake, stepShake, critFlash, hurtFlash, drawScreenFlash, splat, drawSpots, tinted, noteKill, resetJuice } from './juice';
 import { fxScale, fxLevel } from './fxopts';
 import { drawWorldTile, drawGas, MAT_COLS, MAT_SOUND } from './world';
@@ -57,6 +57,8 @@ const burstBits = (x: number, y: number, n: number, cols: string[], v0: number, 
   }
 };
 const cam = { x: 0, y: 0 };
+const ICE_SPRAY = ['#f4f4f4', '#c9d4dc', '#73eff7', '#94b0c2'];
+let slidePhase: 'move' | null = null; // the last frame showed the hero sliding (bump fires on the change)
 const view = { ox: 0, oy: 0 };
 // Bildschirmpunkt -> Kartenfeld (für Mausklicks)
 export const tileAt = (mx: number, my: number): [number, number] => [Math.floor((mx - view.ox) / TS), Math.floor((my - view.oy) / TS)];
@@ -106,11 +108,14 @@ export function resetView() {
   pos.clear(); resetTimeline(); resetJuice();
   bolts.length = 0; bits.length = 0; booms.length = 0;
   shots.length = 0; rings.length = 0; sparks.length = 0; bashes.length = 0; swipes.length = 0; auras.length = 0; deathT = -1;
-  resetDeaths(); resetAmbient(); resetFire(); resetHunterFx(); fuseTags.length = 0;
+  resetDeaths(); resetAmbient(); resetFire(); resetHunterFx(); fuseTags.length = 0; slidePhase = null;
 }
 
 function smooth(a: Actor, dt: number) {
   let p = pos.get(a.id);
+  // ice slide: the hero follows the played-back path exactly (constant speed, no easing)
+  const sl = a.id === 0 ? heroSlide() : null;
+  if (sl) { if (!p) pos.set(a.id, (p = { x: sl.x, y: sl.y })); p.x = sl.x; p.y = sl.y; return p; }
   if (!p || (Math.abs(p.x - a.x) + Math.abs(p.y - a.y) > 3 && !leaping(a.id))) { p = { x: a.x, y: a.y }; pos.set(a.id, p); }
   // an enemy whose beat has not come yet still stands at its old position
   if (held(a.id)) return p;
@@ -257,6 +262,7 @@ export function drawRun(ctx: CanvasRenderingContext2D, run: Run, dt: number, tim
         if (f.mat === 'stone' || f.mat === 'metal') shake(2);
         break;
       }
+      case 'slide': setDir(Math.sign(f.path[1][0] - f.path[0][0]), Math.sign(f.path[1][1] - f.path[0][1])); sfx('scrape'); slidePhase = 'move'; break;
       case 'debris':
         sfx('crack');
         for (let k = 0; k < 14; k++) {
@@ -267,7 +273,17 @@ export function drawRun(ctx: CanvasRenderingContext2D, run: Run, dt: number, tim
     }
   }
 
-  const p = run.p, pp = smooth(p, dt);
+  const p = run.p, pp = smooth(p, dt), sl = heroSlide();
+  // ice slide: spray behind the feet while moving, a small bump when the hero stops
+  if (sl?.phase === 'move' && fxLevel() > 0 && Math.random() < 0.5 + 0.5 * fxScale()) {
+    const fx0 = pp.x * TS + 8 - sl.dx * 5, fy0 = pp.y * TS + 14 - sl.dy * 3;
+    for (let k = 0; k < 2; k++) bits.push({ x: fx0 + (Math.random() - 0.5) * 6, y: fy0, vx: -sl.dx * (20 + Math.random() * 30) + (Math.random() - 0.5) * 24,
+      vy: -sl.dy * (20 + Math.random() * 30) - 18 - Math.random() * 22, col: ICE_SPRAY[(Math.random() * ICE_SPRAY.length) | 0], t: 0, fy: fy0 + 1 + Math.random() * 3 });
+  }
+  if (slidePhase === 'move' && sl?.phase !== 'move') {
+    slidePhase = null;
+    if (sl) { shake(1, [sl.dx, sl.dy]); sfx('step'); burstBits(pp.x * TS + 8 + sl.dx * 5, pp.y * TS + 13 + sl.dy * 2, Math.round(4 * fxScale()) + 2, ICE_SPRAY, 10, 35, 15); }
+  }
   // Held bleibt immer in der Bildmitte; jenseits des Kartenrands ist es einfach dunkel
   const tx = pp.x * TS + 8 - VW / 2, ty = pp.y * TS + 8 - VH / 2;
   if (Math.abs(tx - cam.x) > 220 || Math.abs(ty - cam.y) > 220) { cam.x = tx; cam.y = ty; }
@@ -546,7 +562,8 @@ export function drawRun(ctx: CanvasRenderingContext2D, run: Run, dt: number, tim
     // Blickrichtung wählt die Ansicht, Bewegung die Schrittbilder
     const f = a === p ? p.dir : a.f ?? [0, 1];
     const v = f[1] < 0 ? 'b' : f[1] > 0 ? 'f' : 's', mirror = v === 's' && f[0] < 0;
-    const moving = Math.abs(q.x - a.x) + Math.abs(q.y - a.y) > 0.04;
+    const asl = a === p ? heroSlide() : null;
+    const moving = !asl && Math.abs(q.x - a.x) + Math.abs(q.y - a.y) > 0.04;
     const fr = moving ? [2, 0, 3, 0][Math.floor(time * 11) % 4] : Math.floor(time * 2.5 + a.id * 0.37) % 2;
     // Bosse zeigen ab halber Lebenskraft ihre verwundete Fassung (nur gelesen, keine Logik)
     const base = a === p ? lookOf(p) : a.boss && a.hp * 2 < a.maxHp && sprites[`${a.kind}2:f0`] ? `${a.kind}2` : a.kind, an = peekAnim(a.id), ps = an?.pose;
@@ -565,14 +582,20 @@ export function drawRun(ctx: CanvasRenderingContext2D, run: Run, dt: number, tim
     const rc = an?.recoil, rk = rc ? (1 - rc.t / RECOIL_T) * 2 : 0, sq = an && an.hurt < 0.1 && fxLevel() > 0 ? 1 - an.hurt / 0.1 : 0;
     const glow = GLOW[base.split(':')[0]] ?? GLOW[a.kind];
     const jx = glow ? Math.round(Math.sin(time * 17 + a.id) * 0.6) : 0;
-    const bx = Math.round(q.x * TS + (l ? l.dx * k : 0) + (rc ? rc.dx * rk : 0)) + tlx + ox, by = Math.round(q.y * TS + (l ? l.dy * k : 0) + (rc ? rc.dy * rk : 0)) + tly + oy;
+    // ice bump: the body runs on 2 px past the stop and settles back
+    const bump = asl?.phase === 'bump' ? Math.sin(asl.u * Math.PI) * 2 : 0;
+    const bx = Math.round(q.x * TS + (l ? l.dx * k : 0) + (rc ? rc.dx * rk : 0) + (asl ? asl.dx * bump : 0)) + tlx + ox, by = Math.round(q.y * TS + (l ? l.dy * k : 0) + (rc ? rc.dy * rk : 0) + (asl ? asl.dy * bump : 0)) + tly + oy;
     const hunt = a !== p && isHunter(a);
     const dx = bx + 8 - img.width / 2 + jx, dy = by + 14 - img.height - Math.round(leapLift(a.id)) + bob;
     // squash on hit: wider and flatter, feet stay on the ground
-    const sw = sq ? Math.round(img.width * (1 + 0.15 * sq)) : img.width, sh = sq ? Math.round(img.height * (1 - 0.15 * sq)) : img.height;
+    // sliding: crouched a little (sideways the lean shows it, up/down a slight squash); the stop squashes once more
+    const ssq = !asl || fxLevel() === 0 ? 0 : asl.phase === 'bump' ? 0.12 * Math.sin(asl.u * Math.PI) : asl.dx ? 0 : 0.06;
+    const sw = sq ? Math.round(img.width * (1 + 0.15 * sq)) : ssq ? Math.round(img.width * (1 + ssq)) : img.width, sh = sq ? Math.round(img.height * (1 - 0.15 * sq)) : ssq ? Math.round(img.height * (1 - ssq)) : img.height;
     const qx = dx - ((sw - img.width) >> 1), qy = dy + (img.height - sh);
     // hurt: the body leans away from the blow for a moment (shear anchored at the feet)
-    const lean = fxLevel() > 0 ? hurtLean(an) * (rc ? Math.sign(rc.dx) || 1 : 1) : 0;
+    // sliding sideways: the body leans back against the direction of travel (eases in, springs upright at the stop)
+    const slean = asl && asl.dx ? -asl.dx * (asl.phase === 'move' ? 0.2 * Math.min(1, asl.u * 4 + 0.4) : 0.2 * (1 - asl.u) - 0.06 * Math.sin(asl.u * Math.PI)) : 0;
+    const lean = fxLevel() > 0 ? hurtLean(an) * (rc ? Math.sign(rc.dx) || 1 : 1) + slean : 0;
     const blit = (c: HTMLCanvasElement) => {
       if (!mirror && !lean) { ctx.drawImage(c, qx, qy, sw, sh); return; }
       ctx.save();

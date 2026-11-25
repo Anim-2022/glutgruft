@@ -57,7 +57,7 @@ function noise(dur: number, vol = 0.15, cutoff = 900, delay = 0) {
 }
 
 export type Sfx = 'hit' | 'hurt' | 'kill' | 'boom' | 'zap' | 'pick' | 'level' | 'solve' | 'death' | 'crack'
-  | 'miss' | 'crit' | 'step' | 'shatter' | 'crumble' | 'ignite' | 'splash' | 'heavy';
+  | 'miss' | 'crit' | 'step' | 'shatter' | 'crumble' | 'ignite' | 'splash' | 'heavy' | 'scrape';
 
 // the same sound at most twice at the same instant (otherwise volume stacks)
 const recent = new Map<Sfx, { t: number; n: number }>();
@@ -76,6 +76,8 @@ export function sfx(name: Sfx) {
     case 'crit': tone(1200, 600, 0.06, 'square', 0.05); tone(300, 90, 0.12, 'sawtooth', 0.07, 0.01); noise(0.06, 0.12, 3000); break;
     case 'miss': noise(0.09, 0.05, 3200); tone(700, 1100, 0.06, 'sine', 0.025); break;
     case 'step': noise(0.025, 0.025, 600); break;
+    // ice slide: a soft, high hiss with a faint whistle (quiet; it plays under the whole slide)
+    case 'scrape': noise(0.28, 0.035, 3600); noise(0.18, 0.02, 1800, 0.08); tone(1600, 1250, 0.22, 'sine', 0.008); break;
     case 'boom': noise(0.45, 0.3, 500); tone(90, 30, 0.35, 'sine', 0.2); break;
     case 'crack': noise(0.18, 0.18, 1200); break;
     case 'crumble': noise(0.35, 0.22, 700); noise(0.12, 0.1, 1500, 0.12); tone(70, 40, 0.25, 'sine', 0.1); break;
