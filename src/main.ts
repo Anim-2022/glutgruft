@@ -2,7 +2,7 @@ import { drawIcon, UPG_ICON } from './render/icons';
 import { titleScene, drawLogo, drawTitleMenu, menuStep, menuHit } from './render/title';
 import { VW, VH, bake, sprites, tilesets, text, panel, wrap, figure, BIOMES } from './render/gfx';
 import { drawRun, drawCard, setTutStep, drawTree, treeMove, treeFocus, treeCursor, treeHit, resetView, setMouse, toggleMap, setTutorial, tileAt, getOverlay, setOverlay, invMove, invAction, invDrop, invClick, lootIndex, lootDone } from './render/draw';
-import { sfx, soundOn, toggleSound, wakeAudio } from './core/audio';
+import { cycleSound, sfx, soundOn, toggleSound, volume, wakeAudio } from './core/audio';
 import { fxLevel, setFxLevel, shakeEnabled, toggleShake } from './render/fxopts';
 import { loadMeta, saveMeta } from './core/save';
 import { propSets } from './render/props';
@@ -325,7 +325,7 @@ let tRow = 0;
 
 function titleAction() {
   if (tRow === 0) { scene = 'lager'; row = ROWS - 1; }
-  else if (tRow === 1) toggleSound();
+  else if (tRow === 1) cycleSound(); // off, then volume steps
   else if (tRow === 2) { meta.tutOff = !meta.tutOff; saveMeta(meta); }
   else if (tRow === 3) { meta.tut = []; meta.tutOff = false; saveMeta(meta); flash('Tutorial starts over.'); }
   else if (tRow === 4) setFxLevel(fxLevel() + 1); // minimum: no bloom, particles, fog, shake or hitstop
@@ -346,7 +346,7 @@ function drawTitle(time: number, dt: number) {
 function titleItems() {
   return [
     { label: 'START GAME', icon: '' },
-    { label: soundOn() ? 'SOUND: ON' : 'SOUND: OFF', icon: soundOn() ? 'sound' : 'mute' },
+    { label: soundOn() ? `SOUND: ${Math.round(volume() * 100)}%` : 'SOUND: OFF', icon: soundOn() ? 'sound' : 'mute' },
     { label: meta.tutOff ? 'TUTORIAL: OFF' : 'TUTORIAL: ON', icon: 'book' },
     { label: 'RESTART TUTORIAL', icon: 'restart' },
     { label: ['EFFECTS: MINIMUM', 'EFFECTS: NORMAL', 'EFFECTS: STRONG'][fxLevel()], icon: 'screen' },
