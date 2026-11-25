@@ -88,6 +88,9 @@
 ## 11. Sound: redo the sound design (second pass)
 
 - Where: `src/core/audio.ts` (all sounds are synthesised there), volume setting in `src/main.ts`.
+- Status: the softened stage-4 sounds were reverted; the game uses the original sounds again
+  (the volume setting and the ice-slide scrape stay). A redo must be compared against the
+  original set and only replace a sound when it is clearly better.
 - Problem (playtest after stage 4): sounds feel muffled and boxy, "like sitting inside a barrel".
   Likely causes: the master lowpass at 5.2 kHz plus a lowpass on every tone and noise burst,
   low noise cutoffs (500-1600 Hz) and heavy compression make everything dull and hollow.
