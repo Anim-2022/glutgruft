@@ -116,16 +116,16 @@ function runCell({ variant: full, set, mname, cls }: Cell): Result {
       finalF.push(run.floor);
     }
     finalF.sort((a, b) => a - b);
-    out.push(`\n=== ${mname} ${cls}: Median Ebene ${finalF[N >> 1]}, Siege ${wins}/${N}, Big hits(>=50%maxHP) ${bigHits}, One-shots from full ${oneShots}`);
-    out.push(`Gold verdient ${(goldTotal/N).toFixed(0)}/Lauf, ausgegeben ${(goldSpent/N).toFixed(0)}, Tränke gekauft ${(potBought/N).toFixed(1)}, gefunden ${(potFound/N).toFixed(1)}, Bomben gekauft ${(bombBought/N).toFixed(1)}, Gold übrig bei Sieg ${wins ? (goldLeft/wins).toFixed(0) : '-'}, Tode mit Boss in Sicht ${bossDeaths}`);
+    out.push(`\n=== ${mname} ${cls}: Median Floor ${finalF[N >> 1]}, Siege ${wins}/${N}, Big hits(>=50%maxHP) ${bigHits}, One-shots from full ${oneShots}`);
+    out.push(`Gold verdient ${(goldTotal/N).toFixed(0)}/Lauf, ausgegeben ${(goldSpent/N).toFixed(0)}, Tränke gekauft ${(potBought/N).toFixed(1)}, gefunden ${(potFound/N).toFixed(1)}, Bombn gekauft ${(bombBought/N).toFixed(1)}, gold übrig bei Sieg ${wins ? (goldLeft/wins).toFixed(0) : '-'}, Tode mit Boss in sight ${bossDeaths}`);
     if (EXTRA) {
       const t = (k: string) => ((tele[k] ?? 0) / N).toFixed(2);
-      out.push(`Wirtschaft/Lauf: Reliquien ${(relics / N).toFixed(2)}, Gegenstände ${(items / N).toFixed(1)} (Seltenheit ${rar.map(r => (r / N).toFixed(1)).join('/')}), Verbrauchsgüter ${(cons / N).toFixed(1)}, Seelen ${(souls / N).toFixed(0)}`);
+      out.push(`Wirtschaft/Lauf: Relics ${(relics / N).toFixed(2)}, Gegenstände ${(items / N).toFixed(1)} (Rarity ${rar.map(r => (r / N).toFixed(1)).join('/')}), Consumablesgüter ${(cons / N).toFixed(1)}, Seelen ${(souls / N).toFixed(0)}`);
       if (FEATURES.events) {
         const ids = [...new Set(Object.keys(tele).filter(k => k.startsWith('evStart_')).map(k => k.slice(8)))].sort();
         const started = ids.reduce((a, id) => a + (tele[`evStart_${id}`] ?? 0), 0), won = ids.reduce((a, id) => a + (tele[`evWon_${id}`] ?? 0), 0);
-        out.push(`Ereignisse/Lauf: gestartet ${(started / N).toFixed(2)}, geschafft ${(won / N).toFixed(2)}, entfallen ${t('evSkip')}, Tode im Ereignis ${t('evDeath')} · Lohn/Lauf: Gold ${t('evGold')}, Seelen ${t('evSouls')}, Gegenstände ${t('evItems')}, Reliquienwahl ${t('evRelic')}`);
-        out.push('Ereignis: ' + ids.map(id => `${id} ${tele[`evStart_${id}`] ?? 0}/${tele[`evWon_${id}`] ?? 0}/${tele[`evDeath_${id}`] ?? 0}`).join('  ') + '  (gestartet/geschafft/Tode)');
+        out.push(`Ereignisse/Lauf: gestartet ${(started / N).toFixed(2)}, geschafft ${(won / N).toFixed(2)}, entfallen ${t('evSkip')}, Tode im Ereignis ${t('evDeath')} · Lohn/Lauf: gold ${t('evGold')}, Seelen ${t('evSouls')}, Gegenstände ${t('evItems')}, Relicswahl ${t('evRelic')}`);
+        out.push('Event: ' + ids.map(id => `${id} ${tele[`evStart_${id}`] ?? 0}/${tele[`evWon_${id}`] ?? 0}/${tele[`evDeath_${id}`] ?? 0}`).join('  ') + '  (gestartet/geschafft/Tode)');
       }
       {
         const q = (f: number) => { const v = [...floorT].sort((a, b) => a - b); return v.length ? v[Math.min(v.length - 1, Math.floor(f * v.length))] : 0; };
@@ -135,15 +135,15 @@ function runCell({ variant: full, set, mname, cls }: Cell): Result {
           out.push('Jäger (erschienen/besiegt/Tode): ' + ks.map(k => `${k} ${tele[`hunt_${k}`] ?? 0}/${tele[`huntKill_${k}`] ?? 0}/${tele[`huntDeath_${k}`] ?? 0}`).join('  ') + `  · Sense ${tele.todExec ?? 0}`);
         }
       }
-      out.push(`Fallen/Lauf: ausgelöst ${t('trapHit')}, Schaden ${t('trapDmg')}, von Gegnern ${t('trapMob')}, entdeckt ${t('trapSpot')} · Mimiks/Lauf: getroffen ${t('mimicMet')}, besiegt ${t('mimicKilled')}, Seltenheit+1 ${t('mimicRarUp')}`);
+      out.push(`Fallen/Lauf: ausgelöst ${t('trapHit')}, Schaden ${t('trapDmg')}, von enemiesn ${t('trapMob')}, entdeckt ${t('trapSpot')} · Mimics/Lauf: getropen ${t('mimicMet')}, besiegt ${t('mimicKilled')}, Rarity+1 ${t('mimicRarUp')}`);
     }
-    out.push('Eb  n  Tod  Züge  HPverl  Tränke Kills  Gold  Lvl  Atk  MaxHP  maxHit  medHit');
+    out.push('Eb  n  Tod  turns  HPverl  Tränke Kills  gold  Lvl  Atk  MaxHP  maxHit  medHit');
     for (const f of Object.keys(fl).map(Number).sort((a, b) => a - b)) {
       const x = fl[f]; const d = x.dmgTaken.sort((a,b)=>a-b);
       out.push(`${String(f).padStart(2)} ${String(x.n).padStart(3)} ${String(x.deaths).padStart(3)} ${(x.turns / x.n).toFixed(0).padStart(5)} ${(x.hpLost / x.n).toFixed(0).padStart(6)} ${(x.potUsed / x.n).toFixed(2).padStart(6)} ${(x.kills / x.n).toFixed(1).padStart(5)} ${(x.goldIn / x.n).toFixed(0).padStart(5)} ${(x.lvlIn / x.n).toFixed(1).padStart(4)} ${(x.atkIn / x.n).toFixed(1).padStart(4)} ${(x.maxHpIn / x.n).toFixed(0).padStart(5)} ${String(d[d.length - 1] ?? 0).padStart(6)} ${String(d[d.length>>1]??0).padStart(6)}`);
     }
     const avg = (x: number[]) => x.length ? (x.reduce((q, w) => q + w, 0) / x.length).toFixed(1) : '-';
-    const sum = (`${mname} ${cls.padEnd(11)} Siege ${String(wins).padStart(2)}/${N}  Median ${String(finalF[N >> 1]).padStart(2)}  Seelen/Lauf ${(souls / N).toFixed(0)}  Gaben ${(gaben / N).toFixed(1)}  Ränge ${(ranks / N).toFixed(1)}  Stufe RangII ${avg(rankLvl[0])} RangIII ${avg(rankLvl[1])}  Restpunkt ${ptsAll ? (100 * rest / ptsAll).toFixed(0) : 0} %  Fähigkeiten/Lauf ${uses.map(u => (u / N).toFixed(1)).join(' / ')}  Ressource vor Tod ${avg(resEnd)}`);
+    const sum = (`${mname} ${cls.padEnd(11)} Siege ${String(wins).padStart(2)}/${N}  Median ${String(finalF[N >> 1]).padStart(2)}  Seelen/Lauf ${(souls / N).toFixed(0)}  Boons ${(gaben / N).toFixed(1)}  Ränge ${(ranks / N).toFixed(1)}  Level RangII ${avg(rankLvl[0])} RangIII ${avg(rankLvl[1])}  Restpunkt ${ptsAll ? (100 * rest / ptsAll).toFixed(0) : 0} %  Skills/Lauf ${uses.map(u => (u / N).toFixed(1)).join(' / ')}  Ressource vor Tod ${avg(resEnd)}`);
     out.push('Tod durch: ' + JSON.stringify(Object.entries(killers).sort((a,b)=>b[1]-a[1]).slice(0,8)));
     return { out, sum, su, freq };
 }

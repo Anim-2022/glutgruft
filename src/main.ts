@@ -1,7 +1,6 @@
 import { drawIcon, UPG_ICON } from './render/icons';
 import { titleScene, drawLogo, drawTitleMenu, menuStep, menuHit } from './render/title';
 import { VW, VH, bake, sprites, tilesets, text, panel, wrap, figure } from './render/gfx';
-import { getLang, setLang } from './core/i18n';
 import { drawRun, drawCard, setTutStep, drawTree, treeMove, treeFocus, treeCursor, treeHit, resetView, setMouse, toggleMap, setTutorial, tileAt, getOverlay, setOverlay, invMove, invAction, invDrop, invClick, lootIndex, lootDone } from './render/draw';
 import { sfx, soundOn, toggleSound, wakeAudio } from './core/audio';
 import { reducedFx, setReducedFx } from './render/deaths';
@@ -54,29 +53,29 @@ function flash(s: string) { note = s; noteT = 2; }
 function lagerEnter() {
   if (row === 0) {
     if (locked()) {
-      if (meta.souls >= RANGER_COST) { meta.souls -= RANGER_COST; meta.ranger = true; saveMeta(meta); flash('Waldläufer freigeschaltet!'); sfx('level'); }
-      else flash('Nicht genug Seelensplitter.');
+      if (meta.souls >= RANGER_COST) { meta.souls -= RANGER_COST; meta.ranger = true; saveMeta(meta); flash('Ranger unlocked!'); sfx('level'); }
+      else flash('Not enough soul shards.');
     }
   } else if (row === 1) { scene = 'baum'; treeFocus(CLASS_ORDER[clsIdx], 'n0_1'); }
   else if (row === ROWS - 1) startRun();
   else if (row === ROWS - 2) startRun(true);
   else {
     const u = UPGRADES[row - 2], lvl = meta.upg[u.id] ?? 0;
-    if (lvl >= u.max) flash('Bereits auf höchster Stufe.');
-    else if (meta.souls < upgCost(u, lvl)) flash('Nicht genug Seelensplitter.');
+    if (lvl >= u.max) flash('Already at the highest rank.');
+    else if (meta.souls < upgCost(u, lvl)) flash('Not enough soul shards.');
     else { meta.souls -= upgCost(u, lvl); meta.upg[u.id] = lvl + 1; saveMeta(meta); sfx('pick'); }
   }
 }
 function endSaved() {
   if (!saved) return;
-  meta.souls += saved.souls; saveMeta(meta); saved = null; run = null; storeRun(); flash('Lauf beendet – Splitter gutgeschrieben.');
+  meta.souls += saved.souls; saveMeta(meta); saved = null; run = null; storeRun(); flash('Run ended – shards credited.');
 }
 // ENTER (oder Mausklick) im Fertigkeitsbaum des Lagers: Knoten freischalten
 function baumEnter() {
   const cls = CLASS_ORDER[clsIdx], n = treeNode(cls, treeCursor())!, own = meta.tree[cls] ?? [];
-  if (!n.cost || own.includes(n.id)) flash(n.cost ? 'Schon freigeschaltet.' : 'Immer verfügbar.');
-  else if (n.parent && treeNode(cls, n.parent)!.cost && !own.includes(n.parent)) flash('Erst den vorigen Knoten freischalten.');
-  else if (meta.souls < n.cost) flash('Nicht genug Seelensplitter.');
+  if (!n.cost || own.includes(n.id)) flash(n.cost ? 'Already unlocked.' : 'Always available.');
+  else if (n.parent && treeNode(cls, n.parent)!.cost && !own.includes(n.parent)) flash('Unlock the previous node first.');
+  else if (meta.souls < n.cost) flash('Not enough soul shards.');
   else { meta.souls -= n.cost; meta.tree[cls] = [...own, n.id]; saveMeta(meta); sfx('level'); }
 }
 // Zurück-Taste oben links im Fertigkeitsbaum des Lagers
@@ -89,7 +88,7 @@ const locked = () => CLASS_ORDER[clsIdx] === 'waldlaeufer' && !meta.ranger;
 function startRun(daily = false) {
   resetView();
   if (saved && !daily) { run = saved; saved = null; setTutorial(!meta.tutOff); resetMoves(); scene = 'run'; return; }
-  if (locked()) { flash('Diese Klasse ist noch gesperrt.'); return; }
+  if (locked()) { flash('This class is still locked.'); return; }
   saved = null;
   setTutorial(!meta.tutOff);
   resetMoves();
@@ -122,7 +121,7 @@ function onKey(k: string): boolean {
     if (k === 'enter' || k === ' ' || k === 'escape') { tutDone(card.id); card = null; }
     return true;
   }
-  if (k === 'm') { flash(toggleSound() ? 'Ton an' : 'Ton aus'); return true; }
+  if (k === 'm') { flash(toggleSound() ? 'Sound on' : 'Sound off'); return true; }
   if (k === 'n' && scene === 'run') { toggleMap(); return true; }
   if (scene === 'run' && run && run.mode === 'play') {
     // Charakterbogen und Hilfe halten das Spiel an
@@ -149,7 +148,6 @@ function onKey(k: string): boolean {
   if (scene === 'title') {
     if (MOVES[k] && (MOVES[k][0] || MOVES[k][1])) { tRow = menuStep(tRow, MOVES[k][0], MOVES[k][1], TITLE_ITEMS); return true; }
     if (k === ' ' || k === 'enter') { titleAction(); return true; }
-    if (k === 'l') { setLang(getLang() === 'de' ? 'en' : 'de'); return true; }
     return false;
   }
   if (scene === 'baum') {
@@ -171,7 +169,6 @@ function onKey(k: string): boolean {
     }
     if (k === ' ') { startRun(); return true; }
     if (k === 'escape') { scene = 'title'; return true; }
-    if (k === 'l') { setLang(getLang() === 'de' ? 'en' : 'de'); return true; }
     if (k === 'x' && saved) { endSaved(); return true; }
     if (k === 'enter') {
       lagerEnter();
@@ -180,7 +177,6 @@ function onKey(k: string): boolean {
     return false;
   }
   if (!run) return false;
-  if (k === 'l') { setLang(getLang() === 'de' ? 'en' : 'de'); return true; } // Sprache auch im Lauf
   if (run.mode === 'dead' || run.mode === 'win') {
     if (k === ' ' || k === 'enter') { endRun(); return true; }
     return false;
@@ -300,16 +296,15 @@ function backdrop(time: number, dt: number) {
 }
 
 // ---------- Titelbild ----------
-const TITLE_ITEMS = 7;
+const TITLE_ITEMS = 6;
 let tRow = 0;
 
 function titleAction() {
   if (tRow === 0) { scene = 'lager'; row = ROWS - 1; }
-  else if (tRow === 1) setLang(getLang() === 'de' ? 'en' : 'de');
-  else if (tRow === 2) toggleSound();
-  else if (tRow === 3) { meta.tutOff = !meta.tutOff; saveMeta(meta); }
-  else if (tRow === 4) { meta.tut = []; meta.tutOff = false; saveMeta(meta); flash('Lehrgang beginnt von vorn.'); }
-  else if (tRow === 5) setReducedFx(!reducedFx()); // niedrig: kein Nachglühen, keine Teilchen, kein Nebel, keine Schlagschatten, kein Wackeln
+  else if (tRow === 1) toggleSound();
+  else if (tRow === 2) { meta.tutOff = !meta.tutOff; saveMeta(meta); }
+  else if (tRow === 3) { meta.tut = []; meta.tutOff = false; saveMeta(meta); flash('Tutorial starts over.'); }
+  else if (tRow === 4) setReducedFx(!reducedFx()); // niedrig: kein Nachglühen, keine Teilchen, kein Nebel, keine Schlagschatten, kein Wackeln
   else if (document.fullscreenElement) void document.exitFullscreen();
   else document.documentElement.requestFullscreen().catch(() => { /* nicht erlaubt */ });
 }
@@ -318,20 +313,19 @@ function drawTitle(time: number, dt: number) {
   void time;
   // ruhendes Bild über den ganzen Schirm (einmal gemalt), darüber Schriftzug und Menü
   ctx.drawImage(titleScene(), 0, 0);
-  drawLogo(ctx, 'Ein Abstieg in fünfzehn Ebenen');
+  drawLogo(ctx, 'A descent through fifteen floors');
   if (noteT > 0) noteT -= dt;
-  drawTitleMenu(ctx, titleItems(), tRow, 'Pfeile wählen · ENTER bestätigen · Maus: klicken', noteT > 0 ? note : '');
+  drawTitleMenu(ctx, titleItems(), tRow, 'Arrows select · ENTER confirm · Mouse: click', noteT > 0 ? note : '');
 }
 // Einträge mit ihren aktuellen Werten; Reihenfolge = titleAction
 function titleItems() {
   return [
-    { label: 'SPIEL STARTEN', icon: '' },
-    { label: 'SPRACHE: DEUTSCH', icon: 'globe' },
-    { label: soundOn() ? 'TON: AN' : 'TON: AUS', icon: soundOn() ? 'sound' : 'mute' },
-    { label: meta.tutOff ? 'LEHRGANG: AUS' : 'LEHRGANG: AN', icon: 'book' },
-    { label: 'LEHRGANG NEU', icon: 'restart' },
-    { label: reducedFx() ? 'GRAFIK: NIEDRIG' : 'GRAFIK: HOCH', icon: 'screen' },
-    { label: document.fullscreenElement ? 'VOLLBILD: AN' : 'VOLLBILD: AUS', icon: 'full' },
+    { label: 'START GAME', icon: '' },
+    { label: soundOn() ? 'SOUND: ON' : 'SOUND: OFF', icon: soundOn() ? 'sound' : 'mute' },
+    { label: meta.tutOff ? 'TUTORIAL: OFF' : 'TUTORIAL: ON', icon: 'book' },
+    { label: 'RESTART TUTORIAL', icon: 'restart' },
+    { label: reducedFx() ? 'GRAPHICS: LOW' : 'GRAPHICS: HIGH', icon: 'screen' },
+    { label: document.fullscreenElement ? 'FULLSCREEN: ON' : 'FULLSCREEN: OFF', icon: 'full' },
   ];
 }
 
@@ -366,15 +360,15 @@ function drawLager(time: number, dt: number) {
   ctx.drawImage(lagerBg, 0, 0);
 
   // ---------- Kopfzeile ----------
-  text(ctx, 'LAGER', 26, 12, '#5d275d', 24, 'left', false);
-  text(ctx, 'LAGER', 24, 10, '#ffcd75', 24);
+  text(ctx, 'CAMP', 26, 12, '#5d275d', 24, 'left', false);
+  text(ctx, 'CAMP', 24, 10, '#ffcd75', 24);
   ctx.fillStyle = '#c98a3a'; ctx.fillRect(24, 36, 120, 1); ctx.fillStyle = '#ffcd75'; ctx.fillRect(144, 35, 3, 3);
   const souls = `${meta.souls}`, sw = text(ctx, souls, -999, 0, '#000', 10) + 34;
   plate(VW - 20 - sw, 10, sw, 20, false, 'dark');
   ctx.drawImage(sprites.soul, VW - 20 - sw + 6, 14);
   text(ctx, souls, VW - 28, 15, '#73eff7', 10, 'right');
-  text(ctx, 'Seelensplitter', VW - 24 - sw, 16, '#566c86', 8, 'right');
-  if (meta.best) text(ctx, meta.best > LAST_FLOOR ? 'Gruft bezwungen' : `Tiefste Ebene: ${meta.best}`, VW - 20, 34, '#94b0c2', 8, 'right');
+  text(ctx, 'Soul shards', VW - 24 - sw, 16, '#566c86', 8, 'right');
+  if (meta.best) text(ctx, meta.best > LAST_FLOOR ? 'Crypt conquered' : `Deepest floor: ${meta.best}`, VW - 20, 34, '#94b0c2', 8, 'right');
 
   // ---------- Klasse ----------
   const id = CLASS_ORDER[clsIdx], c = CLASSES[id], lock = locked();
@@ -402,12 +396,12 @@ function drawLager(time: number, dt: number) {
   ctx.globalAlpha = 1;
   // Werte mit Symbolen
   const stats: [string, string, string, string][] = [
-    ['heart', 'Leben', `${c.hp + 2 * (meta.upg.vit ?? 0)}`, '#b13e53'],
-    ['sword', 'Angriff', `${c.atk + (c.id === 'magier' ? 0 : meta.upg.atk ?? 0)}`, '#f4f4f4'],
-    ['shield', 'Verteidigung', `${c.def}`, '#f4f4f4'],
+    ['heart', 'Health', `${c.hp + 2 * (meta.upg.vit ?? 0)}`, '#b13e53'],
+    ['sword', 'Attack', `${c.atk + (c.id === 'magier' ? 0 : meta.upg.atk ?? 0)}`, '#f4f4f4'],
+    ['shield', 'Defense', `${c.def}`, '#f4f4f4'],
     [id === 'krieger' ? 'flame' : id === 'magier' ? 'manaorb' : 'target', c.resName, `${c.resMax + (meta.upg.fokus ?? 0)}`, c.resCol],
   ];
-  if (c.range) stats.push(['bow', 'Fernkampf', `${c.range} Felder`, '#94b0c2']);
+  if (c.range) stats.push(['bow', 'Ranged', `${c.range} tiles`, '#94b0c2']);
   const sx = fx + fw + 10, sxr = L.x + L.w - 10;
   stats.forEach(([ic, label, val, col], i) => {
     const y = fy + 2 + i * 17;
@@ -419,7 +413,7 @@ function drawLager(time: number, dt: number) {
   wrap(c.desc, 46).slice(0, 2).forEach((l, i) => text(ctx, l, L.x + 10, fy + fh + 8 + i * 10, '#e8e4d8', 8));
   // Fähigkeiten
   const ky = fy + fh + 36;
-  text(ctx, 'FÄHIGKEITEN', L.x + 10, ky - 2, '#566c86', 8);
+  text(ctx, 'SKILLS', L.x + 10, ky - 2, '#566c86', 8);
   ctx.fillStyle = '#3b3256'; ctx.fillRect(L.x + 80, ky + 2, L.w - 90, 1);
   c.skills.forEach((sk, i) => {
     const y = ky + 9 + i * 26;
@@ -431,24 +425,24 @@ function drawLager(time: number, dt: number) {
   });
   if (lock) {
     plate(L.x + 36, fy + 30, L.w - 72, 40, true, 'red');
-    text(ctx, 'GESPERRT', L.x + L.w / 2, fy + 36, '#ffcd75', 10, 'center');
-    text(ctx, `Klick oder ENTER: ${RANGER_COST} Splitter`, L.x + L.w / 2, fy + 52, meta.souls >= RANGER_COST ? '#73eff7' : '#f4f4f4', 8, 'center');
+    text(ctx, 'LOCKED', L.x + L.w / 2, fy + 36, '#ffcd75', 10, 'center');
+    text(ctx, `Click or ENTER: ${RANGER_COST} shards`, L.x + L.w / 2, fy + 52, meta.souls >= RANGER_COST ? '#73eff7' : '#f4f4f4', 8, 'center');
   }
   if (row === 0) pointer(L.x - 7, L.y + 15);
   // Fertigkeitsbaum
   const tsel = row === 1, T = { x: L.x, y: L.y + L.h + 6, w: L.w, h: 17 };
   plate(T.x, T.y, T.w, T.h, tsel);
   drawIcon(ctx, ['book'], T.x + 6, T.y + 4, tsel ? '#ffcd75' : '#94b0c2');
-  text(ctx, 'Fertigkeitsbaum', T.x + 20, T.y + 5, tsel ? '#ffcd75' : '#f4f4f4', 8);
-  text(ctx, `${(meta.tree[id] ?? []).length} freigeschaltet  >`, T.x + T.w - 8, T.y + 5, '#94b0c2', 8, 'right');
+  text(ctx, 'Skill tree', T.x + 20, T.y + 5, tsel ? '#ffcd75' : '#f4f4f4', 8);
+  text(ctx, `${(meta.tree[id] ?? []).length} unlocked  >`, T.x + T.w - 8, T.y + 5, '#94b0c2', 8, 'right');
   if (tsel) pointer(T.x - 7, T.y + 8);
   hits.push({ ...T, row: 1, act: () => { row = 1; lagerEnter(); } });
 
   // ---------- Verbesserungen ----------
   const ux = 332, uw = VW - ux - 20;
-  text(ctx, 'VERBESSERUNGEN', ux, 48, '#94b0c2', 8);
+  text(ctx, 'UPGRADES', ux, 48, '#94b0c2', 8);
   if (saved) {
-    const xw = text(ctx, 'X: gespeicherten Lauf beenden', ux + uw, 48, '#566c86', 8, 'right');
+    const xw = text(ctx, 'X: end the saved run', ux + uw, 48, '#566c86', 8, 'right');
     hits.push({ x: ux + uw - xw, y: 46, w: xw, h: 11, act: endSaved });
   }
   UPGRADES.forEach((u, i) => {
@@ -480,14 +474,14 @@ function drawLager(time: number, dt: number) {
   const dy0 = 60 + UPGRADES.length * 17 + 2;
   ctx.fillStyle = 'rgba(13,11,22,0.85)'; ctx.fillRect(ux, dy0, uw, 14);
   const up = row >= 2 && row <= UPGRADES.length + 1 ? UPGRADES[row - 2] : null;
-  text(ctx, up ? up.desc : 'Seelensplitter kaufen dauerhafte Verbesserungen.', ux + 6, dy0 + 3, up ? '#c9d4dc' : '#566c86', 8);
+  text(ctx, up ? up.desc : 'Soul shards buy permanent upgrades.', ux + 6, dy0 + 3, up ? '#c9d4dc' : '#566c86', 8);
   // Tageslauf
   const D = { x: ux, y: dy0 + 20, w: uw, h: 27 }, dsel = row === ROWS - 2, dbest = meta.daily.date === today() ? meta.daily.best : 0;
   plate(D.x, D.y, D.w, D.h, dsel);
   drawIcon(ctx, ['target'], D.x + 6, D.y + 9, dsel ? '#ffcd75' : '#94b0c2');
-  text(ctx, 'Tageslauf', D.x + 20, D.y + 4, dsel ? '#ffcd75' : '#f4f4f4', 10);
-  text(ctx, 'Heute für alle dieselbe Gruft', D.x + 20, D.y + 16, '#94b0c2', 8);
-  text(ctx, dbest ? (dbest > LAST_FLOOR ? 'bezwungen' : `Ebene ${dbest}`) : 'offen', D.x + D.w - 10, D.y + 10, dbest ? '#73eff7' : '#566c86', 8, 'right');
+  text(ctx, 'Daily run', D.x + 20, D.y + 4, dsel ? '#ffcd75' : '#f4f4f4', 10);
+  text(ctx, 'The same crypt for everyone today', D.x + 20, D.y + 16, '#94b0c2', 8);
+  text(ctx, dbest ? (dbest > LAST_FLOOR ? 'conquered' : `Floor ${dbest}`) : 'open', D.x + D.w - 10, D.y + 10, dbest ? '#73eff7' : '#566c86', 8, 'right');
   if (dsel) pointer(D.x - 7, D.y + 13);
   hits.push({ ...D, row: ROWS - 2, act: () => { row = ROWS - 2; lagerEnter(); } });
   // Abstieg
@@ -499,14 +493,14 @@ function drawLager(time: number, dt: number) {
     ctx.fillStyle = gl; ctx.fillRect(S.x + 1, S.y + 1, S.w - 2, S.h - 2);
     pointer(S.x - 7, S.y + S.h / 2);
   }
-  text(ctx, saved ? `FORTSETZEN · EBENE ${saved.floor}` : 'ABSTIEG BEGINNEN', S.x + S.w / 2, S.y + 8, ssel ? '#ffcd75' : '#f4e4c8', 16, 'center');
-  text(ctx, saved ? 'gespeicherter Lauf' : 'LEERTASTE', S.x + S.w / 2, S.y + 27, ssel ? '#ef7d57' : '#7d2b45', 8, 'center');
+  text(ctx, saved ? `CONTINUE · FLOOR ${saved.floor}` : 'BEGIN DESCENT', S.x + S.w / 2, S.y + 8, ssel ? '#ffcd75' : '#f4e4c8', 16, 'center');
+  text(ctx, saved ? 'saved run' : 'SPACE', S.x + S.w / 2, S.y + 27, ssel ? '#ef7d57' : '#7d2b45', 8, 'center');
   hits.push({ ...S, row: ROWS - 1, act: () => { row = ROWS - 1; lagerEnter(); } });
 
   if (noteT > 0) { noteT -= dt; text(ctx, note, S.x + S.w / 2, S.y + S.h + 5, '#ffcd75', 8, 'center'); }
   // Hinweise, zurückhaltend
-  text(ctx, 'Pfeile/Maus: wählen · ENTER/Klick: kaufen · LEERTASTE: Abstieg · ESC: Titel', VW / 2, 341, '#566c86', 8, 'center');
-  text(ctx, 'L: Sprache · V: Vollbild · M: Ton', VW / 2, 351, '#3b3256', 8, 'center');
+  text(ctx, 'Arrows/mouse: select · ENTER/click: buy · SPACE: descend · ESC: title', VW / 2, 341, '#566c86', 8, 'center');
+  text(ctx, 'V: fullscreen · M: sound', VW / 2, 351, '#3b3256', 8, 'center');
   lagerHits = hits;
 }
 
@@ -514,13 +508,13 @@ function drawLagerTree(time: number, dt: number) {
   backdrop(time, dt);
   const cls = CLASS_ORDER[clsIdx], own = meta.tree[cls] ?? [];
   const stateOf = (id: string) => { const n = treeNode(cls, id)!; return !n.cost ? 'free' : own.includes(id) ? 'owned' : meta.souls >= n.cost ? 'open' : 'buy'; };
-  drawTree(ctx, cls, `FERTIGKEITSBAUM – ${CLASSES[cls].name.toUpperCase()}`, stateOf,
-    id => { const n = treeNode(cls, id)!; return !n.cost ? '#free' : own.includes(id) ? 'freigeschaltet' : `${n.cost} Splitter`; },
-    `Pfeile: wählen · ENTER: freischalten · ESC: zurück · ${meta.souls} Seelensplitter`,
-    id => { const n = treeNode(cls, id)!; return !n.cost ? 'Ohne Seelensplitter, steht in jedem Lauf zur Wahl.' : own.includes(id) ? 'Steht in jedem Lauf zur Wahl.' : 'Freischalten: kommt in die Auswahl der Läufe.'; });
+  drawTree(ctx, cls, `SKILL TREE – ${CLASSES[cls].name.toUpperCase()}`, stateOf,
+    id => { const n = treeNode(cls, id)!; return !n.cost ? '#free' : own.includes(id) ? 'freigeschaltet' : `${n.cost} shards`; },
+    `Arrows: select · ENTER: unlock · ESC: back · ${meta.souls} Soul shards`,
+    id => { const n = treeNode(cls, id)!; return !n.cost ? 'No soul shards needed, available in every run.' : own.includes(id) ? 'Available in every run.' : 'Unlock: adds it to the choices of your runs.'; });
   const b = BAUM_BACK, on = inBox(mouse, b);
   plate(b.x, b.y, b.w, b.h, on);
-  text(ctx, '< ZURÜCK', b.x + b.w / 2, b.y + 4, on ? '#ffcd75' : '#c9d4dc', 8, 'center');
+  text(ctx, '< BACK', b.x + b.w / 2, b.y + 4, on ? '#ffcd75' : '#c9d4dc', 8, 'center');
   if (noteT > 0) { noteT -= dt; text(ctx, note, VW / 2, 346, '#ffcd75', 8, 'center'); }
 }
 const mouse = { x: -1, y: -1 };

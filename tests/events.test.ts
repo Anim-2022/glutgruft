@@ -103,7 +103,7 @@ describe('Ereignisse: Planung', () => {
 describe('Ereignisse: Ablauf', () => {
   it.each(EVENTS.map(e => e.id))('%s: startet mit Banner, endet sicher, öffnet Gitter wieder', id => {
     const run = started(id), e = run.ev!;
-    expect(run.log.some(l => l.startsWith('Ereignis:'))).toBe(true);
+    expect(run.log.some(l => l.startsWith('Event:'))).toBe(true);
     const sealed = (e.seal ?? []).map(([i]) => i);
     let banners = 0;
     for (let k = 0; k < 200 && run.ev; k++) {

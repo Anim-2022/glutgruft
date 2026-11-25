@@ -4,7 +4,7 @@ import { defaultMeta } from '../src/core/save';
 import { newRun, act, availableNodes, Run, Actor, skillCost } from '../src/game/run';
 import { W, H, T, computeFov } from '../src/game/dungeon';
 import { MOBS, treeNodes, treePool, NODE_TEXT, NEW_SKILLS, TUNE } from '../src/game/content';
-import { tr, setLang } from '../src/core/i18n';
+const GERMAN = /[äöüÄÖÜß]/;
 
 function arena(meta = defaultMeta()): Run {
   const r = newRun(77, 'magier', meta);
@@ -164,11 +164,9 @@ describe('Magier-Baum', () => {
     expect(rr(true, true)).toBeGreaterThan(rr(true, false));
   });
 
-  it('alle neuen Texte haben eine englische Fassung', () => {
-    setLang('en');
+  it('all new texts are English', () => {
     const all = [...Object.values(NODE_TEXT.magier!).flat(), ...Object.values(NEW_SKILLS).flatMap(s => [s.name, s.desc])];
-    const same = all.filter(s => tr(s) === s);
-    setLang('de');
+    const same = all.filter(s => GERMAN.test(s));
     expect(same).toEqual([]);
   });
 });

@@ -349,7 +349,6 @@ export function menuStep(sel: number, dx: number, dy: number, n: number): number
 }
 
 const ICON: Record<string, string[]> = {
-  globe: ['..xxx..', '.x.x.x.', 'xxxxxxx', 'x..x..x', 'xxxxxxx', '.x.x.x.', '..xxx..'],
   sound: ['...x...', '..xx.x.', 'xxxx..x', 'xxxx..x', 'xxxx..x', '..xx.x.', '...x...'],
   mute: ['...x...', '..xx...', 'xxxxx.x', 'xxxx.x.', 'xxxxx.x', '..xx...', '...x...'],
   book: ['xxx.xxx', 'x.x.x.x', 'xxx.xxx', 'x.x.x.x', 'xxx.xxx', 'xxxxxxx', '...x...'],

@@ -12,10 +12,10 @@ const WEAPON_ICON: Record<string, Ref[]> = {
 };
 const ARMOR_ICON: Ref[] = [['leather'], ['chain'], ['plate'], ['plate', { y: 'o' }]];
 const UNIQUE_ICON: Record<string, Ref> = {
-  'Aschenspalter': ['ashaxe'], 'Weltenbrand': ['firestaff'], 'Sternenfall': ['starbow'],
-  'Drachenhaut': ['dragonscale'], 'Schattenmantel': ['cloak'],
-  'Herz des Vulkans': ['volcanoheart'], 'Auge des Sehers': ['eyeamulet'], 'Blutring': ['bloodring'],
-  'Ring der Gier': ['greedring'], 'Sturmring': ['stormring'],
+  'Ashcleaver': ['ashaxe'], 'Worldfire': ['firestaff'], 'Starfall': ['starbow'],
+  'Dragonhide': ['dragonscale'], 'Shadow Cloak': ['cloak'],
+  'Heart of the Volcano': ['volcanoheart'], 'Eye of the Seer': ['eyeamulet'], 'Blood Ring': ['bloodring'],
+  'Ring of Greed': ['greedring'], 'Storm Ring': ['stormring'],
 };
 // Gaben, Reliquien und Verbesserungen im Lager
 export const PERK_ICON: Record<string, Ref> = {

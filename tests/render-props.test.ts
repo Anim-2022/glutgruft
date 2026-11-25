@@ -5,7 +5,7 @@ import { propAt, SPACING, torchSpots, TORCH_GAP } from '../src/render/props';
 
 // Dekor ist reine Darstellung: fest am Feld, nur auf Wandfront oder freiem Boden, nie in einem Gang
 describe('Dekor je Biom', () => {
-  for (const style of [0, 1, 2]) it(`Biom ${style}: Platzierung fest und an erlaubten Stellen`, () => {
+  for (const style of [0, 1, 2]) it(`Biom ${style}: Slotierung fest und an erlaubten Stellen`, () => {
     for (let seed = 1; seed <= 6; seed++) {
       const { tiles } = genDungeon(new RNG(seed * 97 + style), style);
       const before = tiles.slice();

@@ -5,7 +5,7 @@ import { newRun, act, serialize, Run, Actor } from '../src/game/run';
 import { W, H, T, computeFov } from '../src/game/dungeon';
 import { MOBS } from '../src/game/content';
 import { STEPS, CARDS, snap, stepsDone, currentStep, runCard, resetMoves } from '../src/game/tutorial';
-import { tr, setLang } from '../src/core/i18n';
+const GERMAN = /[äöüÄÖÜß]/;
 
 function arena(): Run {
   const r = newRun(5, 'krieger', defaultMeta());
@@ -84,12 +84,10 @@ describe('Lehrgang', () => {
     expect(parseMeta(JSON.stringify({ best: 6, tutOff: false, tut: ['gabe'] })).tut).toEqual(['gabe']);
   });
 
-  it('alle Texte haben eine englische Fassung', () => {
+  it('all texts are English', () => {
     const r = arena();
-    setLang('en');
     const all = [...STEPS.map(s => s.text(r)), ...Object.values(CARDS).flatMap(c => [c.title, ...c.lines])];
-    const same = all.filter(s => tr(s) === s);
-    setLang('de');
+    const same = all.filter(s => GERMAN.test(s));
     expect(same).toEqual([]);
   });
 });

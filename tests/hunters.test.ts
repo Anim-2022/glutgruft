@@ -113,7 +113,7 @@ describe('Jäger', () => {
     }
     expect(spawns[4].atk).toBeGreaterThan(spawns[2].atk);
     expect(spawns[2].atk).toBeGreaterThan(spawns[0].atk);
-    expect(r.log.some(l => l.includes('Stufe 3'))).toBe(true);
+    expect(r.log.some(l => l.includes('stage 3'))).toBe(true);
   });
 
   it('neue Ebene: die Jagd beginnt wieder bei Stufe 1', () => {
@@ -146,7 +146,7 @@ describe('Jäger', () => {
       expect(hunters(r).length).toBe(0);
       return;
     }
-    throw new Error('keine Kistenkammer');
+    throw new Error('keine Crate chamber');
   });
 
   it('Riesenechse: in einem Zug laufen ODER beißen, nie beides', () => {

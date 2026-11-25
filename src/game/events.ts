@@ -155,26 +155,26 @@ function kegs(a: EvApi, e: EvState) {
 
 export const EVENTS: EvDef[] = [
   {
-    id: 'hinterhalt', cat: 'danger', trigger: 'room', title: 'Hinterhalt!', tier: 2, limit: 40,
-    intro: ['Aus den Schatten springen Gegner hervor!', 'Ein Pfiff – und von allen Seiten kommen sie.', 'Das war eine Falle. Jetzt heißt es kämpfen.'],
+    id: 'hinterhalt', cat: 'danger', trigger: 'room', title: 'Ambush!', tier: 2, limit: 40,
+    intro: ['Enemies leap out of the shadows!', 'A whistle – and they come from all sides.', 'That was a trap. Now you fight.'],
     start(a, e) { return spawnAt(a, e, shuffled(a, a.edge(e.room!)), 2 + (a.floor >= 6 ? 1 : 0), 1); },
     tick: killAll,
-    goal: (a, e) => `Besiege die Angreifer ${beaten(a, e)}`,
+    goal: (a, e) => `Defeat the attackers ${beaten(a, e)}`,
   },
   {
-    id: 'fallenkammer', cat: 'danger', trigger: 'room', title: 'Fallenkammer!', tier: 2, limit: 8, survive: true,
-    intro: ['Gitter fallen herab! Aus dem Boden schießen Stacheln.', 'Klack. Die Türen sind zu. Der Boden hat Löcher.'],
+    id: 'fallenkammer', cat: 'danger', trigger: 'room', title: 'Trap room!', tier: 2, limit: 8, survive: true,
+    intro: ['Gates slam shut! Spikes shoot from the floor.', 'Clack. The doors are shut. The floor has holes.'],
     start(a, e) { a.seal(e); spikeWarn(a, e); return true; },
     tick(a, e) {
       a.strike(4 + Math.floor(a.floor * 0.7), 'spike');
       if (e.turns < e.limit) spikeWarn(a, e);
       return 'run';
     },
-    goal: (a, e) => `Weiche den roten Feldern aus · noch ${left(e)} Züge`,
+    goal: (a, e) => `Dodge the red tiles · ${left(e)} turns`,
   },
   {
-    id: 'netzfalle', cat: 'challenge', trigger: 'calm', title: 'Netzfalle!', tier: 1, limit: 30,
-    intro: ['Ein klebriges Netz fällt von der Decke!', 'Du trittst in ein Netz – und hörst Schritte.'],
+    id: 'netzfalle', cat: 'challenge', trigger: 'calm', title: 'Net trap!', tier: 1, limit: 30,
+    intro: ['A sticky net drops from the ceiling!', 'You step into a net – and hear footsteps.'],
     start(a, e) {
       const s1 = a.near(4, 7), s2 = a.near(4, 7);
       if (!s1) return false;
@@ -183,46 +183,46 @@ export const EVENTS: EvDef[] = [
       return true;
     },
     tick: killAll,
-    goal: (a, e) => `Reiß dich los und besiege sie ${beaten(a, e)}`,
+    goal: (a, e) => `Break free and defeat them ${beaten(a, e)}`,
   },
   {
-    id: 'einsturz', cat: 'challenge', trigger: 'room', title: 'Einsturz!', tier: 2, limit: 6, survive: true,
-    intro: ['Die Decke knirscht. Steine lösen sich!', 'Staub rieselt. Gleich kommt hier alles herunter.'],
+    id: 'einsturz', cat: 'challenge', trigger: 'room', title: 'Cave-in!', tier: 2, limit: 6, survive: true,
+    intro: ['The ceiling creaks. Stones break loose!', 'Dust trickles down. This place is about to collapse.'],
     start(a, e) { if (a.roomTiles(e.room!).length <= 6) return false; rockWarn(a, e); return true; },
     tick(a, e) {
       a.strike(5 + Math.floor(a.floor * 0.7), 'rock');
       if (e.turns < e.limit) rockWarn(a, e);
       return 'run';
     },
-    goal: (a, e) => `Raus aus dem Raum oder ausweichen · noch ${left(e)} Züge`,
+    goal: (a, e) => `Leave the room or dodge · ${left(e)} turns`,
   },
   {
-    id: 'dieb', cat: 'challenge', trigger: 'calm', title: 'Diebesratte!', tier: 0, limit: 25, vanish: true,
-    intro: ['Eine Ratte schnappt sich deinen Geldbeutel!', 'Etwas zupft an deinem Gürtel – dein Gold!'],
+    id: 'dieb', cat: 'challenge', trigger: 'calm', title: 'Thief rat!', tier: 0, limit: 25, vanish: true,
+    intro: ['A rat snatches your purse!', 'Something tugs at your belt – your gold!'],
     start(a, e) {
       const s = a.near(2, 3);
       if (!s) return false;
       a.spawn(e, 'dieb', s[0], s[1]);
       e.data.stolen = a.takeGold(8 + 3 * a.floor);
-      a.say(e.data.stolen ? `Die Ratte hat ${e.data.stolen} Gold!` : 'Die Ratte findet nichts und ist beleidigt.');
+      a.say(e.data.stolen ? `The rat has ${e.data.stolen} gold!` : 'The rat finds nothing and is offended.');
       return true;
     },
     tick: killAll,
-    goal: (a, e) => `Fang die Diebesratte · noch ${left(e)} Züge`,
-    won: (a, e) => `${a.gold(Math.max(Math.round(1.5 * e.data.stolen), 5 + a.floor))} Gold zurück`,
-    lost: (a, e) => (e.data.stolen ? `Die Ratte ist mit ${e.data.stolen} Gold verschwunden.` : 'Die Ratte ist verschwunden.'),
+    goal: (a, e) => `Catch the thief rat · ${left(e)} turns`,
+    won: (a, e) => `${a.gold(Math.max(Math.round(1.5 * e.data.stolen), 5 + a.floor))} gold back`,
+    lost: (a, e) => (e.data.stolen ? `The rat got away with ${e.data.stolen} gold.` : 'The rat is gone.'),
   },
   {
-    id: 'goblin', cat: 'challenge', trigger: 'calm', title: 'Schatzgoblin!', tier: 3, limit: 30, vanish: true,
-    intro: ['Ein Goblin mit einem prall gefüllten Sack kichert und rennt los!', 'Klimper, klimper – ein Schatzgoblin!'],
+    id: 'goblin', cat: 'challenge', trigger: 'calm', title: 'Treasure goblin!', tier: 3, limit: 30, vanish: true,
+    intro: ['A goblin with a bulging sack giggles and runs!', 'Jingle, jingle – a treasure goblin!'],
     start(a, e) { const s = a.near(4, 7); if (!s) return false; a.spawn(e, 'goblin', s[0], s[1]); return true; },
     tick: killAll,
-    goal: (a, e) => `Erwische den Schatzgoblin · noch ${left(e)} Züge`,
-    lost: () => 'Der Goblin ist mit seinem Schatz entwischt.',
+    goal: (a, e) => `Catch the treasure goblin · ${left(e)} turns`,
+    lost: () => 'The goblin escaped with its treasure.',
   },
   {
-    id: 'geist', cat: 'flavour', trigger: 'calm', title: 'Verirrter Geist', tier: 2, limit: 30,
-    intro: ['Ein blasser Geist winkt dir zu und schwebt davon.', '"Folge mir ...", flüstert ein Licht.'],
+    id: 'geist', cat: 'flavour', trigger: 'calm', title: 'Lost spirit', tier: 2, limit: 30,
+    intro: ['A pale spirit waves at you and drifts away.', '"Follow me ...", a light whispers.'],
     start(a, e) {
       const s = a.near(8, 14);
       if (!s) return false;
@@ -231,52 +231,52 @@ export const EVENTS: EvDef[] = [
       return true;
     },
     tick: (a, e) => (a.atPlayer(e.mark!) ? 'won' : 'run'),
-    goal: (a, e) => `Folge dem Geist zum Licht · noch ${left(e)} Züge`,
-    lost: () => 'Der Geist verblasst.',
+    goal: (a, e) => `Follow the spirit to the light · ${left(e)} turns`,
+    lost: () => 'The spirit fades.',
   },
   {
-    id: 'kopfgeld', cat: 'danger', trigger: 'calm', title: 'Kopfgeld', tier: 3, limit: 150,
-    intro: ['An der Wand hängt ein Steckbrief: "Gesucht – tot."', 'Ein Zettel: "Belohnung für diesen Kerl." Er ist hier unten.'],
+    id: 'kopfgeld', cat: 'danger', trigger: 'calm', title: 'Bounty', tier: 3, limit: 150,
+    intro: ['A poster on the wall: "Wanted – dead."', 'A note: "Reward for this guy." He is down here.'],
     start(a, e) {
       const s = a.near(10, 40);
       if (!s) return false;
       const m = a.spawn(e, a.table()[a.int(0, a.table().length - 1)], s[0], s[1]);
-      m.name = `Gesucht: ${m.name}`;
+      m.name = `Wanted: ${m.name}`;
       m.maxHp = m.hp = Math.round(m.hp * 1.8); m.atk += 2; m.awake = false;
       return true;
     },
     tick: killAll,
-    goal: () => 'Finde und besiege den Gesuchten (Karte: gelb)',
-    lost: () => 'Das Kopfgeld ist verfallen.',
+    goal: () => 'Find and defeat the wanted one (map: yellow)',
+    lost: () => 'The bounty has expired.',
   },
   {
-    id: 'glocke', cat: 'danger', trigger: 'room', title: 'Alarmglocke!', tier: 2, limit: 15, survive: true,
-    intro: ['Du stößt an einen Draht – irgendwo läutet eine Glocke!', 'BIMM! BAMM! Die ganze Gegend ist wach.'],
+    id: 'glocke', cat: 'danger', trigger: 'room', title: 'Alarm bell!', tier: 2, limit: 15, survive: true,
+    intro: ['You trip a wire – somewhere a bell rings!', 'DING! DONG! The whole area is awake.'],
     start(a, e) { e.data.n = a.wake(e, 7, 25); return true; },
     tick: (a, e) => (e.data.n && !a.alive(e).length ? 'won' : 'run'),
-    goal: (a, e) => `Überlebe noch ${left(e)} Züge (${a.alive(e).length} geweckt)`,
+    goal: (a, e) => `Survive ${left(e)} turns (${a.alive(e).length} awake)`,
   },
   {
-    id: 'seelen', cat: 'flavour', trigger: 'calm', title: 'Seelensturm', tier: 0, limit: 30, vanish: true, survive: true,
-    intro: ['Seelenlichter tanzen um dich herum. Fang sie!', 'Ein Hauch – und plötzlich schweben Lichter überall.'],
+    id: 'seelen', cat: 'flavour', trigger: 'calm', title: 'Soul storm', tier: 0, limit: 30, vanish: true, survive: true,
+    intro: ['Soul lights dance around you. Catch them!', 'A breath – and suddenly lights float everywhere.'],
     start(a, e) {
       for (let k = 0; k < 5; k++) { const s = a.near(2, 7); if (s) a.spawn(e, 'irrlicht', s[0], s[1]); }
       return e.mobs.length > 0;
     },
     tick: (a, e) => (a.alive(e).length ? 'run' : 'won'),
-    goal: (a, e) => `Fange die Seelenlichter ${beaten(a, e)} · noch ${left(e)} Züge`,
-    won: (a, e) => { const n = e.total - a.alive(e).length; return n ? `${a.souls(2 * n)} Seelen` : 'kein einziges Licht – nächstes Mal'; },
+    goal: (a, e) => `Catch the soul lights ${beaten(a, e)} · ${left(e)} turns`,
+    won: (a, e) => { const n = e.total - a.alive(e).length; return n ? `${a.souls(2 * n)} souls` : 'not a single light – next time'; },
   },
   {
-    id: 'nebel', cat: 'challenge', trigger: 'calm', title: 'Fluchnebel', tier: 1, limit: 15, survive: true,
-    intro: ['Kalter Nebel kriecht heran. Du siehst kaum noch etwas.', 'Der Nebel flüstert. Etwas bewegt sich darin.'],
+    id: 'nebel', cat: 'challenge', trigger: 'calm', title: 'Cursed fog', tier: 1, limit: 15, survive: true,
+    intro: ['Cold fog creeps in. You can barely see.', 'The fog whispers. Something moves inside.'],
     start(a, e) { e.data.fog = 1; const s = a.near(5, 9); if (s) spawnAt(a, e, [[s[0], s[1]]], 1); return true; },
     tick: () => 'run',
-    goal: (a, e) => `Überstehe den Nebel · noch ${left(e)} Züge`,
+    goal: (a, e) => `Endure the fog · ${left(e)} turns`,
   },
   {
-    id: 'tote', cat: 'danger', trigger: 'room', title: 'Die Toten erheben sich', tier: 2, limit: 40,
-    intro: ['Der Boden bricht auf – Hände greifen nach oben!', 'Knochen klappern. Hier ruht niemand in Frieden.'],
+    id: 'tote', cat: 'danger', trigger: 'room', title: 'The dead rise', tier: 2, limit: 40,
+    intro: ['The ground breaks open – hands reach up!', 'Bones rattle. Nobody rests in peace here.'],
     start(a, e) {
       e.data.wave = 1;
       const spots: [number, number][] = [];
@@ -289,15 +289,15 @@ export const EVENTS: EvDef[] = [
         e.data.wave = 2;
         const spots: [number, number][] = [];
         for (let k = 0; k < 2 + (a.floor >= 8 ? 1 : 0); k++) { const s = a.inRoom(e.room!); if (s) spots.push(s); }
-        if (spawnAt(a, e, spots, spots.length)) { a.say('Die zweite Welle!'); return 'run'; }
+        if (spawnAt(a, e, spots, spots.length)) { a.say('The second wave!'); return 'run'; }
       }
       return 'won';
     },
-    goal: (a, e) => `Welle ${e.data.wave}/2 · besiegt ${beaten(a, e)}`,
+    goal: (a, e) => `Wave ${e.data.wave}/2 · defeated ${beaten(a, e)}`,
   },
   {
-    id: 'wettlauf', cat: 'challenge', trigger: 'calm', title: 'Wettlauf', tier: 2, limit: 30,
-    intro: ['Irgendwo leuchtet eine Truhe auf – sie wird nicht lange halten!', 'Eine goldene Truhe erscheint. Schnell!'],
+    id: 'wettlauf', cat: 'challenge', trigger: 'calm', title: 'Race', tier: 2, limit: 30,
+    intro: ['Somewhere a chest lights up – it won\'t last long!', 'A golden chest appears. Hurry!'],
     start(a, e) {
       const s = a.near(8, 16);
       if (!s) return false;
@@ -307,12 +307,12 @@ export const EVENTS: EvDef[] = [
       return true;
     },
     tick: (a, e) => (a.atPlayer(e.mark!) ? 'won' : 'run'),
-    goal: (a, e) => `Erreiche die leuchtende Truhe · noch ${left(e)} Züge`,
-    lost: () => 'Die Truhe zerfällt zu Staub.',
+    goal: (a, e) => `Reach the glowing chest · ${left(e)} turns`,
+    lost: () => 'The chest crumbles to dust.',
   },
   {
-    id: 'zwilling', cat: 'danger', trigger: 'room', title: 'Schattenzwilling', tier: 3, limit: 60,
-    intro: ['Dein Schatten löst sich von der Wand – und zieht die Waffe.', 'Aus dem Dunkel tritt jemand, der aussieht wie du.'],
+    id: 'zwilling', cat: 'danger', trigger: 'room', title: 'Shadow twin', tier: 3, limit: 60,
+    intro: ['Your shadow peels off the wall – and draws its weapon.', 'Someone who looks like you steps out of the dark.'],
     start(a, e) {
       const tiles = a.roomTiles(e.room!).filter(i => Math.abs((i % W) - a.p.x) + Math.abs(((i / W) | 0) - a.p.y) >= 3);
       if (!tiles.length) return false;
@@ -321,12 +321,12 @@ export const EVENTS: EvDef[] = [
       return true;
     },
     tick: killAll,
-    goal: () => 'Besiege deinen Schatten',
+    goal: () => 'Defeat your shadow',
   },
   // ===================== Gruft (Gebiet 0) =====================
   {
-    id: 'parade', cat: 'danger', trigger: 'room', biome: 0, title: 'Skelettparade', tier: 2, limit: 40,
-    intro: ['Der Boden klappert. Knochen fügen sich zusammen – einer nach dem anderen.', 'Unter den Fliesen regt sich etwas. Viele etwas.'],
+    id: 'parade', cat: 'danger', trigger: 'room', biome: 0, title: 'Skeleton parade', tier: 2, limit: 40,
+    intro: ['The floor rattles. Bones assemble – one after another.', 'Something stirs under the tiles. Many somethings.'],
     start(a, e) { e.data.left = 4; return parade(a, e); },
     tick(a, e) {
       if (e.data.left > 0) {
@@ -338,52 +338,52 @@ export const EVENTS: EvDef[] = [
       }
       return killAll(a, e);
     },
-    goal: (a, e) => (e.data.left > 0 ? `Gleich steigt ein Skelett aus dem roten Feld · noch ${e.data.left}` : `Besiege die Parade ${beaten(a, e)}`),
+    goal: (a, e) => (e.data.left > 0 ? `A skeleton rises from the red tile · left ${e.data.left}` : `Defeat the parade ${beaten(a, e)}`),
   },
   {
-    id: 'rivale', cat: 'danger', trigger: 'calm', biome: 0, title: 'Rivalisierender Abenteurer', tier: 3, limit: 60, vanish: true,
-    intro: ['"Die Beute hier unten gehört MIR!", ruft jemand.', 'Ein anderer Abenteurer zieht die Waffe. Er will deinen Fund.'],
+    id: 'rivale', cat: 'danger', trigger: 'calm', biome: 0, title: 'Rival adventurer', tier: 3, limit: 60, vanish: true,
+    intro: ['"The loot down here is MINE!", someone shouts.', 'Another adventurer draws a weapon. They want your loot.'],
     start(a, e) { const s = a.near(5, 9); if (!s) return false; a.rival(e, s[0], s[1]); return true; },
     tick: killAll,
-    goal: () => 'Besiege den Rivalen',
-    lost: () => 'Der Rivale zieht lachend ab.',
+    goal: () => 'Defeat the rival',
+    lost: () => 'The rival leaves, laughing.',
   },
   {
-    id: 'spukglocke', cat: 'challenge', trigger: 'calm', biome: 0, title: 'Spukglocke', tier: 2, limit: 13, survive: true,
-    intro: ['Eine Glocke läutet von selbst. Und noch einmal.', 'Dong ... dong ... Die Toten zählen mit.'],
+    id: 'spukglocke', cat: 'challenge', trigger: 'calm', biome: 0, title: 'Haunted bell', tier: 2, limit: 13, survive: true,
+    intro: ['A bell rings by itself. And again.', 'Dong ... dong ... The dead are counting along.'],
     start(a, e) { e.data.ring = 0; return true; },
     tick(a, e) {
-      if (e.turns % 4 === 1 && e.data.ring < 3) { e.data.ring++; const n = a.wake(e, 2, 30); a.say(`Die Glocke läutet (${e.data.ring}/3)${n ? ' – etwas erwacht.' : '.'}`); }
+      if (e.turns % 4 === 1 && e.data.ring < 3) { e.data.ring++; const n = a.wake(e, 2, 30); a.say(`The bell rings (${e.data.ring}/3)${n ? ' – something awakens.' : '.'}`); }
       return 'run';
     },
-    goal: (a, e) => `Überstehe das Läuten (${e.data.ring}/3) · noch ${left(e)} Züge`,
+    goal: (a, e) => `Endure the ringing (${e.data.ring}/3) · ${left(e)} turns`,
   },
   {
-    id: 'ratten', cat: 'challenge', trigger: 'room', biome: 0, title: 'Rattenschwarm', tier: 1, limit: 40,
-    intro: ['Quiek. Quiek? QUIEK! Aus jeder Ritze kommen Ratten.', 'Der Boden bewegt sich. Er ist voller Ratten.'],
+    id: 'ratten', cat: 'challenge', trigger: 'room', biome: 0, title: 'Rat swarm', tier: 1, limit: 40,
+    intro: ['Squeak. Squeak? SQUEAK! Rats pour out of every crack.', 'The floor moves. It is full of rats.'],
     start(a, e) {
       for (const [x, y] of shuffled(a, a.edge(e.room!)).slice(0, 5 + (a.floor >= 3 ? 1 : 0))) a.spawn(e, 'ratte', x, y);
       return e.mobs.length > 0;
     },
     tick: killAll,
-    goal: (a, e) => `Vertreibe die Ratten ${beaten(a, e)}`,
+    goal: (a, e) => `Drive off the rats ${beaten(a, e)}`,
   },
   {
-    id: 'koloss', cat: 'danger', trigger: 'room', biome: 0, title: 'Knochenkoloss', tier: 3, limit: 60,
-    intro: ['Der Knochenhaufen in der Ecke steht auf. Er ist sehr groß.', 'Hunderte Knochen, ein Wille. Der Koloss erwacht.'],
+    id: 'koloss', cat: 'danger', trigger: 'room', biome: 0, title: 'Bone colossus', tier: 3, limit: 60,
+    intro: ['The bone pile in the corner stands up. It is very big.', 'Hundreds of bones, one will. The colossus awakens.'],
     start(a, e) {
       const t = far(a, e, 3);
       if (t < 0) return false;
       const m = a.spawn(e, 'skelett', t % W, (t / W) | 0);
-      a.elite(m, 2.2, 'Knochenkoloss');
+      a.elite(m, 2.2, 'Bone colossus');
       return true;
     },
     tick: killAll,
-    goal: () => 'Zerschlage den Knochenkoloss',
+    goal: () => 'Smash the bone colossus',
   },
   {
-    id: 'kerzen', cat: 'challenge', trigger: 'calm', biome: 0, title: 'Geisterkerzen', tier: 2, limit: 40,
-    intro: ['Drei kalte Kerzen flackern auf. Entzünde sie, bevor der Geist geht.', 'Eine Stimme: "Licht ... bring mir Licht ..."'],
+    id: 'kerzen', cat: 'challenge', trigger: 'calm', biome: 0, title: 'Ghost candles', tier: 2, limit: 40,
+    intro: ['Three cold candles flicker. Light them before the spirit leaves.', 'A voice: "Light ... bring me light ..."'],
     start(a, e) {
       const ms: number[] = []; let sum = 0;
       for (let k = 0; k < 6 && ms.length < 3; k++) { const s = a.near(4, 12); if (s && !ms.includes(s[1] * W + s[0])) { ms.push(s[1] * W + s[0]); sum += s[2]; } }
@@ -392,27 +392,27 @@ export const EVENTS: EvDef[] = [
       e.limit = 2 * sum + 10; // reicht immer: Hin und zurück zu jeder Kerze, mit Puffer
       return true;
     },
-    tick(a, e) { take(a, e, () => a.say('Eine Kerze brennt.')); return e.marks!.length ? 'run' : 'won'; },
-    goal: (a, e) => `Entzünde die Kerzen ${e.data.need - e.marks!.length}/${e.data.need} · noch ${left(e)} Züge`,
-    lost: () => 'Die Kerzen erlöschen. Der Geist seufzt.',
+    tick(a, e) { take(a, e, () => a.say('A candle is lit.')); return e.marks!.length ? 'run' : 'won'; },
+    goal: (a, e) => `Light the candles ${e.data.need - e.marks!.length}/${e.data.need} · ${left(e)} turns`,
+    lost: () => 'The candles go out. The spirit sighs.',
   },
   {
-    id: 'sarkophag', cat: 'danger', trigger: 'room', biome: 0, title: 'Sarkophag', tier: 3, limit: 60,
-    intro: ['Ein Steindeckel schabt zur Seite. Der Grabwächter erwacht.', 'Der Sarkophag öffnet sich – und sein Bewohner ist schlecht gelaunt.'],
+    id: 'sarkophag', cat: 'danger', trigger: 'room', biome: 0, title: 'Sarcophagus', tier: 3, limit: 60,
+    intro: ['A stone lid scrapes aside. The tomb warden awakens.', 'The sarcophagus opens – and its tenant is in a bad mood.'],
     start(a, e) {
       const t = far(a, e, 3);
       if (t < 0) return false;
       const m = a.spawn(e, a.table()[a.int(0, a.table().length - 1)], t % W, (t / W) | 0);
-      a.elite(m, 2, `Grabwächter`);
+      a.elite(m, 2, `Tomb warden`);
       for (const i of a.near2(t % W, (t / W) | 0, 1, 1).filter(a.free).slice(0, 2)) a.spawn(e, 'fledermaus', i % W, (i / W) | 0);
       return true;
     },
     tick: killAll,
-    goal: (a, e) => `Besiege den Grabwächter ${beaten(a, e)}`,
+    goal: (a, e) => `Defeat the tomb warden ${beaten(a, e)}`,
   },
   {
-    id: 'gruftfluch', cat: 'challenge', trigger: 'calm', biome: 0, title: 'Gruftfluch', tier: 2, limit: 30,
-    intro: ['Ein Fluch kriecht in deine Knochen. Nur ein Altar kann ihn brechen.', 'Kalte Finger an deinem Herzen. Du musst zum Altar!'],
+    id: 'gruftfluch', cat: 'challenge', trigger: 'calm', biome: 0, title: 'Crypt curse', tier: 2, limit: 30,
+    intro: ['A curse creeps into your bones. Only an altar can break it.', 'Cold fingers on your heart. You must reach the altar!'],
     start(a, e) {
       const s = a.near(7, 14);
       if (!s) return false;
@@ -422,16 +422,16 @@ export const EVENTS: EvDef[] = [
     },
     tick(a, e) {
       if (a.atPlayer(e.mark!)) return 'won';
-      if (e.turns % 3 === 0) a.hurt(1, 'Der Gruftfluch hat dich verzehrt.');
+      if (e.turns % 3 === 0) a.hurt(1, 'The crypt curse consumed you.');
       return 'run';
     },
-    goal: (a, e) => `Erreiche den Altar, der Fluch zehrt · noch ${left(e)} Züge`,
-    lost: () => 'Der Fluch verfliegt von selbst – diesmal.',
+    goal: (a, e) => `Reach the altar, the curse is draining you · ${left(e)} turns`,
+    lost: () => 'The curse fades by itself – this time.',
   },
   // ===================== Pilzhöhle (Gebiet 1) =====================
   {
-    id: 'sporenwolke', cat: 'danger', trigger: 'calm', biome: 1, title: 'Sporenwolke', tier: 2, limit: 8, survive: true,
-    intro: ['Ein Pilz platzt. Eine grüne Wolke breitet sich aus!', 'Pfff – und die Luft wird grün und dick.'],
+    id: 'sporenwolke', cat: 'danger', trigger: 'calm', biome: 1, title: 'Spore cloud', tier: 2, limit: 8, survive: true,
+    intro: ['A mushroom bursts. A green cloud spreads!', 'Pfff – and the air turns green and thick.'],
     start(a, e) {
       const s = a.near(2, 4);
       if (!s) return false;
@@ -444,11 +444,11 @@ export const EVENTS: EvDef[] = [
       if (e.turns < e.limit) a.warn(a.near2(e.data.sx, e.data.sy, e.turns, e.turns));
       return 'run';
     },
-    goal: (a, e) => `Weiche der grünen Welle aus · noch ${left(e)} Züge`,
+    goal: (a, e) => `Dodge the green wave · ${left(e)} turns`,
   },
   {
-    id: 'pilzring', cat: 'challenge', trigger: 'room', biome: 1, title: 'Pilzring', tier: 2, limit: 40,
-    intro: ['Ein Ring aus Pilzen leuchtet auf. Wer darin ausharrt, wird belohnt.', 'Die Pilze summen. Stell dich in den Kreis!'],
+    id: 'pilzring', cat: 'challenge', trigger: 'room', biome: 1, title: 'Fairy ring', tier: 2, limit: 40,
+    intro: ['A ring of mushrooms lights up. Whoever holds out inside is rewarded.', 'The mushrooms hum. Step into the circle!'],
     start(a, e) {
       const r = e.room!, cx = r.x + (r.w >> 1), cy = r.y + (r.h >> 1);
       e.marks = a.near2(cx, cy, 0, 1).filter(i => a.isFloor(i));
@@ -461,12 +461,12 @@ export const EVENTS: EvDef[] = [
       if (e.turns % 3 === 1 && e.total < 3) { const s = shuffled(a, a.edge(e.room!))[0]; if (s) a.spawn(e, 'sporling', s[0], s[1]); }
       return 'run';
     },
-    goal: (a, e) => `Halte den Pilzring ${e.data.hold}/5 · noch ${left(e)} Züge`,
-    lost: () => 'Der Ring verblasst.',
+    goal: (a, e) => `Hold the fairy ring ${e.data.hold}/5 · ${left(e)} turns`,
+    lost: () => 'The ring fades.',
   },
   {
-    id: 'leuchtpilze', cat: 'flavour', trigger: 'calm', biome: 1, title: 'Leuchtpilze', tier: 0, limit: 40, survive: true,
-    intro: ['Ringsum leuchten blaue Pilze. Sie riechen ... gesund.', 'Blaue Pilze! Die heilen, sagt man.'],
+    id: 'leuchtpilze', cat: 'flavour', trigger: 'calm', biome: 1, title: 'Glowing mushrooms', tier: 0, limit: 40, survive: true,
+    intro: ['Blue mushrooms glow all around. They smell ... healthy.', 'Blue mushrooms! They heal, they say.'],
     start(a, e) {
       const ms: number[] = [];
       for (let k = 0; k < 6 && ms.length < 3; k++) { const s = a.near(2, 9); if (s && !ms.includes(s[1] * W + s[0])) ms.push(s[1] * W + s[0]); }
@@ -475,22 +475,22 @@ export const EVENTS: EvDef[] = [
       return true;
     },
     tick(a, e) { take(a, e, () => { e.data.healed += a.heal(0.12); }); return e.marks!.length ? 'run' : 'won'; },
-    goal: (a, e) => `Sammle die Leuchtpilze ${e.data.need - e.marks!.length}/${e.data.need} · noch ${left(e)} Züge`,
-    won: (a, e) => (e.data.need - e.marks!.length ? `${e.data.healed} Leben, ${a.souls(3 * (e.data.need - e.marks!.length))} Seelen` : 'die Pilze sind verwelkt'),
+    goal: (a, e) => `Collect the glowing mushrooms ${e.data.need - e.marks!.length}/${e.data.need} · ${left(e)} turns`,
+    won: (a, e) => (e.data.need - e.marks!.length ? `${e.data.healed} life, ${a.souls(3 * (e.data.need - e.marks!.length))} souls` : 'the mushrooms have wilted'),
   },
   {
-    id: 'fledermaeuse', cat: 'challenge', trigger: 'calm', biome: 1, title: 'Fledermausschwarm', tier: 1, limit: 30,
-    intro: ['Flatter, flatter – ein ganzer Schwarm!', 'Die Decke bewegt sich. Die Decke sind Fledermäuse.'],
+    id: 'fledermaeuse', cat: 'challenge', trigger: 'calm', biome: 1, title: 'Bat swarm', tier: 1, limit: 30,
+    intro: ['Flutter, flutter – a whole swarm!', 'The ceiling moves. The ceiling is bats.'],
     start(a, e) {
       for (let k = 0; k < 4 + (a.floor >= 8 ? 1 : 0); k++) { const s = a.near(3, 6); if (s) a.spawn(e, 'fledermaus', s[0], s[1]); }
       return e.mobs.length > 0;
     },
     tick: killAll,
-    goal: (a, e) => `Vertreibe den Schwarm ${beaten(a, e)}`,
+    goal: (a, e) => `Drive off the swarm ${beaten(a, e)}`,
   },
   {
-    id: 'wurzeln', cat: 'challenge', trigger: 'calm', biome: 1, title: 'Wurzelgriff', tier: 1, limit: 30,
-    intro: ['Wurzeln schießen aus dem Boden und packen deine Füße!', 'Etwas greift nach deinen Knöcheln. Holz. Lebendiges Holz.'],
+    id: 'wurzeln', cat: 'challenge', trigger: 'calm', biome: 1, title: 'Root grip', tier: 1, limit: 30,
+    intro: ['Roots shoot up and grab your feet!', 'Something grabs your ankles. Wood. Living wood.'],
     start(a, e) {
       const s = a.near(3, 6);
       if (!s) return false;
@@ -501,22 +501,22 @@ export const EVENTS: EvDef[] = [
       return true;
     },
     tick(a, e) { a.strike(2, 'spike'); return killAll(a, e); },
-    goal: (a, e) => `Reiß dich los und besiege sie ${beaten(a, e)}`,
+    goal: (a, e) => `Break free and defeat them ${beaten(a, e)}`,
   },
   {
-    id: 'schlamm', cat: 'challenge', trigger: 'room', biome: 1, title: 'Schlammflut', tier: 2, limit: 35,
-    intro: ['Brauner Schlamm quillt aus dem Boden. Wer hineintritt, bleibt stecken!', 'Blubb. Der Boden wird zu Brei.'],
+    id: 'schlamm', cat: 'challenge', trigger: 'room', biome: 1, title: 'Mud flood', tier: 2, limit: 35,
+    intro: ['Brown mud oozes from the floor. Step in and you get stuck!', 'Blub. The floor turns to mush.'],
     start(a, e) {
       const pi = a.p.y * W + a.p.x;
       a.mud(a.roomTiles(e.room!).filter(i => i !== pi && a.isFloor(i) && a.chance(0.35)));
       return spawnAt(a, e, shuffled(a, a.edge(e.room!)), 2 + (a.floor >= 8 ? 1 : 0));
     },
     tick: killAll,
-    goal: (a, e) => `Besiege sie, meide den Schlamm ${beaten(a, e)}`,
+    goal: (a, e) => `Defeat them, avoid the mud ${beaten(a, e)}`,
   },
   {
-    id: 'riesenpilz', cat: 'danger', trigger: 'room', biome: 1, title: 'Riesenpilz', tier: 2, limit: 15, survive: true,
-    intro: ['Ein riesiger Pilz pulsiert. Gleich platzt er!', 'Der Pilz in der Mitte bläht sich auf. Und wieder. Und wieder.'],
+    id: 'riesenpilz', cat: 'danger', trigger: 'room', biome: 1, title: 'Giant mushroom', tier: 2, limit: 15, survive: true,
+    intro: ['A giant mushroom pulses. It is about to burst!', 'The mushroom in the middle swells. And again. And again.'],
     start(a, e) {
       const t = far(a, e, 3);
       if (t < 0) return false;
@@ -530,11 +530,11 @@ export const EVENTS: EvDef[] = [
       if (e.turns % 3 === 2) a.warn(a.near2(e.data.px, e.data.py, 1, 2));
       return 'run';
     },
-    goal: (a, e) => `Zerstöre den Riesenpilz oder halte Abstand · noch ${left(e)} Züge`,
+    goal: (a, e) => `Destroy the giant mushroom or keep your distance · ${left(e)} turns`,
   },
   {
-    id: 'brutnest', cat: 'challenge', trigger: 'room', biome: 1, title: 'Brutnest', tier: 0, limit: 50,
-    intro: ['Grüne Eier pulsieren. Zerstöre sie, bevor sie schlüpfen!', 'Ein Nest. Es zuckt. Schnell!'],
+    id: 'brutnest', cat: 'challenge', trigger: 'room', biome: 1, title: 'Brood nest', tier: 0, limit: 50,
+    intro: ['Green eggs pulse. Destroy them before they hatch!', 'A nest. It twitches. Quick!'],
     start(a, e) {
       e.data.hatch = 12;
       for (let k = 0; k < 3; k++) { const t = far(a, e, 2); if (t >= 0) a.spawn(e, 'ei', t % W, (t / W) | 0); }
@@ -542,19 +542,19 @@ export const EVENTS: EvDef[] = [
     },
     tick(a, e) {
       if (e.turns === e.data.hatch) {
-        const eggs = a.alive(e).filter(m => m.name === 'Sporenei');
-        if (eggs.length) { a.say('Die Eier schlüpfen!'); e.data.hatched = 1; }
+        const eggs = a.alive(e).filter(m => m.name === 'Spore egg');
+        if (eggs.length) { a.say('The eggs hatch!'); e.data.hatched = 1; }
         for (const m of eggs) { a.remove(m); a.spawn(e, 'sporling', m.x, m.y); }
       }
       return a.alive(e).some(m => m.hp > 0) ? 'run' : 'won';
     },
-    goal: (a, e) => (e.data.hatched ? `Besiege die Brut ${beaten(a, e)}` : `Zerstöre die Eier · schlüpfen in ${Math.max(0, e.data.hatch - e.turns)} Zügen`),
+    goal: (a, e) => (e.data.hatched ? `Defeat the brood ${beaten(a, e)}` : `Destroy the eggs · hatching in ${Math.max(0, e.data.hatch - e.turns)} turns`),
     won: (a, e) => (e.data.hatched ? a.reward(1) : a.reward(2)),
   },
   // ===================== Glutschmiede (Gebiet 2) =====================
   {
-    id: 'lavariss', cat: 'danger', trigger: 'room', biome: 2, title: 'Lavariss', tier: 2, limit: 9, survive: true,
-    intro: ['Der Boden reißt auf. Glut kriecht quer durch den Raum!', 'Ein Riss. Darin: flüssiges Feuer. Es wird länger.'],
+    id: 'lavariss', cat: 'danger', trigger: 'room', biome: 2, title: 'Lava rift', tier: 2, limit: 9, survive: true,
+    intro: ['The floor splits. Embers crawl across the room!', 'A rift. Inside: liquid fire. It is growing.'],
     start(a, e) {
       const r = e.room!, hor = r.w >= r.h;
       e.data.dx = hor ? 1 : 0; e.data.len = hor ? r.w : r.h;
@@ -564,54 +564,54 @@ export const EVENTS: EvDef[] = [
       return true;
     },
     tick(a, e) { a.strike(2, 'fire'); if (e.turns < e.limit) lava(a, e); return 'run'; },
-    goal: (a, e) => `Weg von der Glutspur · noch ${left(e)} Züge`,
+    goal: (a, e) => `Get away from the ember trail · ${left(e)} turns`,
   },
   {
-    id: 'esse', cat: 'danger', trigger: 'room', biome: 2, title: 'Esse-Ausbruch', tier: 2, limit: 8, survive: true,
-    intro: ['Die Essen fauchen. Feuerstrahlen schießen quer durch den Raum!', 'Zisch! Aus den Wänden schlagen Flammen.'],
+    id: 'esse', cat: 'danger', trigger: 'room', biome: 2, title: 'Forge eruption', tier: 2, limit: 8, survive: true,
+    intro: ['The forges hiss. Jets of fire shoot across the room!', 'Hiss! Flames burst from the walls.'],
     start(a, e) { esse(a, e); return true; },
     tick(a, e) { a.strike(3, 'fire'); if (e.turns < e.limit) esse(a, e); return 'run'; },
-    goal: (a, e) => `Meide die roten Reihen · noch ${left(e)} Züge`,
+    goal: (a, e) => `Avoid the red rows · ${left(e)} turns`,
   },
   {
-    id: 'glutschwarm', cat: 'challenge', trigger: 'calm', biome: 2, title: 'Glutgeist-Schwarm', tier: 2, limit: 40,
-    intro: ['Funken tanzen – und bekommen Gesichter.', 'Die Glut erhebt sich. Mehrmals.'],
+    id: 'glutschwarm', cat: 'challenge', trigger: 'calm', biome: 2, title: 'Ember spirit swarm', tier: 2, limit: 40,
+    intro: ['Sparks dance – and grow faces.', 'The embers rise. Several times.'],
     start(a, e) {
       for (let k = 0; k < 3 + (a.floor >= 13 ? 1 : 0); k++) { const s = a.near(4, 7); if (s) a.spawn(e, 'glutgeist', s[0], s[1]); }
       return e.mobs.length > 0;
     },
     tick: killAll,
-    goal: (a, e) => `Lösche die Glutgeister ${beaten(a, e)}`,
+    goal: (a, e) => `Put out the ember spirits ${beaten(a, e)}`,
   },
   {
-    id: 'golem', cat: 'danger', trigger: 'room', biome: 2, title: 'Rüstungsgolem erwacht', tier: 3, limit: 60,
-    intro: ['Die Rüstung an der Wand bewegt sich. Sie ist nicht leer.', 'Klirr. Ein Golem aus Schmiedestahl richtet sich auf.'],
+    id: 'golem', cat: 'danger', trigger: 'room', biome: 2, title: 'Armour golem awakens', tier: 3, limit: 60,
+    intro: ['The armour on the wall moves. It is not empty.', 'Clank. A golem of forged steel stands up.'],
     start(a, e) {
       const t = far(a, e, 3);
       if (t < 0) return false;
-      a.elite(a.spawn(e, 'golem', t % W, (t / W) | 0), 1.5, 'Rüstungsgolem');
+      a.elite(a.spawn(e, 'golem', t % W, (t / W) | 0), 1.5, 'Armour golem');
       return true;
     },
     tick: killAll,
-    goal: () => 'Besiege den Rüstungsgolem',
+    goal: () => 'Defeat the armour golem',
   },
   {
-    id: 'funken', cat: 'challenge', trigger: 'calm', biome: 2, title: 'Funkenregen', tier: 1, limit: 8, survive: true,
-    intro: ['Von der Decke regnet es Funken!', 'Ein Funkenregen. Nicht stehen bleiben!'],
+    id: 'funken', cat: 'challenge', trigger: 'calm', biome: 2, title: 'Spark rain', tier: 1, limit: 8, survive: true,
+    intro: ['Sparks rain from the ceiling!', 'A rain of sparks. Keep moving!'],
     start(a, e) { sparks(a); return true; },
     tick(a, e) { a.strike(2, 'fire'); if (e.turns < e.limit) sparks(a); return 'run'; },
-    goal: (a, e) => `Weiche den Funken aus · noch ${left(e)} Züge`,
+    goal: (a, e) => `Dodge the sparks · ${left(e)} turns`,
   },
   {
-    id: 'amboss', cat: 'challenge', trigger: 'room', biome: 2, title: 'Ambossrhythmus', tier: 2, limit: 8, survive: true,
-    intro: ['BAMM – bamm – BAMM. Die Hämmer schlagen im Takt. Bleib in Bewegung!', 'Unsichtbare Hämmer. Jeder zweite Stein. Im Takt.'],
+    id: 'amboss', cat: 'challenge', trigger: 'room', biome: 2, title: 'Anvil rhythm', tier: 2, limit: 8, survive: true,
+    intro: ['BANG – bang – BANG. The hammers strike in rhythm. Keep moving!', 'Invisible hammers. Every other stone. In rhythm.'],
     start(a, e) { anvil(a, e); return true; },
     tick(a, e) { a.strike(3, 'hammer'); if (e.turns < e.limit) anvil(a, e); return 'run'; },
-    goal: (a, e) => `Halte den Takt: jeden Zug ein Feld weiter · noch ${left(e)} Züge`,
+    goal: (a, e) => `Keep the rhythm: move one tile every turn · ${left(e)} turns`,
   },
   {
-    id: 'glutader', cat: 'challenge', trigger: 'calm', biome: 2, title: 'Glutader', tier: 1, limit: 12, survive: true,
-    intro: ['Der Boden glüht. Nur die blauen Kühlplatten sind sicher.', 'Hitze steigt auf. Such dir eine Kühlplatte!'],
+    id: 'glutader', cat: 'challenge', trigger: 'calm', biome: 2, title: 'Ember vein', tier: 1, limit: 12, survive: true,
+    intro: ['The floor glows. Only the blue cooling plates are safe.', 'Heat rises. Find a cooling plate!'],
     start(a, e) {
       const ms: number[] = [];
       for (let k = 0; k < 8 && ms.length < 4; k++) { const s = a.near(2, 6); if (s && !ms.includes(s[1] * W + s[0])) ms.push(s[1] * W + s[0]); }
@@ -619,15 +619,15 @@ export const EVENTS: EvDef[] = [
       e.marks = ms; e.data.look = 3;
       return true;
     },
-    tick(a, e) { if (e.turns % 2 === 0 && !e.marks!.some(m => a.atPlayer(m))) a.hurt(1, 'Die Glutader hat dich verbrannt.'); return 'run'; },
-    goal: (a, e) => `Steh auf einer Kühlplatte · noch ${left(e)} Züge`,
+    tick(a, e) { if (e.turns % 2 === 0 && !e.marks!.some(m => a.atPlayer(m))) a.hurt(1, 'The ember vein burned you.'); return 'run'; },
+    goal: (a, e) => `Stand on a cooling plate · ${left(e)} turns`,
   },
   {
-    id: 'ofen', cat: 'danger', trigger: 'room', biome: 2, title: 'Schmelzofen', tier: 2, limit: 10, survive: true,
-    intro: ['Der Ofen spuckt Fässer aus – mit brennender Lunte!', 'Rumpel, rumpel – Fässer rollen herein. Sie zischen.'],
+    id: 'ofen', cat: 'danger', trigger: 'room', biome: 2, title: 'Smelting furnace', tier: 2, limit: 10, survive: true,
+    intro: ['The furnace spits out barrels – with lit fuses!', 'Rumble, rumble – barrels roll in. They hiss.'],
     start(a, e) { kegs(a, e); return true; },
     tick(a, e) { if (e.turns % 3 === 0 && e.turns < e.limit - 2) kegs(a, e); return 'run'; },
-    goal: (a, e) => `Halte Abstand zu den Fässern · noch ${left(e)} Züge`,
+    goal: (a, e) => `Keep away from the barrels · ${left(e)} turns`,
   },
 ];
 
@@ -635,28 +635,28 @@ export const EVENT_BY_ID: Record<string, EvDef> = Object.fromEntries(EVENTS.map(
 
 // Kleine Fundstücke an ruhigen Stellen – ohne jede Wirkung
 export const NOTES = [
-  'Hier war Kurt. Kurt ist nicht mehr hier.',
-  'Bitte keine Fässer anzünden. – Die Verwaltung',
-  'Tag 3: Die Ratten haben meinen Käse. Tag 4: Die Ratten haben mich.',
-  'Wer das liest, ist zu tief gegangen.',
-  'Truhen beißen nicht. Meistens.',
-  'Achtung, frisch gestrichen. (Vor 200 Jahren.)',
-  'Mein Schwert für ein Brot.',
-  'Notiz an mich: Die Treppe führt nach UNTEN.',
-  'Skelette zählen nicht als Gesellschaft.',
-  'Ausgang -> (durchgestrichen)',
-  'Liebe Mama, mir geht es gut. Das Gold ist echt.',
-  'Hier ruht Gerd. Er hat den roten Boden betreten.',
-  'Die Glocke NICHT anfassen.',
-  'Wenn du das findest: Ich war schneller.',
-  'Rezept: Pilze, die nicht leuchten.',
-  'Der Händler gibt keinen Rabatt. Ich habe gefragt. Zweimal.',
-  'Wer hat die Leiter mitgenommen?!',
-  'Golems mögen keine Witze.',
-  'Ich bin nicht verirrt. Ich erkunde.',
-  'Diese Wand ist rissig. Diese auch. Alle Wände sind rissig.',
-  'Kopfgeldjäger gesucht. Bezahlung: Ruhm (wenig).',
-  'Ein Kreuz auf der Karte. Leider ohne Karte.',
-  'Glück ist eine volle Heiltrankflasche.',
-  'Bitte nicht die Statuen ärgern.',
+  'Kurt was here. Kurt is no longer here.',
+  'Please do not light the barrels. – The Management',
+  'Day 3: The rats have my cheese. Day 4: The rats have me.',
+  'Whoever reads this went too deep.',
+  'Chests don\'t bite. Mostly.',
+  'Caution, wet paint. (200 years ago.)',
+  'My sword for a loaf of bread.',
+  'Note to self: the stairs go DOWN.',
+  'Skeletons don\'t count as company.',
+  'Exit -> (crossed out)',
+  'Dear Mum, I\'m fine. The gold is real.',
+  'Here lies Gerd. He stepped on the red floor.',
+  'Do NOT touch the bell.',
+  'If you find this: I was faster.',
+  'Recipe: mushrooms that don\'t glow.',
+  'The trader gives no discount. I asked. Twice.',
+  'Who took the ladder?!',
+  'Golems don\'t like jokes.',
+  'I\'m not lost. I\'m exploring.',
+  'This wall is cracked. So is this one. All walls are cracked.',
+  'Bounty hunters wanted. Pay: fame (little).',
+  'An X on the map. Sadly, no map.',
+  'Happiness is a full healing potion.',
+  'Please do not annoy the statues.',
 ];

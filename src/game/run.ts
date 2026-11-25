@@ -52,7 +52,7 @@ export interface Puzzle {
 }
 
 export const VAULT_NAMES: Record<PuzzleKind, string> = {
-  crates: 'Kistenkammer', runes: 'Runenkammer', ice: 'Eishalle', arena: 'Prüfungskammer', braziers: 'Glutschalenkammer', darts: 'Pfeilgang',
+  crates: 'Crate chamber', runes: 'Rune chamber', ice: 'Ice hall', arena: 'Trial chamber', braziers: 'Brazier chamber', darts: 'Dart corridor',
 };
 
 export type Fx =
@@ -89,7 +89,7 @@ export type Fx =
 // Versteckte Bodenfalle. seen: der Held hat sie entdeckt (oder sie wurde ausgelöst) – dann ist sie sichtbar.
 export type HazardKind = 'stachel' | 'pfeil' | 'gas' | 'glut';
 export interface Hazard { x: number; y: number; kind: HazardKind; seen: boolean; }
-export const HAZARD_NAMES: Record<HazardKind, string> = { stachel: 'Stachelfalle', pfeil: 'Pfeilfalle', gas: 'Gasfalle', glut: 'Glutfalle' };
+export const HAZARD_NAMES: Record<HazardKind, string> = { stachel: 'Spike trap', pfeil: 'Dart trap', gas: 'Gas trap', glut: 'Ember trap' };
 
 export interface Run {
   seed: number; rng: RNG; floor: number;
@@ -197,13 +197,13 @@ const DIRS4 = [[1, 0], [-1, 0], [0, 1], [0, -1]];
 
 export const BAG_MAX = 12;
 const WEAPONS: Record<ClassId, string[][]> = {
-  krieger: [['Eisenklinge', 'Stahlklinge', 'Runenklinge', 'Glutklinge'], ['Handaxt', 'Streitaxt', 'Runenaxt', 'Glutaxt'], ['Jagdspeer', 'Stahlspeer', 'Runenspeer', 'Glutspeer']],
-  magier: [['Glimmstab', 'Feuerstab', 'Flammenstab', 'Sonnenstab'], ['Reifstab', 'Froststab', 'Eisstab', 'Gletscherstab'], ['Funkenstab', 'Blitzstab', 'Sturmstab', 'Donnerstab']],
-  waldlaeufer: [['Eschenbogen', 'Langbogen', 'Runenbogen', 'Glutbogen'], ['Handarmbrust', 'Armbrust', 'Runenarmbrust', 'Glutarmbrust'], ['Wurfmesser', 'Stahlmesser', 'Runenmesser', 'Glutmesser']],
+  krieger: [['Iron Blade', 'Steel Blade', 'Rune Blade', 'Ember Blade'], ['Hand Axe', 'Battle Axe', 'Rune Axe', 'Ember Axe'], ['Hunting Spear', 'Steel Spear', 'Rune Spear', 'Ember Spear']],
+  magier: [['Smolder Staff', 'Fire Staff', 'Flame Staff', 'Sun Staff'], ['Rime Staff', 'Frost Staff', 'Ice Staff', 'Glacier Staff'], ['Spark Staff', 'Lightning Staff', 'Storm Staff', 'Thunder Staff']],
+  waldlaeufer: [['Ash Bow', 'Longbow', 'Rune Bow', 'Ember Bow'], ['Hand Crossbow', 'Crossbow', 'Rune Crossbow', 'Ember Crossbow'], ['Throwing Knives', 'Steel Knives', 'Rune Knives', 'Ember Knives']],
 };
-const ARMOR_NAMES = ['Lederrüstung', 'Kettenhemd', 'Runenpanzer', 'Glutpanzer'];
-const AMULET_NAMES = ['Kupferamulett', 'Silberamulett', 'Runenamulett', 'Glutamulett'];
-const RING_NAMES = ['Kupferring', 'Silberring', 'Runenring', 'Glutring'];
+const ARMOR_NAMES = ['Leather Armor', 'Chain Mail', 'Rune Plate', 'Ember Plate'];
+const AMULET_NAMES = ['Copper Amulet', 'Silver Amulet', 'Rune Amulet', 'Ember Amulet'];
+const RING_NAMES = ['Copper Ring', 'Silver Ring', 'Rune Ring', 'Ember Ring'];
 // Zufällige Eigenschaften und ihre Stärke je Seltenheit
 const ROLL_AFF: [string, (r: number) => number][] = [
   ['vamp', r => 1 + (r >> 1)], ['dorn', r => 1 + r], ['quell', r => 2 + r], ['macht', r => 8 + 4 * r], ['gold', r => 15 + 10 * r],
@@ -251,7 +251,7 @@ export function genConsumable(run: Run): Item {
 export const itemScore = (it: Item) => it.atk * 3 + it.def * 3 + it.hp * 0.5 + it.crit * 40 + (it.aff?.length ?? 0) * 3;
 // Jede Wirkung eines Gegenstands als eigene Zeile
 export const itemLines = (it: Item): string[] => it.use ? [CONSUMABLES[it.use].desc] : [
-  it.atk ? `+${it.atk} Angriff` : '', it.def ? `+${it.def} Vert.` : '', it.hp ? `${it.hp > 0 ? '+' : ''}${it.hp} Leben` : '', it.crit ? `+${Math.round(it.crit * 100)} % Krit` : '',
+  it.atk ? `+${it.atk} attack` : '', it.def ? `+${it.def} def.` : '', it.hp ? `${it.hp > 0 ? '+' : ''}${it.hp} health` : '', it.crit ? `+${Math.round(it.crit * 100)} % crit` : '',
   ...(it.aff ?? []).map(([id, v]) => AFFIX[id](v)),
 ].filter(Boolean);
 export const itemText = (it: Item) => itemLines(it).join(', ');
@@ -278,7 +278,7 @@ function wear(p: Player, it: Item, sign: 1 | -1) {
 // Verkaufswert: 60 % des früheren Werts, damit sich kein Goldberg ansammelt
 export const itemValue = (it: Item) => Math.max(1, Math.round(0.6 * (it.use ? 6 : 5 * (it.rar + 1) * (it.cursed ? 0 : 1) + (it.cursed ? 2 : 0) + (it.aff?.length ?? 0) * 3)));
 // Ordnung im Rucksack: nach Platz, nach Seltenheit oder danach, wie viel besser als das Angelegte
-export const SORT_NAMES = ['Platz', 'Seltenheit', 'Verbesserung'];
+export const SORT_NAMES = ['Slot', 'Rarity', 'Upgrade'];
 function sortBag(p: Player) {
   const gain = (it: Item) => it.use ? -99 : itemScore(it) - (p.gear[it.slot] ? itemScore(p.gear[it.slot]!) : 0);
   p.bag.sort((a, b) => p.sort === 1 ? b.rar - a.rar || a.slot - b.slot || itemScore(b) - itemScore(a)
@@ -296,18 +296,18 @@ function takeItem(run: Run, it: Item, from: string) {
     p.gear[it.slot] = it;
     if (it.cursed) it.lock = run.floor;
     how = 'worn';
-    say(run, `${from}: ${it.name} angelegt.`);
+    say(run, `${from}: ${it.name} equipped.`);
   } else {
     it.neu = true;
     p.bag.push(it);
-    say(run, `${from}: ${it.name} – im Rucksack [I].`);
+    say(run, `${from}: ${it.name} – in backpack [I].`);
     if (p.bag.length > BAG_MAX) {
       const keep = (o: Item) => o.use ? 50 : itemScore(o) + o.rar;
       const worst = p.bag.reduce((a, b) => keep(b) < keep(a) ? b : a);
       p.bag.splice(p.bag.indexOf(worst), 1);
       p.gold += itemValue(worst);
       if (worst === it) how = 'sold';
-      say(run, `Rucksack voll: ${worst.name} für ${itemValue(worst)} Gold verkauft.`);
+      say(run, `Backpack full: ${worst.name} for ${itemValue(worst)} gold.`);
     }
     sortBag(p);
   }
@@ -324,7 +324,7 @@ function useItem(run: Run, i: number): boolean {
         for (let oy = -1; oy <= 1 && !open; oy++) for (let ox = -1; ox <= 1; ox++) if (run.tiles[(y + oy) * W + x + ox] !== T.WALL) { open = true; break; }
         if (open) run.seen[y * W + x] = 1;
       }
-      say(run, 'Die Karte zeigt dir die ganze Ebene.');
+      say(run, 'The map shows you the whole floor.');
       break;
     case 'sprung': {
       const spots: number[] = [];
@@ -333,14 +333,14 @@ function useItem(run: Run, i: number): boolean {
         if (!run.seen[k] || (run.tiles[k] !== T.FLOOR && run.tiles[k] !== T.BURNT) || !isFree(run, q.x, q.y) || cheb(q, p) < 6) continue;
         if (run.mobs.every(m => cheb(m, q) >= 6)) spots.push(k);
       }
-      if (!spots.length) { say(run, 'Du kennst keinen sicheren Ort.'); return false; }
+      if (!spots.length) { say(run, 'You know no safe place.'); return false; }
       const k = run.rng.pick(spots);
       p.x = k % W; p.y = (k / W) | 0;
-      say(run, 'Die Rolle trägt dich fort.');
+      say(run, 'The scroll carries you away.');
       break;
     }
-    case 'kraft': p.st.stark = 10; say(run, 'Kraft durchströmt dich.'); break;
-    case 'quell': gain(p, 6); say(run, 'Deine Kräfte sind erneuert.'); break;
+    case 'kraft': p.st.stark = 10; say(run, 'Power surges through you.'); break;
+    case 'quell': gain(p, 6); say(run, 'Your powers are renewed.'); break;
     default: return false;
   }
   p.bag.splice(i, 1);
@@ -350,7 +350,7 @@ function useItem(run: Run, i: number): boolean {
 // Ein verfluchtes Stück lässt sich erst auf der nächsten Ebene wieder ablegen
 function cursedHold(run: Run, it: Item | null): boolean {
   if (!it?.cursed || it.lock !== run.floor) return false;
-  say(run, `Der Fluch hält ${it.name} fest – erst auf der nächsten Ebene löst er sich.`);
+  say(run, `The curse holds ${it.name} tight – it only lets go on the next level.`);
   return true;
 }
 
@@ -364,7 +364,7 @@ function manage(run: Run, a: Action): boolean {
   if (a.t === 'equip') {
     const it = p.bag[a.i];
     if (!it) return true;
-    if (it.use || it.slot >= 4) { invNote(run, `${it.name} lässt sich nicht anlegen.`); return true; }
+    if (it.use || it.slot >= 4) { invNote(run, `${it.name} cannot be equipped.`); return true; }
     const cur = p.gear[it.slot];
     if (cursedHold(run, cur)) { run.invNote = run.log[run.log.length - 1]; return true; }
     if (cur) { wear(p, cur, -1); p.bag[a.i] = cur; } else p.bag.splice(a.i, 1);
@@ -374,20 +374,20 @@ function manage(run: Run, a: Action): boolean {
     delete it.neu;
     sortBag(p);
     run.invFocus = { col: 0, row: it.slot };
-    invNote(run, cur ? `${it.name} angelegt, ${cur.name} im Rucksack.` : `${it.name} angelegt.`);
+    invNote(run, cur ? `${it.name} equipped, ${cur.name} in the backpack.` : `${it.name} equipped.`);
     return true;
   }
   if (a.t === 'unequip') {
     const cur = p.gear[a.slot];
     if (!cur) return true;
     if (cursedHold(run, cur)) { run.invNote = run.log[run.log.length - 1]; return true; }
-    if (p.bag.length >= BAG_MAX) { invNote(run, 'Kein Platz im Rucksack.'); return true; }
+    if (p.bag.length >= BAG_MAX) { invNote(run, 'No room in the backpack.'); return true; }
     wear(p, cur, -1);
     p.gear[a.slot] = null;
     p.bag.push(cur);
     sortBag(p);
     run.invFocus = { col: 1, row: p.bag.indexOf(cur) };
-    invNote(run, `${cur.name} abgelegt.`);
+    invNote(run, `${cur.name} unequipped.`);
     return true;
   }
   if (a.t === 'sell') {
@@ -395,14 +395,14 @@ function manage(run: Run, a: Action): boolean {
     if (!it) return true;
     p.bag.splice(a.i, 1);
     p.gold += itemValue(it);
-    invNote(run, `${it.name} für ${itemValue(it)} Gold verkauft.`);
+    invNote(run, `${it.name} for ${itemValue(it)} gold.`);
     return true;
   }
   if (a.t === 'drop') {
     const it = p.bag[a.i];
     if (!it) return true;
     p.bag.splice(a.i, 1);
-    invNote(run, `${it.name} weggeworfen.`);
+    invNote(run, `${it.name} thrown away.`);
     return true;
   }
   if (a.t === 'sort') { p.sort = (p.sort + 1) % 3; sortBag(p); return true; }
@@ -424,11 +424,11 @@ function wares(run: Run): Offer[] {
 function stock(run: Run): Offer[] {
   const f = run.floor;
   return [
-    { kind: 'potion', name: 'Heiltrank', desc: 'Heilt einen großen Teil deines Lebens', price: Math.round((20 + 4 * f) * DIFF.potionPrice), sold: false, left: 3 },
-    { kind: 'bomb', name: 'Bombe', desc: 'Sprengt Gegner, Wände und Säulen', price: 10 + f, sold: false, left: 2 },
+    { kind: 'potion', name: 'Healing Potion', desc: 'Restores a large part of your health', price: Math.round((20 + 4 * f) * DIFF.potionPrice), sold: false, left: 3 },
+    { kind: 'bomb', name: 'Bomb', desc: 'Blasts enemies, walls and pillars', price: 10 + f, sold: false, left: 2 },
     ...wares(run),
-    { kind: 'forge', name: 'Schmied', desc: `Waffe +1 Angriff, sonst Rüstung +1 Vert. (bis +${FORGE_MAX} je Stück)`, price: 30 + 4 * f, sold: false, left: 2 },
-    { kind: 'reroll', name: 'Neue Ware', desc: 'Der Händler tauscht seine Ausrüstung aus', price: 12 + 2 * f, sold: false, left: 2 },
+    { kind: 'forge', name: 'Smith', desc: `Weapon +1 attack, otherwise armor +1 def. (up to +${FORGE_MAX} each)`, price: 30 + 4 * f, sold: false, left: 2 },
+    { kind: 'reroll', name: 'New Stock', desc: 'The trader swaps out his gear', price: 12 + 2 * f, sold: false, left: 2 },
   ];
 }
 
@@ -445,7 +445,7 @@ export function forgeTarget(p: Player): Item | null {
 export const MAX_TRAPS = 3;
 // Werkzeuggürtel (Waldläufer): 5 Fallen
 export const maxTraps = (p: Player) => (p.cls === 'waldlaeufer' && hasNode(p, 'n1_2b') ? 5 : MAX_TRAPS);
-export const RUNE_NAMES = ['Sonne', 'Mond', 'Stern', 'Auge'];
+export const RUNE_NAMES = ['Sun', 'Moon', 'Star', 'Eye'];
 const has = (p: Player, id: string) => p.relics.includes(id);
 export const hasNode = (p: Player, id: string) => p.tree.includes(id);
 export const spellAt = (p: Player, i: number) => (i >= 3 ? p.spells?.[i - 3] : undefined);
@@ -592,7 +592,7 @@ export function inVault(run: Run, x: number, y: number): boolean {
 function solve(run: Run) {
   const z = run.puzzle!, p = run.p;
   z.solved = true;
-  say(run, 'Das Rätsel ist gelöst!');
+  say(run, 'The puzzle is solved!');
   run.souls += Math.round(15 * p.soulMul);
   run.fx.push({ k: 'shake', n: 3 });
   const pool = run.rng.shuffle(Object.keys(RELICS).filter(id => !has(p, id)));
@@ -608,13 +608,13 @@ function afterStep(run: Run) {
   const i = p.y * W + p.x, t = run.tiles[i];
   if (!z.entered && inVault(run, p.x, p.y)) {
     z.entered = true;
-    say(run, z.kind === 'crates' ? 'Rätsel: Schiebe jede Kiste auf eine Platte. Der Hebel setzt zurück.'
-      : z.kind === 'ice' ? 'Rätsel: Auf dem Eis rutschst du bis zum nächsten Hindernis. Erreiche die leuchtende Platte – Kristalle unterwegs bringen Gold.'
-      : z.kind === 'arena' ? 'Prüfung: Betritt die Platte in der Mitte – und besiege alle in kurzer Zeit.'
-      : z.kind === 'braziers' ? 'Rätsel: Entzünde alle neun Glutschalen. Jeder Tritt schaltet die Schale und ihre Nachbarn um.'
-      : z.kind === 'darts' ? 'Rätsel: Erreiche die Platte oben. Rot leuchtende Reihen schießen im nächsten Zug.'
-      : z.read ? 'Rätsel: Betritt die Runen in der Reihenfolge der Tafel – sie steht oben.'
-      : 'Rätsel: Betritt die Runen in der richtigen Reihenfolge. Eine Tafel in einem anderen Raum kennt sie.');
+    say(run, z.kind === 'crates' ? 'Puzzle: push every crate onto a plate. The lever resets.'
+      : z.kind === 'ice' ? 'Puzzle: on ice you slide until something stops you. Reach the glowing plate – crystals on the way give gold.'
+      : z.kind === 'arena' ? 'Trial: step on the plate in the middle – and defeat everyone in time.'
+      : z.kind === 'braziers' ? 'Puzzle: light all nine braziers. Each step toggles the brazier and its neighbours.'
+      : z.kind === 'darts' ? 'Puzzle: reach the plate at the top. Rows glowing red fire on the next turn.'
+      : z.read ? 'Puzzle: step on the runes in the tablet\'s order – it is shown at the top.'
+      : 'Puzzle: step on the runes in the right order. A tablet in another room knows it.');
   }
   if (z.solved || z.dead) return;
   if (t === T.GOAL && z.kind === 'arena') {
@@ -630,7 +630,7 @@ function afterStep(run: Run) {
       m.awake = true; m.arena = true;
     }
     run.fx.push({ k: 'shake', n: 5 });
-    say(run, 'Die Prüfung beginnt! Besiege alle in 22 Zügen.');
+    say(run, 'The trial begins! Defeat everyone within 22 turns.');
   } else if (t === T.GOAL) solve(run);
   else if ((t === T.BRAZIER || t === T.BRAZIER_ON) && z.kind === 'braziers' && z.lights !== undefined) {
     const k = ((p.y - z.y - 1) >> 1) * 3 + ((p.x - z.x - 1) >> 1);
@@ -642,19 +642,19 @@ function afterStep(run: Run) {
     const g = Math.round((4 + run.floor) * (1 + (p.aff.gold ?? 0) / 100));
     p.gold += g;
     run.fx.push({ k: 'num', x: p.x, y: p.y, s: `+${g}`, col: '#73eff7' });
-    say(run, `Eiskristall! +${g} Gold.`);
+    say(run, `Ice crystal! +${g} gold.`);
   } else if (t === T.RUNE) {
     const k = z.runes[i];
     if (z.pressed.includes(k)) return;
     if (k === z.order[z.pressed.length]) {
       z.pressed.push(k);
-      say(run, `${RUNE_NAMES[k]} leuchtet auf.`);
+      say(run, `${RUNE_NAMES[k]} lights up.`);
       if (z.pressed.length === z.order.length) solve(run);
     } else {
       z.pressed = [];
       z.fails++;
       run.fx.push({ k: 'shake', n: 5 });
-      if (z.fails >= 3) { z.dead = true; say(run, 'Falsch! Die Runen zerfallen zu Staub.'); }
+      if (z.fails >= 3) { z.dead = true; say(run, 'Wrong! The runes crumble to dust.'); }
       else {
         // Runenwächter erscheinen an der Tür: einer beim ersten Fehler, zwei beim zweiten
         const table = spawnTable(run.floor);
@@ -665,7 +665,7 @@ function afterStep(run: Run) {
           const m = spawnMob(run, run.rng.pick(table), z.x + sx, z.y + sy);
           m.awake = true; n++;
         }
-        say(run, `Falsch! Die Runen erlöschen – ${n > 1 ? 'Runenwächter erscheinen' : 'ein Runenwächter erscheint'} an der Tür. Noch ${3 - z.fails} Versuch${3 - z.fails > 1 ? 'e' : ''}.`);
+        say(run, `Wrong! The runes go dark – ${n > 1 ? 'rune guardians appear' : 'a rune guardian appears'} at the door. ${3 - z.fails} ${3 - z.fails > 1 ? 'tries' : 'try'} left.`);
       }
     }
   }
@@ -681,10 +681,10 @@ function checkCrates(run: Run) {
 function resetCrates(run: Run) {
   const z = run.puzzle;
   if (!z || z.kind !== 'crates') return;
-  if (z.solved) { say(run, 'Das Rätsel ist bereits gelöst.'); return; }
-  if (run.mobs.some(m => inVault(run, m.x, m.y))) { say(run, 'Der Hebel klemmt, solange Gegner im Raum sind.'); return; }
+  if (z.solved) { say(run, 'The puzzle is already solved.'); return; }
+  if (run.mobs.some(m => inVault(run, m.x, m.y))) { say(run, 'The lever is stuck while enemies are in the room.'); return; }
   z.layout.forEach((tile, k) => { run.tiles[(z.y + ((k / VS) | 0)) * W + z.x + (k % VS)] = tile; });
-  say(run, 'Die Kisten rumpeln zurück an ihren Platz.');
+  say(run, 'The crates rumble back into place.');
 }
 
 
@@ -715,20 +715,20 @@ export function puzzleGoal(run: Run): string | null {
   if (!z) return null;
   const arenaOn = z.kind === 'arena' && z.started && !z.solved && !z.dead;
   if (!inVault(run, p.x, p.y) && !arenaOn) return null;
-  if (z.solved) return `${VAULT_NAMES[z.kind]}: gelöst`;
-  if (z.dead) return `${VAULT_NAMES[z.kind]}: verloren`;
+  if (z.solved) return `${VAULT_NAMES[z.kind]}: solved`;
+  if (z.dead) return `${VAULT_NAMES[z.kind]}: lost`;
   const count = (...ts: number[]) => { let n = 0; for (let y = 0; y < VS; y++) for (let x = 0; x < VS; x++) if (ts.includes(run.tiles[(z.y + y) * W + z.x + x])) n++; return n; };
   switch (z.kind) {
-    case 'crates': return `Kisten ${count(T.CRATE_ON)}/${count(T.CRATE_ON, T.PLATE)} auf Platten · Hebel setzt zurück`;
+    case 'crates': return `Crates ${count(T.CRATE_ON)}/${count(T.CRATE_ON, T.PLATE)} on plates · lever resets`;
     case 'runes': {
-      const tries = `Versuche ${3 - z.fails}/3`;
-      if (!z.read) return `Runen: die Reihenfolge steht auf einer Tafel · ${tries}`;
-      return `Runen: ${z.order.map((k, n) => (n < z.pressed.length ? `+${RUNE_NAMES[k]}` : RUNE_NAMES[k])).join(' – ')} · ${tries}`;
+      const tries = `Tries ${3 - z.fails}/3`;
+      if (!z.read) return `Runes: the order is written on a tablet · ${tries}`;
+      return `Runes: ${z.order.map((k, n) => (n < z.pressed.length ? `+${RUNE_NAMES[k]}` : RUNE_NAMES[k])).join(' – ')} · ${tries}`;
     }
-    case 'ice': return `Eis: rutsche zur leuchtenden Platte${z.gemsMax ? ` · Kristalle ${z.gemsMax - (z.gems?.length ?? 0)}/${z.gemsMax}` : ''}`;
-    case 'arena': return z.started ? `Prüfung: noch ${z.timer} Züge · ${run.mobs.filter(m => m.arena).length} Gegner` : 'Prüfung: Betritt die Mitte, dann besiege alle in 22 Zügen';
-    case 'braziers': { let n = 0; for (let k = 0; k < 9; k++) if ((z.lights ?? 0) & (1 << k)) n++; return `Glutschalen: ${n}/9 brennen · Tritt schaltet Nachbarn um`; }
-    case 'darts': return 'Pfeilgang: erreiche die Platte oben · rote Reihen schießen gleich';
+    case 'ice': return `Ice: slide to the glowing plate${z.gemsMax ? ` · crystals ${z.gemsMax - (z.gems?.length ?? 0)}/${z.gemsMax}` : ''}`;
+    case 'arena': return z.started ? `Trial: ${z.timer} turns · ${run.mobs.filter(m => m.arena).length} enemies` : 'Trial: step into the middle, then defeat everyone within 22 turns';
+    case 'braziers': { let n = 0; for (let k = 0; k < 9; k++) if ((z.lights ?? 0) & (1 << k)) n++; return `Braziers: ${n}/9 lit · a step toggles the neighbours`; }
+    case 'darts': return 'Dart corridor: reach the plate at the top · red rows fire next';
   }
 }
 
@@ -867,7 +867,7 @@ function nextFloor(run: Run) {
     const d0 = distMap(run.tiles, run.p.x, run.p.y);
     const e = cands.reduce((a, b) => (d0[a.y * W + a.x] >= d0[b.y * W + b.x] ? a : b));
     e.elite = true;
-    e.name = `Elite-${e.name}`;
+    e.name = `Elite ${e.name}`;
     e.maxHp = e.hp = Math.round(e.hp * 1.8);
     e.atk += 2; e.xp *= 2;
   }
@@ -879,8 +879,8 @@ function nextFloor(run: Run) {
   else if (run.evQ?.length) run.evQ = [];
   if (FEATURES.hunters) { run.floorTurns = 0; run.entry = [run.p.x, run.p.y]; run.hunt = bossFloor ? null : { next: HUNTER.first, n: 0 }; }
   computeFov(run.tiles, run.p.x, run.p.y, fovR(run), run.vis, run.seen);
-  say(run, `Ebene ${run.floor} – ${BIOME_NAMES[biome]}`);
-  if (bossFloor) say(run, 'Etwas Mächtiges lauert hier ...');
+  say(run, `Floor ${run.floor} – ${BIOME_NAMES[biome]}`);
+  if (bossFloor) say(run, 'Something mighty lurks here ...');
 }
 
 // ---------- Versteckte Fallen und Mimiks ----------
@@ -932,7 +932,7 @@ function stepHazard(run: Run, a: Actor) {
   const hp0 = p.hp;
   switch (h.kind) {
     case 'stachel':
-      if (shown) say(run, isP ? `${name}! Stacheln schießen aus dem Boden.` : `${a.name} tritt in eine ${name}!`);
+      if (shown) say(run, isP ? `${name}! Spikes shoot out of the floor.` : `${a.name} steps into a ${name}!`);
       damage(run, a, Math.round((3 + run.floor / 2) * DIFF.trapDmg), isP ? '#b13e53' : '#c9d4dc');
       break;
     case 'pfeil': {
@@ -943,18 +943,18 @@ function stepHazard(run: Run, a: Actor) {
         if (opaque(run.tiles[y * W + x])) { src = [x, y]; break; }
       }
       if (src && shown) run.fx.push({ k: 'arrow', x0: src[0], y0: src[1], x1: a.x, y1: a.y, col: '#c9d4dc', heavy: false });
-      if (shown) say(run, isP ? `${name}! Ein Pfeil zischt aus der Wand.` : `${a.name} löst eine ${name} aus!`);
+      if (shown) say(run, isP ? `${name}! A dart hisses out of the wall.` : `${a.name} triggers a ${name}!`);
       damage(run, a, Math.round((2 + run.floor / 2) * DIFF.trapDmg), isP ? '#b13e53' : '#c9d4dc');
       break;
     }
     case 'gas':
       // Giftwolke über 3x3, danach ist die Falle leer
-      if (shown) say(run, isP ? `${name}! Grünes Gas strömt aus dem Boden.` : `Unter ${a.name} zischt eine ${name}!`);
+      if (shown) say(run, isP ? `${name}! Green gas pours out of the floor.` : `Under ${a.name} hisses a ${name}!`);
       for (const q of [p, ...run.mobs]) if (cheb(q, a) <= 1) q.st.gift = Math.max(q.st.gift ?? 0, 4);
       run.hazards = run.hazards.filter(q => q !== h);
       break;
     case 'glut':
-      if (shown) say(run, isP ? `${name}! Glut bricht aus dem Boden.` : `${a.name} tritt auf eine ${name}!`);
+      if (shown) say(run, isP ? `${name}! Embers burst out of the floor.` : `${a.name} steps on an ${name}!`);
       for (const [ox, oy] of [[0, 0], ...DIRS4]) ignite(run, a.x + ox, a.y + oy, 2);
       a.st.brand = Math.max(a.st.brand ?? 0, 2);
       break;
@@ -972,7 +972,7 @@ function spotHazards(run: Run) {
     h.seen = true;
     tele(run, 'trapSpot');
     run.fx.push({ k: 'num', x: h.x, y: h.y, s: '!', col: '#ffcd75' });
-    say(run, `Falle entdeckt! ${HAZARD_NAMES[h.kind]}.`);
+    say(run, `Trap spotted! ${HAZARD_NAMES[h.kind]}.`);
   }
 }
 
@@ -985,7 +985,7 @@ function revealMimic(run: Run, i: number, bite: boolean) {
   m.cd = bite ? 1 : 0; // nach dem Biss beim Aufdecken setzt er in diesem Zug aus
   tele(run, 'mimicMet');
   run.fx.push({ k: 'shake', n: 4 });
-  say(run, 'Die Truhe hat Zähne! Ein Mimik!');
+  say(run, 'The chest has teeth! A mimic!');
   if (bite) hitPlayer(run, m, true);
 }
 
@@ -1091,7 +1091,7 @@ function evApi(run: Run): EvApi {
         if (kind === 'fire') ignite(run, x, y, 3);
         const a = p.x === x && p.y === y ? p : mobAt(run, x, y);
         if (!a || a.hp <= 0) continue;
-        if (kind === 'gas') { a.st.gift = Math.max(a.st.gift ?? 0, 3); run.fx.push({ k: 'num', x, y, s: 'Gift', col: '#38b764' }); }
+        if (kind === 'gas') { a.st.gift = Math.max(a.st.gift ?? 0, 3); run.fx.push({ k: 'num', x, y, s: 'Poison', col: '#38b764' }); }
         if (dmg > 0) damage(run, a, dmg, '#b13e53');
       }
       tele(run, 'evStrike');
@@ -1155,15 +1155,15 @@ function evReward(run: Run, tier: number): string {
   const p = run.p, rng = run.rng, a = evApi(run), R = EVENT;
   if (tier === 1) {
     const g = a.gold(R.gold1 + run.floor);
-    if (rng.chance(R.potion1)) { p.potions++; return `${g} Gold, ein Heiltrank`; }
-    return `${g} Gold`;
+    if (rng.chance(R.potion1)) { p.potions++; return `${g} gold, a healing potion`; }
+    return `${g} gold`;
   }
   if (tier === 2) {
     const s = a.souls(R.souls2);
-    if (rng.chance(R.item2)) { const it = genItem(run); takeItem(run, it, 'Lohn'); tele(run, 'evItems'); return `${it.name}, ${s} Seelen`; }
-    if (!rng.chance(R.cons2)) return `${s} Seelen`;
-    if (rng.chance(0.5)) { p.potions++; return `ein Heiltrank, ${s} Seelen`; }
-    p.bombs++; return `eine Bombe, ${s} Seelen`;
+    if (rng.chance(R.item2)) { const it = genItem(run); takeItem(run, it, 'Reward'); tele(run, 'evItems'); return `${it.name}, ${s} souls`; }
+    if (!rng.chance(R.cons2)) return `${s} souls`;
+    if (rng.chance(0.5)) { p.potions++; return `a healing potion, ${s} souls`; }
+    p.bombs++; return `a bomb, ${s} souls`;
   }
   const pool = rng.shuffle(Object.keys(RELICS).filter(id => !has(p, id)));
   if ((run.relicOps ?? 0) < R.relicCap && pool.length >= 2 && rng.chance(R.relicChance)) {
@@ -1171,12 +1171,12 @@ function evReward(run: Run, tier: number): string {
     tele(run, 'evRelic');
     run.perkChoices = pool.slice(0, 2);
     run.mode = 'perk';
-    return 'Wahl einer Reliquie';
+    return 'choice of a relic';
   }
-  if (!rng.chance(R.item3)) return `${a.gold(2 * (R.gold3 + run.floor))} Gold, ${a.souls(R.souls3)} Seelen`;
+  if (!rng.chance(R.item3)) return `${a.gold(2 * (R.gold3 + run.floor))} gold, ${a.souls(R.souls3)} souls`;
   const it = genItem(run, false, 1);
-  takeItem(run, it, 'Lohn'); tele(run, 'evItems');
-  return `${it.name}, ${a.gold(R.gold3 + run.floor)} Gold, ${a.souls(R.souls3)} Seelen`;
+  takeItem(run, it, 'Reward'); tele(run, 'evItems');
+  return `${it.name}, ${a.gold(R.gold3 + run.floor)} gold, ${a.souls(R.souls3)} souls`;
 }
 
 function evStart(run: Run, plan: EvPlan): boolean {
@@ -1188,8 +1188,8 @@ function evStart(run: Run, plan: EvPlan): boolean {
   if (!ok) { tele(run, 'evSkip'); return false; }
   run.ev = e;
   const intro = d.intro[run.rng.int(0, d.intro.length - 1)];
-  say(run, `Ereignis: ${d.title} – ${intro}`);
-  run.fx.push({ k: 'banner', title: `EREIGNIS: ${d.title}`, sub: intro, col: d.cat === 'danger' ? '#ef7d57' : d.cat === 'challenge' ? '#ffcd75' : '#73eff7' }, { k: 'shake', n: d.cat === 'danger' ? 4 : 1 });
+  say(run, `Event: ${d.title} – ${intro}`);
+  run.fx.push({ k: 'banner', title: `EVENT: ${d.title}`, sub: intro, col: d.cat === 'danger' ? '#ef7d57' : d.cat === 'challenge' ? '#ffcd75' : '#73eff7' }, { k: 'shake', n: d.cat === 'danger' ? 4 : 1 });
   tele(run, `evStart_${d.id}`);
   return true;
 }
@@ -1204,12 +1204,12 @@ function evEnd(run: Run, won: boolean) {
   tele(run, `ev${won ? 'Won' : 'Lost'}_${d.id}`);
   if (won) {
     const what = d.won ? d.won(a, e) : evReward(run, d.tier);
-    say(run, `Geschafft! Lohn: ${what}.`);
-    run.fx.push({ k: 'banner', title: 'GESCHAFFT!', sub: `Lohn: ${what}`, col: '#a7f070' });
+    say(run, `Done! Reward: ${what}.`);
+    run.fx.push({ k: 'banner', title: 'DONE!', sub: `Reward: ${what}`, col: '#a7f070' });
   } else {
-    const why = d.lost ? d.lost(a, e) : 'Das Ereignis ist vorbei.';
+    const why = d.lost ? d.lost(a, e) : 'The event is over.';
     say(run, why);
-    run.fx.push({ k: 'banner', title: 'VORBEI', sub: why, col: '#94b0c2' });
+    run.fx.push({ k: 'banner', title: 'OVER', sub: why, col: '#94b0c2' });
   }
 }
 
@@ -1234,7 +1234,7 @@ function evTick(run: Run) {
   // Fundstück: einmal je Ebene an einer ruhigen Stelle
   if (run.evCalm === 12 && run.evNote !== run.floor && run.rng.chance(EVENT.noteChance)) {
     run.evNote = run.floor;
-    say(run, `Ein Zettel an der Wand: "${NOTES[run.rng.int(0, NOTES.length - 1)]}"`);
+    say(run, `A note on the wall: "${NOTES[run.rng.int(0, NOTES.length - 1)]}"`);
   }
   const calmPlan = q.find(pl => pl.room === undefined);
   if (calmPlan && run.evCalm >= EVENT.calmMin && (run.evCalm >= EVENT.calmMax || run.rng.chance(EVENT.calmChance))) { run.evCalm = 0; evStart(run, calmPlan); }
@@ -1258,7 +1258,7 @@ function hunterTick(run: Run) {
   if (!h || run.mode !== 'play' || run.p.hp <= 0) return;
   run.floorTurns = (run.floorTurns ?? 0) + 1;
   const t = run.floorTurns;
-  if (t === HUNTER.first - HUNTER.warn) say(run, 'Etwas verfolgt dich ...');
+  if (t === HUNTER.first - HUNTER.warn) say(run, 'Something is following you ...');
   if (t < h.next) return;
   // aufgeschoben (nicht verloren): in der Rätselkammer, in einem versiegelten Ereignis, bei voller Zahl
   if (inVault(run, run.p.x, run.p.y) || run.ev?.seal?.length || run.mobs.filter(isHunter).length >= HUNTER.cap) return;
@@ -1290,10 +1290,10 @@ function spawnHunter(run: Run, stage = 0): boolean {
   m.awake = true; m.st.born = run.turn;
   if (run.floor < HUNTER.weakBelow) { m.maxHp = m.hp = Math.round(m.hp * HUNTER.weak); m.atk = Math.max(1, Math.round(m.atk * HUNTER.weak)); }
   // Wer bleibt, wird härter gejagt: jeder weitere Jäger dieser Ebene ist stärker
-  if (stage > 0) { m.maxHp = m.hp = Math.round(m.hp * (1 + HUNTER.growHp * stage)); m.atk += HUNTER.growAtk * Math.ceil(stage / 2); m.name = `${m.name} (Stufe ${stage + 1})`; }
+  if (stage > 0) { m.maxHp = m.hp = Math.round(m.hp * (1 + HUNTER.growHp * stage)); m.atk += HUNTER.growAtk * Math.ceil(stage / 2); m.name = `${m.name} (stage ${stage + 1})`; }
   tele(run, `hunt_${kind}`);
-  say(run, `DER JÄGER IST DA: ${m.name}!`);
-  run.fx.push({ k: 'banner', title: 'DER JÄGER IST DA', sub: m.name, col: '#b13e53' }, { k: 'shake', n: 5 });
+  say(run, `THE HUNTER IS HERE: ${m.name}!`);
+  run.fx.push({ k: 'banner', title: 'THE HUNTER IS HERE', sub: m.name, col: '#b13e53' }, { k: 'shake', n: 5 });
   return true;
 }
 
@@ -1379,12 +1379,12 @@ function knock(run: Run, m: Actor, dx: number, dy: number, dmg = 2) {
   const p = run.p;
   if (p.hp <= 0) return;
   if (isFree(run, p.x + dx, p.y + dy)) { p.x += dx; p.y += dy; stepHazard(run, p); }
-  else { damage(run, p, dmg, '#b13e53'); run.fx.push({ k: 'num', x: p.x, y: p.y, s: 'Wand!', col: '#ef7d57' }); }
+  else { damage(run, p, dmg, '#b13e53'); run.fx.push({ k: 'num', x: p.x, y: p.y, s: 'Wall!', col: '#ef7d57' }); }
 }
 // Trefferwert eines Spezialangriffs: Rüstung zählt nur halb
 function special(run: Run, m: Actor, mul: number) {
   const p = run.p;
-  if (p.st.dodge) { run.fx.push({ k: 'num', x: p.x, y: p.y, s: 'verfehlt', col: '#94b0c2' }); return false; }
+  if (p.st.dodge) { run.fx.push({ k: 'num', x: p.x, y: p.y, s: 'missed', col: '#94b0c2' }); return false; }
   const atk = m.atk * mul;
   damage(run, p, Math.max(Math.ceil(atk * 0.5), atk - Math.floor(p.def / 2) - (p.st.wall ? 3 : 0) - (p.st.eis ? 2 : 0)), '#b13e53');
   run.fx.push({ k: 'shake', n: 6 });
@@ -1404,8 +1404,8 @@ function unleash(run: Run, m: Actor) {
       const x0 = m.x, y0 = m.y;
       if (land) { moveMob(run, m, land[0], land[1]); if (m.hp <= 0) return; }
       run.fx.push({ k: 'leap', id: m.id, x0, y0, x1: m.x, y1: m.y }, { k: 'quake', x: m.x, y: m.y, col: '#a7f070' });
-      if (hit && special(run, m, 1.6)) { p.st.gift = Math.max(p.st.gift ?? 0, 3); knock(run, m, ax, ay); say(run, `${m.name} reißt dich zu Boden!`); }
-      else say(run, `${m.name} springt ins Leere.`);
+      if (hit && special(run, m, 1.6)) { p.st.gift = Math.max(p.st.gift ?? 0, 3); knock(run, m, ax, ay); say(run, `${m.name} slams you to the ground!`); }
+      else say(run, `${m.name} leaps at nothing.`);
       m.cd = HUNTER.leapCd;
       return;
     }
@@ -1422,9 +1422,9 @@ function unleash(run: Run, m: Actor) {
         const [dx, dy] = axis(p, m);
         let x = p.x, y = p.y;
         while (Math.abs(x - m.x) + Math.abs(y - m.y) > 1 && isFree(run, x + dx, y + dy)) { x += dx; y += dy; }
-        if (x !== p.x || y !== p.y) { p.x = x; p.y = y; say(run, 'Ein Tentakel reißt dich heran!'); }
+        if (x !== p.x || y !== p.y) { p.x = x; p.y = y; say(run, 'A tentacle drags you in!'); }
         p.st.netz = Math.max(p.st.netz ?? 0, 2);
-        run.fx.push({ k: 'num', x: p.x, y: p.y, s: 'Umschlungen', col: '#9a4fc0' });
+        run.fx.push({ k: 'num', x: p.x, y: p.y, s: 'Entangled', col: '#9a4fc0' });
       }
       m.cd = HUNTER.krakeCd;
       return;
@@ -1449,9 +1449,9 @@ function unleash(run: Run, m: Actor) {
       if (hit && special(run, m, 0.8)) {
         p.st.netz = Math.max(p.st.netz ?? 0, HUNTER.stoneTurns);
         p.st.stein = HUNTER.stoneTurns;
-        say(run, 'Medusas Blick lässt dich zu Stein erstarren!');
-        run.fx.push({ k: 'num', x: p.x, y: p.y, s: 'Versteinert', col: '#c9d4dc' });
-      } else say(run, 'Du wendest den Blick gerade noch ab.');
+        say(run, 'Medusa\'s gaze turns you to stone!');
+        run.fx.push({ k: 'num', x: p.x, y: p.y, s: 'Petrified', col: '#c9d4dc' });
+      } else say(run, 'You avert your eyes just in time.');
       m.cd = HUNTER.gazeCd;
       return;
     }
@@ -1462,8 +1462,8 @@ function unleash(run: Run, m: Actor) {
 function enrage(run: Run, m: Actor) {
   if (m.st.rage || m.hp > m.maxHp * HUNTER.rageAt) return;
   m.st.rage = 1; m.atk += HUNTER.rageAtk; m.cd = 0; m.st.bc = 0;
-  say(run, `${m.name} gerät in Raserei!`);
-  run.fx.push({ k: 'roar', id: m.id, x: m.x, y: m.y }, { k: 'num', x: m.x, y: m.y, s: 'RASEREI', col: '#b13e53' }, { k: 'shake', n: 6 });
+  say(run, `${m.name} flies into a frenzy!`);
+  run.fx.push({ k: 'roar', id: m.id, x: m.x, y: m.y }, { k: 'num', x: m.x, y: m.y, s: 'FRENZY', col: '#b13e53' }, { k: 'shake', n: 6 });
 }
 
 function hunterAct(run: Run, m: Actor, dist: Int16Array) {
@@ -1479,15 +1479,15 @@ function hunterAct(run: Run, m: Actor, dist: Int16Array) {
         if (!m.cd && run.rng.chance(0.5)) {
           const ring: number[] = [];
           for (let oy = -1; oy <= 1; oy++) for (let ox = -1; ox <= 1; ox++) if (ox || oy) ring.push((m.y + oy) * W + m.x + ox);
-          if (windUp(run, m, 'tail', ring, `${m.name} peitscht mit dem Schwanz aus ...`)) return;
+          if (windUp(run, m, 'tail', ring, `${m.name} lashes out with its tail ...`)) return;
         }
         hitPlayer(run, m, true);
-        if (p.hp > 0 && run.rng.chance(0.25)) { p.st.gift = Math.max(p.st.gift ?? 0, 3); run.fx.push({ k: 'num', x: p.x, y: p.y, s: 'Gift', col: '#38b764' }); }
+        if (p.hp > 0 && run.rng.chance(0.25)) { p.st.gift = Math.max(p.st.gift ?? 0, 3); run.fx.push({ k: 'num', x: p.x, y: p.y, s: 'Poison', col: '#38b764' }); }
         return;
       }
       if (!m.cd && near >= 2 && near <= 4 && seen && m.st.born !== run.turn) {
         const [dx, dy] = axis(m, p);
-        if (windUp(run, m, 'leap', [(p.y - dy) * W + p.x - dx, p.y * W + p.x, (p.y + dy) * W + p.x + dx], `${m.name} duckt sich zum Sprung!`)) { m.st.lx = p.x; m.st.ly = p.y; return; }
+        if (windUp(run, m, 'leap', [(p.y - dy) * W + p.x - dx, p.y * W + p.x, (p.y + dy) * W + p.x + dx], `${m.name} crouches to pounce!`)) { m.st.lx = p.x; m.st.ly = p.y; return; }
       }
       walk(run, m, dist, 2);
       return;
@@ -1495,12 +1495,12 @@ function hunterAct(run: Run, m: Actor, dist: Int16Array) {
     case 'krake': { // Tentakelwand quer zur Achse auf bis zu 4 Felder; daneben ein Schlag, der festhält
       if (orth(run, m)) {
         hitPlayer(run, m, true);
-        if (p.hp > 0 && run.rng.chance(0.3)) { p.st.netz = Math.max(p.st.netz ?? 0, 1); run.fx.push({ k: 'num', x: p.x, y: p.y, s: 'Umschlungen', col: '#9a4fc0' }); }
+        if (p.hp > 0 && run.rng.chance(0.3)) { p.st.netz = Math.max(p.st.netz ?? 0, 1); run.fx.push({ k: 'num', x: p.x, y: p.y, s: 'Entangled', col: '#9a4fc0' }); }
         return;
       }
       if (near <= 4 && !m.cd && seen) {
         const [dx, dy] = axis(m, p), qx = dy ? 1 : 0, qy = dx ? 1 : 0;
-        if (windUp(run, m, 'tent', [p.y * W + p.x, (p.y + qy) * W + p.x + qx, (p.y - qy) * W + p.x - qx], 'Der Boden unter dir bebt ...')) return;
+        if (windUp(run, m, 'tent', [p.y * W + p.x, (p.y + qy) * W + p.x + qx, (p.y - qy) * W + p.x - qx], 'The ground beneath you trembles ...')) return;
       }
       walk(run, m, dist, 1);
       return;
@@ -1515,11 +1515,11 @@ function hunterAct(run: Run, m: Actor, dist: Int16Array) {
           if (Math.abs(x - m.x) + Math.abs(y - m.y) >= 3) cone.push((y + qy) * W + x + qx, (y - qy) * W + x - qx);
         }
         m.st.bdx = dx; m.st.bdy = dy;
-        if (windUp(run, m, 'breath', cone, `${m.name} holt tief Luft ...`)) return;
+        if (windUp(run, m, 'breath', cone, `${m.name} takes a deep breath ...`)) return;
       }
       if (!m.cd && near >= 3 && near <= 7 && seen && m.st.born !== run.turn) {
         const x = p.x, y = p.y;
-        if (windUp(run, m, 'rain', [y * W + x, (y - 1) * W + x - 1, (y - 1) * W + x + 1, (y + 1) * W + x - 1, (y + 1) * W + x + 1], `${m.name} brüllt – Feuer regnet herab!`)) return;
+        if (windUp(run, m, 'rain', [y * W + x, (y - 1) * W + x - 1, (y - 1) * W + x + 1, (y + 1) * W + x - 1, (y + 1) * W + x + 1], `${m.name} roars – fire rains down!`)) return;
       }
       walk(run, m, dist, 3);
       return;
@@ -1528,7 +1528,7 @@ function hunterAct(run: Run, m: Actor, dist: Int16Array) {
       if (orth(run, m) && (p.st.stein || m.cd)) { hitPlayer(run, m, true); if (p.st.stein && p.hp > 0) damage(run, p, 2, '#c9d4dc'); return; }
       if (!m.cd && line && near <= 6 && seen && !p.st.stein) {
         const [dx, dy] = axis(m, p);
-        if (windUp(run, m, 'gaze', ray(run, m, dx, dy, 7), 'Medusas Augen beginnen zu glühen ...')) return;
+        if (windUp(run, m, 'gaze', ray(run, m, dx, dy, 7), 'Medusa\'s eyes begin to glow ...')) return;
       }
       if (orth(run, m)) { hitPlayer(run, m, true); return; }
       walk(run, m, dist, 2);
@@ -1541,18 +1541,18 @@ function hunterAct(run: Run, m: Actor, dist: Int16Array) {
         run.fx.push({ k: 'reap', x: m.st.zx, y: m.st.zy, v: m.st.zv });
         m.cd = HUNTER.todCd;
         if (inZone) {
-          say(run, 'Die Sense trifft. Der Tod holt dich.');
+          say(run, 'The scythe strikes. Death takes you.');
           tele(run, 'todExec');
           p.hp = 0; // Rüstung und Schild helfen nicht – nur Lebensretter wie Eisenwille
           run.fx.push({ k: 'shake', n: 8 });
           fatal(run);
-        } else say(run, 'Die Sense trifft ins Leere.');
+        } else say(run, 'The scythe hits nothing.');
         return;
       }
       if (m.st.born !== run.turn && !m.cd && near <= 2 && canEscape(run, m)) {
         m.st.zt = 1; m.st.zx = p.x; m.st.zy = p.y; m.st.zv = Math.abs(p.x - m.x) >= Math.abs(p.y - m.y) ? 1 : 0;
-        say(run, 'DER TOD HOLT AUS! Raus aus dem Feld!');
-        run.fx.push({ k: 'banner', title: 'DER TOD HOLT AUS', sub: 'Verlasse das rote Feld!', col: '#b13e53' }, { k: 'charge', id: m.id, x: m.x, y: m.y, kind: 'scythe' });
+        say(run, 'DEATH WINDS UP! Get off the tile!');
+        run.fx.push({ k: 'banner', title: 'DEATH WINDS UP', sub: 'Leave the red tile!', col: '#b13e53' }, { k: 'charge', id: m.id, x: m.x, y: m.y, kind: 'scythe' });
         return;
       }
       // Schattenschritt: aus der Ferne direkt hinter den Helden
@@ -1564,7 +1564,7 @@ function hunterAct(run: Run, m: Actor, dist: Int16Array) {
           run.fx.push({ k: 'blink', x: m.x, y: m.y }, { k: 'blink', x: s[0], y: s[1] });
           m.x = s[0]; m.y = s[1]; m.f = axis(m, p);
           m.st.bc = HUNTER.blinkCd;
-          say(run, 'Der Tod tritt aus den Schatten hinter dich.');
+          say(run, 'Death steps out of the shadows behind you.');
           return;
         }
       }
@@ -1592,17 +1592,17 @@ function medusaHurt(run: Run, m: Actor) {
   m.st.sumT = run.turn;
   const s = spawnMob(run, 'schlange', spot[0], spot[1]);
   s.awake = true; s.st.mom = m.id;
-  say(run, 'Aus Medusas Haar fällt eine Schlange!');
+  say(run, 'A snake drops from Medusa\'s hair!');
 }
 
 // Anzeige oben: Zugzähler und Warnung vor dem nächsten Jäger
 export function hunterInfo(run: Run): { text: string; col: string } | null {
   if (!run.hunt) return null;
   const t = run.floorTurns ?? 0, h = run.hunt;
-  if (h.n) return { text: `Nächster Jäger: ${Math.max(0, h.next - t)} Züge`, col: '#b13e53' };
-  if (t >= HUNTER.first - 10) return { text: `Die Jagd beginnt bald ... ${Math.max(0, HUNTER.first - t)}`, col: '#b13e53' };
-  if (t >= HUNTER.first - HUNTER.warn) return { text: 'Etwas verfolgt dich ...', col: '#ef7d57' };
-  return { text: `Züge: ${t}`, col: '#566c86' };
+  if (h.n) return { text: `Next hunter: ${Math.max(0, h.next - t)} turns`, col: '#b13e53' };
+  if (t >= HUNTER.first - 10) return { text: `The hunt begins soon ... ${Math.max(0, HUNTER.first - t)}`, col: '#b13e53' };
+  if (t >= HUNTER.first - HUNTER.warn) return { text: 'Something is following you ...', col: '#ef7d57' };
+  return { text: `Turns: ${t}`, col: '#566c86' };
 }
 
 function ignite(run: Run, x: number, y: number, turns = 3) {
@@ -1656,7 +1656,7 @@ function breakWall(run: Run, i: number) {
   run.tiles[i] = T.RUBBLE;
   run.cracks.delete(i);
   run.fx.push({ k: 'debris', x: i % W, y: (i / W) | 0 });
-  say(run, 'Die Wand bricht ein!');
+  say(run, 'The wall collapses!');
 }
 
 function burst(run: Run, i: number) {
@@ -1669,7 +1669,7 @@ function burst(run: Run, i: number) {
 function collapse(run: Run, x: number, y: number) {
   run.tiles[y * W + x] = T.RUBBLE;
   run.fx.push({ k: 'debris', x, y });
-  say(run, 'Eine Säule stürzt ein!');
+  say(run, 'A pillar collapses!');
   for (const [ox, oy] of DIRS4) {
     const m = mobAt(run, x + ox, y + oy);
     if (m) { stun(run, m, 2); damage(run, m, 8 + run.floor, '#94b0c2'); }
@@ -1702,7 +1702,7 @@ function tickWorld(run: Run) {
 function stun(run: Run, a: Actor, turns: number) {
   if (a.st.immun) return;
   // betäubte Jäger brechen ihren angekündigten Angriff ab
-  if (a.st.zt || a.zone) { delete a.st.zt; delete a.zone; delete a.zk; run.fx.push({ k: 'num', x: a.x, y: a.y, s: 'unterbrochen', col: '#73eff7' }); }
+  if (a.st.zt || a.zone) { delete a.st.zt; delete a.zone; delete a.zk; run.fx.push({ k: 'num', x: a.x, y: a.y, s: 'interrupted', col: '#73eff7' }); }
   // Jäger schütteln Betäubung schneller ab
   a.st.stun = (a.boss ? 1 : MOBS[a.kind]?.hunter ? Math.min(turns, HUNTER.stunMax) : turns) + (has(run.p, 'frostkern') ? 1 : 0);
 }
@@ -1721,7 +1721,7 @@ function damage(run: Run, dst: Actor, amt: number, col = '#f4f4f4', crit = false
     const ab = Math.min(p.shield, amt);
     p.shield -= ab; amt -= ab;
     if (!p.shield) delete p.st.schild;
-    if (amt <= 0) { run.fx.push({ k: 'num', x: p.x, y: p.y, s: 'Schild', col: '#9a4fc0' }); return; }
+    if (amt <= 0) { run.fx.push({ k: 'num', x: p.x, y: p.y, s: 'Shield', col: '#9a4fc0' }); return; }
   }
   // Kryomant: Treffer gegen Betäubte und Bosse geben Mana (TUNE.kryoMana)
   if (dst !== p && playerActing && p.cls === 'magier' && hasNode(p, 'n1_5') && (dst.st.stun || dst.boss)) gain(p, TUNE.kryoMana);
@@ -1733,7 +1733,7 @@ function damage(run: Run, dst: Actor, amt: number, col = '#f4f4f4', crit = false
   // Schutzrune: einmal je Ebene ein Blinzeln, wenn das Leben knapp wird
   if (dst === p && p.hp > 0 && p.hp < p.maxHp * 0.3 && p.cls === 'magier' && hasNode(p, 'n2_2b') && !run.runeUsed) {
     const spot = blinkSpot(run);
-    if (spot) { run.runeUsed = true; [p.x, p.y] = spot; say(run, 'Die Schutzrune reißt dich fort!'); }
+    if (spot) { run.runeUsed = true; [p.x, p.y] = spot; say(run, 'The ward rune pulls you away!'); }
   }
 }
 
@@ -1796,11 +1796,11 @@ function sideHits(run: Run, dst: Actor, base: number, col: string) {
 function fatal(run: Run) {
   const p = run.p;
   if (p.hp > 0) return;
-  if (has(p, 'eisenwille') && !run.willUsed) { run.willUsed = true; p.hp = 1; say(run, 'Eisenwille hält dich am Leben!'); return; }
+  if (has(p, 'eisenwille') && !run.willUsed) { run.willUsed = true; p.hp = 1; say(run, 'Iron Will keeps you alive!'); return; }
   p.hp = 0;
   run.mode = 'dead';
   run.fx.push({ k: 'pdeath', x: p.x, y: p.y });
-  say(run, 'Du bist gefallen.');
+  say(run, 'You have fallen.');
 }
 
 function kill(run: Run, m: Actor) {
@@ -1818,7 +1818,7 @@ function kill(run: Run, m: Actor) {
   }
   if (m.st.mark && p.cls === 'waldlaeufer') gain(p, 2); // Markieren
   // Klingenrausch: ein Sieg gibt einen freien Zug, höchstens alle 3 Züge
-  if (p.cls === 'krieger' && playerActing && hasNode(p, 'n1_5') && !p.st.rausch) { p.st.rausch = 3; freeTurn = true; say(run, 'Klingenrausch!'); }
+  if (p.cls === 'krieger' && playerActing && hasNode(p, 'n1_5') && !p.st.rausch) { p.st.rausch = 3; freeTurn = true; say(run, 'Blade rush!'); }
   if (p.cls === 'magier' && m.st.brand && hasNode(p, 'n0_5')) {
     // Flächenbrand: brennende Gegner explodieren und stecken Nachbarn an
     run.fx.push({ k: 'boom', x: m.x, y: m.y, r: 1 });
@@ -1833,7 +1833,7 @@ function kill(run: Run, m: Actor) {
   if (p.vamp) p.hp = Math.min(p.maxHp, p.hp + p.vamp);
   if (p.cls === 'waldlaeufer') gain(p, 1);
   if (m.boss) {
-    say(run, `${m.name} ist besiegt!`);
+    say(run, `${m.name} is defeated!`);
     run.souls += Math.round(25 * p.soulMul);
     run.fx.push({ k: 'shake', n: 8 });
     if (run.floor >= LAST_FLOOR) { run.mode = 'win'; return; }
@@ -1845,15 +1845,15 @@ function kill(run: Run, m: Actor) {
     tele(run, 'mimicKilled'); if (up) tele(run, 'mimicRarUp');
     const g = Math.round((2 + run.floor / 2) * (1 + (p.aff.gold ?? 0) / 100));
     p.gold += g;
-    say(run, `Der Mimik ist besiegt: ${g} Gold${up ? ', und er hütete etwas Besonderes' : ''}.`);
-    chestLoot(run, 'Mimik', up);
+    say(run, `The mimic is defeated: ${g} gold${up ? ', and it guarded something special' : ''}.`);
+    chestLoot(run, 'Mimic', up);
   } else if (m.elite) {
     p.keys++;
     p.potions++;
-    say(run, `${m.name} lässt einen Schlüssel und einen Heiltrank fallen.`);
+    say(run, `${m.name} drops a key and a healing potion.`);
   } else if (run.rng.chance(DIFF.dropPotion)) {
     p.potions++;
-    say(run, `${m.name} lässt einen Heiltrank fallen.`);
+    say(run, `${m.name} drops a healing potion.`);
   }
   checkLevel(run);
 }
@@ -1866,7 +1866,7 @@ export function checkLevel(run: Run) {
   p.lvl++;
   p.maxHp += 3;
   p.hp = Math.min(p.maxHp, p.hp + Math.ceil(p.maxHp * 0.2));
-  say(run, `Stufe ${p.lvl} erreicht!`);
+  say(run, `Level ${p.lvl} reached!`);
   // jede dritte Stufe (3, 6, 9 …) ein Fertigkeitspunkt, sonst eine Gabe
   // höchstens TUNE.treePtsMax Punkte je Lauf, danach Gaben
   const point = p.lvl % TREE_EVERY === 0 && (p.ptsGot ?? 0) < TUNE.treePtsMax;
@@ -1908,12 +1908,12 @@ function learnNode(run: Run, id: string) {
   const p = run.p, n = treeNode(p.cls, id)!, i = n.branch;
   p.tree.push(id);
   // gebündelte Knoten (T2a) kommen mit
-  for (const b of treeNodes(p.cls)) if (b.bundled && b.parent === id && run.pool.includes(b.id) && !p.tree.includes(b.id)) { p.tree.push(b.id); say(run, `Dazu: ${nodeName(p, b.id)}`); }
-  if (n.spell) { (p.spells ??= []).push(n.spell); say(run, `${p.cls === 'magier' ? 'Neuer Zauber' : 'Neue Fähigkeit'}: ${NEW_SKILLS[n.spell].name} [${2 + p.spells.length}]`); return; }
-  if (n.tier !== '1' && n.tier !== '4a' && n.tier !== '4b') { say(run, `Gelernt: ${nodeName(p, id)}`); return; }
+  for (const b of treeNodes(p.cls)) if (b.bundled && b.parent === id && run.pool.includes(b.id) && !p.tree.includes(b.id)) { p.tree.push(b.id); say(run, `Also: ${nodeName(p, b.id)}`); }
+  if (n.spell) { (p.spells ??= []).push(n.spell); say(run, `${p.cls === 'magier' ? 'New spell' : 'New skill'}: ${NEW_SKILLS[n.spell].name} [${2 + p.spells.length}]`); return; }
+  if (n.tier !== '1' && n.tier !== '4a' && n.tier !== '4b') { say(run, `Learned: ${nodeName(p, id)}`); return; }
   if (n.tier === '1') p.skillLvl[i] = Math.max(1, p.skillLvl[i]);
   else if (n.tier === '4a' || n.tier === '4b') { p.skillLvl[i] = 2; p.skillMod[i] = n.tier === '4a' ? 1 : 2; }
-  say(run, `${CLASSES[p.cls].skills[i].name}: Rang ${RANKS[p.skillLvl[i]]}${p.skillMod[i] ? ` – ${skillModName(p, i)}` : ''}`);
+  say(run, `${CLASSES[p.cls].skills[i].name}: rank ${RANKS[p.skillLvl[i]]}${p.skillMod[i] ? ` – ${skillModName(p, i)}` : ''}`);
 }
 
 function offerPerks(run: Run) {
@@ -1928,7 +1928,7 @@ function applyPerk(run: Run, id: string) {
   if (RELICS[id]) {
     p.relics.push(id);
     if (id === 'blutpakt') { p.atk += 3; p.maxHp = Math.max(5, Math.round(p.maxHp * 0.8)); p.hp = Math.min(p.hp, p.maxHp); }
-    say(run, `Reliquie: ${RELICS[id].name}`);
+    say(run, `Relic: ${RELICS[id].name}`);
     return;
   }
   if (id.startsWith('skill')) {
@@ -1937,7 +1937,7 @@ function applyPerk(run: Run, id: string) {
     if (id[6]) { p.skillLvl[i] = 2; p.skillMod[i] = id[6] === 'a' ? 1 : 2; }
     else p.skillLvl[i] = Math.max(1, p.skillLvl[i]);
     p.tree = [...new Set([...p.tree, ...nodesFromRanks(p.skillLvl, p.skillMod)])];
-    say(run, `${CLASSES[p.cls].skills[i].name}: Rang ${RANKS[p.skillLvl[i]]}${id[6] ? ` – ${skillModName(p, i)}` : ''}`);
+    say(run, `${CLASSES[p.cls].skills[i].name}: rank ${RANKS[p.skillLvl[i]]}${id[6] ? ` – ${skillModName(p, i)}` : ''}`);
     return;
   }
   p.perks.push(id);
@@ -1969,12 +1969,12 @@ function applyPerk(run: Run, id: string) {
     case 'dornen': p.thorns += 2; break;
     case 'seelen': p.soulMul += 0.5; break;
   }
-  say(run, `Neue Gabe: ${PERKS[id].name}`);
+  say(run, `New boon: ${PERKS[id].name}`);
   for (const s of SYNERGIES) {
     if (p.syn.includes(s.id) || !s.need.every(q => p.perks.includes(q))) continue;
     p.syn.push(s.id);
     if (s.id === 'rausch') addAff(p, 'vamp', 3); else addAff(p, s.id, 1);
-    say(run, `Synergie: ${s.name} – ${s.desc}`);
+    say(run, `Synergy: ${s.name} – ${s.desc}`);
   }
 }
 
@@ -1997,8 +1997,8 @@ function gain(p: Player, n: number) { p.res = Math.max(0, Math.min(p.resMax, p.r
 function openChest(run: Run, i: number) {
   const p = run.p, cursed = run.tiles[i] === T.CURSED;
   run.tiles[i] = T.CHEST_OPEN;
-  if (cursed) { takeItem(run, genItem(run, true), 'Verfluchte Truhe'); return; }
-  chestLoot(run, 'Truhe');
+  if (cursed) { takeItem(run, genItem(run, true), 'Cursed chest'); return; }
+  chestLoot(run, 'Chest');
 }
 
 // Inhalt einer Truhe (auch die Beute eines Mimiks). bump hebt die Seltenheit eines Gegenstands.
@@ -2006,12 +2006,12 @@ function chestLoot(run: Run, from: string, bump = 0) {
   const p = run.p;
   for (let k = has(p, 'muenze') ? 2 : 1; k > 0; k--) {
     const r = run.rng.next();
-    if (r < DIFF.chestPotion) { p.potions++; say(run, `${from}: ein Heiltrank.`); }
-    else if (r < 0.38) { p.bombs += 2; say(run, `${from}: zwei Bomben.`); }
+    if (r < DIFF.chestPotion) { p.potions++; say(run, `${from}: a healing potion.`); }
+    else if (r < 0.38) { p.bombs += 2; say(run, `${from}: two bombs.`); }
     else if (r < 0.70) takeItem(run, genItem(run, false, bump), from);
     else if (r < 0.80) takeItem(run, genConsumable(run), from);
-    else if (r < 0.92) { const g = Math.round((8 + run.floor * 2) * (1 + (p.aff.gold ?? 0) / 100)); p.gold += g; say(run, `${from}: ${g} Gold.`); }
-    else { const n = Math.round(10 * p.soulMul); run.souls += n; say(run, `${from}: ${n} Seelensplitter.`); }
+    else if (r < 0.92) { const g = Math.round((8 + run.floor * 2) * (1 + (p.aff.gold ?? 0) / 100)); p.gold += g; say(run, `${from}: ${g} gold.`); }
+    else { const n = Math.round(10 * p.soulMul); run.souls += n; say(run, `${from}: ${n} soul shards.`); }
   }
   if (p.aff.midas) p.gold += 10 + run.floor * 2;
 }
@@ -2019,9 +2019,9 @@ function chestLoot(run: Run, from: string, bump = 0) {
 function useSkill(run: Run, i: number): boolean {
   const p = run.p, sk = i < 3 ? CLASSES[p.cls].skills[i] : NEW_SKILLS[spellAt(p, i) ?? ''];
   if (!sk) return false;
-  if (p.cls === 'magier' && i === 2 && p.st.riss) { say(run, `Zeitriss: noch ${p.st.riss} Züge.`); return false; }
+  if (p.cls === 'magier' && i === 2 && p.st.riss) { say(run, `Time rift: ${p.st.riss} turns.`); return false; }
   const cost = skillCost(p, i);
-  if (!canPay(p, cost)) { say(run, `Nicht genug ${CLASSES[p.cls].resName}.`); return false; }
+  if (!canPay(p, cost)) { say(run, `Not enough ${CLASSES[p.cls].resName}.`); return false; }
   if (i >= 3) {
     if (!castSpell(run, spellAt(p, i)!)) return false;
     payRes(run, cost);
@@ -2030,7 +2030,7 @@ function useSkill(run: Run, i: number): boolean {
   }
   const atk = playerAtk(p), L = p.skillLvl[i], mod = p.skillMod[i], sp = p.pow * (1 + 0.3 * L);
   const around = (r: number) => run.mobs.filter(m => cheb(m, p) <= r && run.vis[m.y * W + m.x]);
-  const noTarget = () => { say(run, 'Kein Ziel in Reichweite.'); return false; };
+  const noTarget = () => { say(run, 'No target in range.'); return false; };
   let refund = 0; // Wut, die erst nach dem Bezahlen gutgeschrieben wird
   switch (`${p.cls}${i}`) {
     case 'krieger0': {
@@ -2068,7 +2068,7 @@ function useSkill(run: Run, i: number): boolean {
       if (mod === 2) p.st.wall = p.st.stark;
       // Einschüchterung: Gegner ringsum schlagen schwächer, solange der Schrei wirkt
       if (hasNode(p, 'n2_2b')) for (const t of around(2)) t.st.schwach = p.st.stark + 1;
-      say(run, 'Kriegsschrei!');
+      say(run, 'War cry!');
       break;
     case 'magier0': {
       const t = nearestMob(run, 7);
@@ -2129,7 +2129,7 @@ function useSkill(run: Run, i: number): boolean {
       break;
     }
     case 'waldlaeufer1': {
-      if (run.traps.some(t => t.x === p.x && t.y === p.y)) { say(run, 'Hier liegt schon eine Falle.'); return false; }
+      if (run.traps.some(t => t.x === p.x && t.y === p.y)) { say(run, 'There is already a trap here.'); return false; }
       run.traps.push({ x: p.x, y: p.y });
       if (mod === 2) for (let k = 1; k <= 2; k++) {
         const x = p.x + p.dir[0] * k, y = p.y + p.dir[1] * k;
@@ -2147,7 +2147,7 @@ function useSkill(run: Run, i: number): boolean {
         if (!isFree(run, nx, ny)) break;
         p.x = nx; p.y = ny; moved++;
       }
-      if (!moved) { say(run, 'Kein Platz zum Rollen.'); return false; }
+      if (!moved) { say(run, 'No room to roll.'); return false; }
       p.st.dodge = mod === 1 ? 2 : 1;
       if (hasNode(p, 'n2_2a')) p.st.schatten = 1; // Schattenschritt
       if (hasNode(p, 'n2_2b') && wasAdj) refund = 1; // Leichtfuß
@@ -2187,18 +2187,18 @@ function castSpell(run: Run, id: string): boolean {
   const p = run.p, atk = playerAtk(p);
   if (id === 'flammenwand') {
     const t = nearestMob(run, 7);
-    if (!t) { say(run, 'Kein Ziel in Reichweite.'); return false; }
+    if (!t) { say(run, 'No target in range.'); return false; }
     const dx = t.x - p.x, dy = t.y - p.y;
     const s: [number, number] = Math.abs(dx) >= Math.abs(dy) ? [Math.sign(dx), 0] : [0, Math.sign(dy)];
     const k = Math.max(1, Math.min(2, cheb(t, p) - 1)), cx = p.x + s[0] * k, cy = p.y + s[1] * k;
     for (const o of [-1, 0, 1]) ignite(run, cx - s[1] * o, cy + s[0] * o, 4);
     run.fx.push({ k: 'boom', x: cx, y: cy, r: 0 });
-    say(run, 'Flammenwand!');
+    say(run, 'Wall of flame!');
     return true;
   }
   if (id === 'eislanze') {
     const t = nearestMob(run, 6);
-    if (!t) { say(run, 'Kein Ziel in Reichweite.'); return false; }
+    if (!t) { say(run, 'No target in range.'); return false; }
     const path = lineFrom(run, t.x, t.y, 6), end = path[path.length - 1] ?? [t.x, t.y];
     run.fx.push({ k: 'bolt', x0: p.x, y0: p.y, x1: end[0], y1: end[1], col: '#73eff7' });
     for (const [x, y] of path) {
@@ -2213,12 +2213,12 @@ function castSpell(run: Run, id: string): boolean {
   if (id === 'arkanschild') {
     p.shield = 8 + p.lvl;
     p.st.schild = 5;
-    say(run, 'Arkanschild!');
+    say(run, 'Arcane shield!');
     return true;
   }
   if (id === 'schildwurf') {
     const t = nearestMob(run, 4);
-    if (!t) { say(run, 'Kein Ziel in Reichweite.'); return false; }
+    if (!t) { say(run, 'No target in range.'); return false; }
     run.fx.push({ k: 'arrow', x0: p.x, y0: p.y, x1: t.x, y1: t.y, col: '#94b0c2', heavy: true });
     playerHit(run, t, atk * 0.9 * p.pow);
     return true;
@@ -2226,7 +2226,7 @@ function castSpell(run: Run, id: string): boolean {
   if (id === 'sturmangriff') {
     // Sturm in gerader Linie bis neben das Ziel; ohne freien Weg kein Sturm
     const t = nearestMob(run, 5);
-    if (!t) { say(run, 'Kein Ziel in Reichweite.'); return false; }
+    if (!t) { say(run, 'No target in range.'); return false; }
     let stop = -1;
     const path = lineFrom(run, t.x, t.y, 5);
     if (cheb(t, p) > 1) {
@@ -2234,7 +2234,7 @@ function castSpell(run: Run, id: string): boolean {
         if (!isFree(run, path[k][0], path[k][1])) break;
         if (cheb(t, { x: path[k][0], y: path[k][1] }) <= 1) { stop = k; break; }
       }
-      if (stop < 0) { say(run, 'Kein freier Weg zum Ziel.'); return false; }
+      if (stop < 0) { say(run, 'No clear path to the target.'); return false; }
       [p.x, p.y] = path[stop];
     }
     p.dir = [Math.sign(t.x - p.x), Math.sign(t.y - p.y)];
@@ -2244,31 +2244,31 @@ function castSpell(run: Run, id: string): boolean {
   }
   if (id === 'markieren') {
     const t = nearestMob(run, shotRange(p) + 3);
-    if (!t) { say(run, 'Kein Ziel in Reichweite.'); return false; }
+    if (!t) { say(run, 'No target in range.'); return false; }
     for (const m of run.mobs) delete m.st.mark;
     t.st.mark = 7; // 6 Züge des Gegners
-    run.fx.push({ k: 'num', x: t.x, y: t.y, s: 'markiert', col: '#ffcd75' });
+    run.fx.push({ k: 'num', x: t.x, y: t.y, s: 'marked', col: '#ffcd75' });
     return true;
   }
   if (id === 'fangnetz') {
     const t = nearestMob(run, 4);
-    if (!t) { say(run, 'Kein Ziel in Reichweite.'); return false; }
+    if (!t) { say(run, 'No target in range.'); return false; }
     t.st.netz = 4; // 3 Züge des Gegners
     run.fx.push({ k: 'arrow', x0: p.x, y0: p.y, x1: t.x, y1: t.y, col: '#c9d4dc', heavy: false });
-    say(run, `${t.name} hängt im Netz.`);
+    say(run, `${t.name} is caught in the net.`);
     return true;
   }
   if (id === 'rauchbombe') {
     p.st.rauch = 4; p.st.rx = p.x; p.st.ry = p.y;
     run.fx.push({ k: 'boom', x: p.x, y: p.y, r: 2 });
-    say(run, 'Rauchbombe!');
+    say(run, 'Smoke bomb!');
     return true;
   }
   if (id === 'herausforderung') {
     const ts = run.mobs.filter(m => cheb(m, p) <= 4 && run.vis[m.y * W + m.x]);
-    if (!ts.length) { say(run, 'Kein Ziel in Reichweite.'); return false; }
+    if (!ts.length) { say(run, 'No target in range.'); return false; }
     for (const m of ts) { m.awake = true; m.st.taunt = 2; } // Schützen schweigen einen Zug
-    say(run, 'Herausforderung!');
+    say(run, 'Challenge!');
     return true;
   }
   return false;
@@ -2276,24 +2276,24 @@ function castSpell(run: Run, id: string): boolean {
 
 function useUlt(run: Run): boolean {
   const p = run.p, u = ULT[p.cls], atk = playerAtk(p);
-  if (p.lvl < ULT_LEVEL) { say(run, `${u.name}: erst ab Stufe ${ULT_LEVEL}.`); return false; }
-  if (p.ultCd > 0) { say(run, `${u.name} ist in ${p.ultCd} Zügen bereit.`); return false; }
+  if (p.lvl < ULT_LEVEL) { say(run, `${u.name}: from level ${ULT_LEVEL}.`); return false; }
+  if (p.ultCd > 0) { say(run, `${u.name} is ready in ${p.ultCd} turns.`); return false; }
   const seen = (m: Actor) => !!run.vis[m.y * W + m.x];
   if (p.cls === 'krieger') {
     const ts = run.mobs.filter(m => cheb(m, p) <= 2 && seen(m));
-    if (!ts.length) { say(run, 'Kein Ziel in Reichweite.'); return false; }
+    if (!ts.length) { say(run, 'No target in range.'); return false; }
     run.fx.push({ k: 'boom', x: p.x, y: p.y, r: 2 }, { k: 'shake', n: 6 });
     for (const t of ts) { stun(run, t, 2); playerHit(run, t, atk * 3 * p.pow); }
   } else if (p.cls === 'magier') {
     const t = nearestMob(run, 8);
-    if (!t) { say(run, 'Kein Ziel in Reichweite.'); return false; }
+    if (!t) { say(run, 'No target in range.'); return false; }
     const c = { x: t.x, y: t.y };
     run.fx.push({ k: 'bolt', x0: p.x, y0: p.y - 6, x1: c.x, y1: c.y, col: '#ef7d57' }, { k: 'boom', x: c.x, y: c.y, r: 2 }, { k: 'shake', n: 8 });
     for (let y = c.y - 1; y <= c.y + 1; y++) for (let x = c.x - 1; x <= c.x + 1; x++) ignite(run, x, y, 2);
     for (const m of run.mobs.filter(m => cheb(m, c) <= 2)) { m.st.brand = 3; damage(run, m, (14 + p.lvl * 1.5) * p.pow - m.def, '#ef7d57'); }
   } else {
     const ts = run.mobs.filter(m => cheb(m, p) <= 9 && seen(m));
-    if (!ts.length) { say(run, 'Kein Ziel in Reichweite.'); return false; }
+    if (!ts.length) { say(run, 'No target in range.'); return false; }
     for (const t of ts) { run.fx.push({ k: 'bolt', x0: p.x, y0: p.y, x1: t.x, y1: t.y, col: '#ffcd75' }); playerHit(run, t, atk * 0.9 * p.pow); }
   }
   say(run, `${u.name}!`);
@@ -2336,20 +2336,20 @@ export function act(run: Run, a: Action): void {
     else if (a.t === 'buy') {
       const o = run.shop[a.i];
       if (!o || o.sold) return;
-      if (p.gold < o.price) { say(run, 'Dafür reicht dein Gold nicht.'); return; }
+      if (p.gold < o.price) { say(run, 'You cannot afford that.'); return; }
       const it = o.kind === 'forge' ? forgeTarget(p) : null;
-      if (o.kind === 'forge' && !it) { say(run, 'Der Schmied findet nichts mehr zu verbessern.'); return; }
+      if (o.kind === 'forge' && !it) { say(run, 'The smith finds nothing left to improve.'); return; }
       p.gold -= o.price;
       if (o.kind === 'forge' || o.kind === 'reroll') {
         if (it) {
           if (it.slot === 0) { it.atk++; p.atk++; } else { it.def++; p.def++; }
           it.plus = (it.plus ?? 0) + 1;
           it.name = `${it.name.replace(/ \+\d$/, '')} +${it.plus}`;
-          say(run, `Schmied: ${it.name}.`);
+          say(run, `Smith: ${it.name}.`);
         } else {
           run.shop = [...run.shop.filter(q => q.kind !== 'item'), ...wares(run)];
           run.shop.sort((a, b) => SHOP_ORDER.indexOf(a.kind) - SHOP_ORDER.indexOf(b.kind));
-          say(run, 'Der Händler bringt neue Ware.');
+          say(run, 'The trader brings new stock.');
         }
         o.left = (o.left ?? 1) - 1;
         o.price = Math.ceil(o.price * 1.5);
@@ -2360,7 +2360,7 @@ export function act(run: Run, a: Action): void {
         o.left = (o.left ?? (o.kind === 'potion' ? 3 : 2)) - 1;
         o.price = Math.ceil(o.price * 1.25);
         if (o.left <= 0) o.sold = true;
-      } else { o.sold = true; takeItem(run, o.item!, 'Händler'); }
+      } else { o.sold = true; takeItem(run, o.item!, 'Trader'); }
     }
     return;
   }
@@ -2382,7 +2382,7 @@ export function act(run: Run, a: Action): void {
       if (nx < 0 || ny < 0 || nx >= W || ny >= H) break;
       p.dir = [a.dx, a.dy];
       const i = ny * W + nx, t = run.tiles[i], m = mobAt(run, nx, ny);
-      if (p.st.netz && !m) { say(run, 'Du zerrst am Netz ...'); used = true; break; }
+      if (p.st.netz && !m) { say(run, 'You tug at the net ...'); used = true; break; }
       if (m) {
         run.fx.push({ k: 'lunge', id: 0, dx: a.dx, dy: a.dy });
         const base = playerAtk(p) * (CLASSES[p.cls].range ? 0.6 : 1);
@@ -2398,18 +2398,18 @@ export function act(run: Run, a: Action): void {
         delete p.st.gift; delete p.st.brand;
         run.tiles[i] = T.FOUNTAIN_DRY;
         run.fx.push({ k: 'num', x: p.x, y: p.y, s: `+${n}`, col: '#a7f070' });
-        say(run, 'Du trinkst aus dem Brunnen. Er versiegt.');
+        say(run, 'You drink from the fountain. It runs dry.');
         used = true;
-      } else if (t === T.GATE && run.ev?.seal?.some(([g]) => g === i)) say(run, 'Das Gitter rührt sich nicht – erst muss das Ereignis vorbei sein.');
+      } else if (t === T.GATE && run.ev?.seal?.some(([g]) => g === i)) say(run, 'The gate won\'t move – the event has to end first.');
       else if (t === T.GATE) {
-        if (p.keys > 0) { p.keys--; run.tiles[i] = T.FLOOR; say(run, 'Der Schlüssel passt. Das Gitter öffnet sich.'); used = true; }
-        else say(run, 'Ein verschlossenes Gitter. Ein Elitegegner auf dieser Ebene trägt den Schlüssel.');
+        if (p.keys > 0) { p.keys--; run.tiles[i] = T.FLOOR; say(run, 'The key fits. The gate opens.'); used = true; }
+        else say(run, 'A locked gate. An elite enemy on this floor carries the key.');
       }
-      else if (t === T.TRADER) { if (run.shop.length) { run.mode = 'shop'; say(run, 'Händler: "Sieh dich um, Wanderer."'); } }
+      else if (t === T.TRADER) { if (run.shop.length) { run.mode = 'shop'; say(run, 'Trader: "Have a look around, wanderer."'); } }
       else if (t === T.CRACKED) {
         const n = (run.cracks.get(i) ?? 0) + 1;
         run.fx.push({ k: 'lunge', id: 0, dx: a.dx, dy: a.dy }, { k: 'shake', n: 2 });
-        if (n >= 3) breakWall(run, i); else { run.cracks.set(i, n); say(run, n === 1 ? 'Die Wand ist rissig – sie gibt nach.' : 'Noch ein Schlag ...'); }
+        if (n >= 3) breakWall(run, i); else { run.cracks.set(i, n); say(run, n === 1 ? 'The wall is cracked – it gives way.' : 'One more blow ...'); }
         used = true;
       } else if (t === T.CRATE || t === T.CRATE_ON) {
         const bx = nx + a.dx, by = ny + a.dy, bi = by * W + bx, bt = run.tiles[bi];
@@ -2418,12 +2418,12 @@ export function act(run: Run, a: Action): void {
           run.tiles[i] = t === T.CRATE_ON ? T.PLATE : T.FLOOR;
           p.x = nx; p.y = ny; used = true;
           checkCrates(run);
-        } else say(run, 'Die Kiste lässt sich so nicht schieben.');
+        } else say(run, 'The crate cannot be pushed that way.');
       } else if (t === T.LEVER) { resetCrates(run); used = true; }
       else if (t === T.TABLET) {
         const z = run.puzzle;
         if (z && z.kind === 'runes') z.read = true;
-        say(run, z && z.kind === 'runes' ? `Die Tafel zeigt: ${z.order.map(k => RUNE_NAMES[k]).join(' – ')} – du merkst sie dir.` : 'Die Tafel ist verwittert.');
+        say(run, z && z.kind === 'runes' ? `The tablet shows: ${z.order.map(k => RUNE_NAMES[k]).join(' – ')} – you memorise it.` : 'The tablet is weathered.');
       } else if (t === T.ICE) {
         const kind = (x: number, y: number) => {
           const tt = run.tiles[y * W + x];
@@ -2436,31 +2436,31 @@ export function act(run: Run, a: Action): void {
         stepHazard(run, p);
       } else if (t === T.BARREL) {
         // Lunte: 2 oder 3 Züge Zeit, um Abstand zu gewinnen (der Zähler sinkt schon am Ende dieses Zugs)
-        if (!run.fuses.has(i)) { run.fuses.set(i, 3 + (spot(nx, ny, run.turn) % 2)); say(run, 'Die Lunte brennt – weg hier!'); }
+        if (!run.fuses.has(i)) { run.fuses.set(i, 3 + (spot(nx, ny, run.turn) % 2)); say(run, 'The fuse is lit – get away!'); }
         used = true;
       }
       else if (t === T.ALTAR) {
         const cost = Math.ceil(p.maxHp * 0.25);
-        if (p.hp <= cost) say(run, 'Du bist zu schwach für das Opfer.');
+        if (p.hp <= cost) say(run, 'You are too weak for the sacrifice.');
         else {
           p.hp -= cost;
           run.tiles[i] = T.ALTAR_USED;
-          say(run, `Der Altar nimmt ${cost} Leben und gewährt eine Gabe.`);
+          say(run, `The altar takes ${cost} health and grants a boon.`);
           offerPerks(run);
           used = true;
         }
       } else if (walkable(t)) {
         p.x = nx; p.y = ny; used = true;
-        if (t === T.STAIRS) say(run, 'Eine Treppe nach unten. [E] zum Abstieg.');
-        else if (t === T.FRAGILE) { run.tiles[i] = T.FRAGILE2; say(run, 'Der Boden knackt unter dir ...'); }
+        if (t === T.STAIRS) say(run, 'Stairs leading down. [E] to descend.');
+        else if (t === T.FRAGILE) { run.tiles[i] = T.FRAGILE2; say(run, 'The floor cracks beneath you ...'); }
         else if (t === T.FRAGILE2) {
-          say(run, 'Der Boden bricht ein!');
+          say(run, 'The floor gives way!');
           nextFloor(run);
           damage(run, p, Math.ceil(p.maxHp * 0.15), '#b13e53');
           run.fx.push({ k: 'shake', n: 8 });
           used = false;
           fatal(run);
-        } else { afterStep(run); stepHazard(run, p); if (run.mud?.includes(i)) { p.st.netz = 2; say(run, 'Du steckst im Schlamm fest!'); } }
+        } else { afterStep(run); stepHazard(run, p); if (run.mud?.includes(i)) { p.st.netz = 2; say(run, 'You are stuck in the mud!'); } }
       }
       break;
     }
@@ -2477,7 +2477,7 @@ export function act(run: Run, a: Action): void {
       const c = CLASSES[p.cls];
       if (!c.range) break;
       const t = nearestMob(run, shotRange(p));
-      if (!t) { say(run, 'Kein Ziel in Reichweite.'); break; }
+      if (!t) { say(run, 'No target in range.'); break; }
       run.fx.push({ k: 'bolt', x0: p.x, y0: p.y, x1: t.x, y1: t.y, col: c.resCol });
       const base = playerAtk(p) * (p.cls === 'waldlaeufer' ? (hasNode(p, 'n1_5') ? 0.49 : 0.7) * shotBonus(p) : 1); // Minenfeld –30 %
       playerHit(run, t, base);
@@ -2492,8 +2492,8 @@ export function act(run: Run, a: Action): void {
       break;
     }
     case 'potion':
-      if (p.potions <= 0) say(run, 'Keine Heiltränke mehr.');
-      else if (p.hp >= p.maxHp) say(run, 'Du bist bereits bei voller Gesundheit.');
+      if (p.potions <= 0) say(run, 'No healing potions left.');
+      else if (p.hp >= p.maxHp) say(run, 'You are already at full health.');
       else {
         p.potions--;
         const n = has(p, 'seelenkelch') ? p.maxHp : Math.ceil(p.maxHp * DIFF.potionHeal);
@@ -2504,7 +2504,7 @@ export function act(run: Run, a: Action): void {
       }
       break;
     case 'bomb': {
-      if (p.bombs <= 0) { say(run, 'Keine Bomben mehr.'); break; }
+      if (p.bombs <= 0) { say(run, 'No bombs left.'); break; }
       // Ziel: Hindernis in Blickrichtung, sonst nächster Gegner, sonst drei Felder voraus
       let tx = p.x, ty = p.y, found = false;
       for (let k = 1; k <= 3; k++) {
@@ -2543,8 +2543,8 @@ function hitPlayer(run: Run, m: Actor, melee: boolean) {
   const p = run.p, d = MOBS[m.kind];
   m.f = Math.abs(p.x - m.x) >= Math.abs(p.y - m.y) ? [Math.sign(p.x - m.x), 0] : [0, Math.sign(p.y - m.y)];
   if (melee) run.fx.push({ k: 'lunge', id: m.id, dx: Math.sign(p.x - m.x), dy: Math.sign(p.y - m.y) }, { k: 'swipe', x: p.x, y: p.y, dx: Math.sign(p.x - m.x), dy: Math.sign(p.y - m.y), big: !!m.boss });
-  if (melee && inSmoke(p) && run.rng.chance(0.5)) { run.fx.push({ k: 'num', x: p.x, y: p.y, s: 'verfehlt', col: '#94b0c2' }); return; }
-  if (p.st.dodge || (p.aff.flink && run.rng.chance(Math.min(40, p.aff.flink) / 100))) { run.fx.push({ k: 'num', x: p.x, y: p.y, s: 'verfehlt', col: '#94b0c2' }); if (p.aff.konter) p.st.konter = 1; return; }
+  if (melee && inSmoke(p) && run.rng.chance(0.5)) { run.fx.push({ k: 'num', x: p.x, y: p.y, s: 'missed', col: '#94b0c2' }); return; }
+  if (p.st.dodge || (p.aff.flink && run.rng.chance(Math.min(40, p.aff.flink) / 100))) { run.fx.push({ k: 'num', x: p.x, y: p.y, s: 'missed', col: '#94b0c2' }); if (p.aff.konter) p.st.konter = 1; return; }
   const atk = Math.max(1, (melee ? m.atk : Math.round(m.atk * 0.7)) - (m.st.schwach ? 1 : 0)); // Fernschüsse treffen schwächer
   damage(run, p, Math.max(Math.ceil(atk * 0.3), atk - p.def - (p.st.wall ? 3 : 0) - (p.st.eis ? 2 : 0) - (p.st.sw ? 2 : 0)) - (has(p, 'steinhaut') ? 1 : 0), '#b13e53');
   run.fx.push({ k: 'shake', n: m.boss ? 5 : 2 });
@@ -2569,7 +2569,7 @@ function moveMob(run: Run, m: Actor, x: number, y: number) {
     run.traps.splice(ti, 1);
     const L = run.p.skillLvl[1];
     stun(run, m, run.p.skillMod[1] === 1 ? 3 : 2);
-    say(run, `${m.name} tritt in die Falle!`);
+    say(run, `${m.name} steps into the trap!`);
     damage(run, m, (8 * run.p.pow + run.p.lvl) * (1 + 0.3 * L), '#ffcd75');
     if (hasNode(run.p, 'n1_2a') && m.hp > 0) m.st.gift = 3; // Stacheldraht
   }
@@ -2589,7 +2589,7 @@ function mobAct(run: Run, m: Actor, dist: Int16Array) {
     if (spots.length && run.mobs.filter(o => o !== m && cheb(o, m) <= 6).length < 5) {
       const [x, y] = run.rng.pick(spots);
       spawnMob(run, d.minion!, x, y).awake = true;
-      say(run, `${m.name} ruft Verstärkung!`);
+      say(run, `${m.name} calls for reinforcements!`);
       return;
     }
   }
@@ -2712,11 +2712,11 @@ function endTurn(run: Run) {
   if (z && z.kind === 'arena' && z.started && !z.solved && !z.dead && run.mode !== 'dead') {
     if (!run.mobs.some(m => m.arena)) {
       if (run.mode === 'play') {
-        if (z.timer >= 8) { const g = 10 + 2 * run.floor; p.gold += g; say(run, `Schnell bestanden: +${g} Gold.`); }
+        if (z.timer >= 8) { const g = 10 + 2 * run.floor; p.gold += g; say(run, `Passed quickly: +${g} gold.`); }
         solve(run);
       }
     }
-    else if (--z.timer <= 0) { z.dead = true; say(run, 'Die Zeit ist um – die Prüfung ist gescheitert.'); }
+    else if (--z.timer <= 0) { z.dead = true; say(run, 'Time is up – the trial has failed.'); }
   }
   if (p.st.netz) p.st.netz--;
   if (p.st.stein && !--p.st.stein) delete p.st.stein;

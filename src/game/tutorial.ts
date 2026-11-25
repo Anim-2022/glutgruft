@@ -26,25 +26,25 @@ let moves = 0; // Schritte für „Bewegen“ (nur Anzeige, nicht gespeichert)
 export const resetMoves = () => { moves = 0; };
 
 export const STEPS: TutStep[] = [
-  { id: 'bewegen', text: () => 'Pfeiltasten oder WASD: bewegen', ready: () => true,
+  { id: 'bewegen', text: () => 'Arrow keys or WASD: move', ready: () => true,
     done: (run, _a, b) => { if (run.p.x !== b.x || run.p.y !== b.y) moves++; return moves >= 3; } },
-  { id: 'angriff', text: run => CLASSES[run.p.cls].range ? '[F] schießt auf den nächsten Gegner – oder hineinlaufen' : 'In einen Gegner hineinlaufen greift an', ready: foeInSight,
+  { id: 'angriff', text: run => CLASSES[run.p.cls].range ? '[F] shoots the nearest enemy – or walk into it' : 'Walking into an enemy attacks it', ready: foeInSight,
     done: (run, _a, b) => run.kills > b.kills },
-  { id: 'faehigkeit', text: run => `[1] ${CLASSES[run.p.cls].skills[0].name} – Fähigkeiten kosten ${CLASSES[run.p.cls].resName}`, ready: foeInSight,
+  { id: 'faehigkeit', text: run => `[1] ${CLASSES[run.p.cls].skills[0].name} – skills cost ${CLASSES[run.p.cls].resName}`, ready: foeInSight,
     done: (run, a, b) => a.t === 'skill' && run.turn > b.turn },
-  { id: 'trank', text: () => 'Wenig Leben: [Q] trinkt einen Heiltrank', ready: run => run.p.hp < run.p.maxHp * 0.5 && run.p.potions > 0,
+  { id: 'trank', text: () => 'Low on life: [Q] drinks a healing potion', ready: run => run.p.hp < run.p.maxHp * 0.5 && run.p.potions > 0,
     done: (run, a, b) => a.t === 'potion' && run.p.potions < b.potions },
-  { id: 'ausruestung', text: () => 'Truhen öffnen: hineinlaufen · [I] Rucksack, Ausrüstung anlegen', ready: run => run.p.bag.length > 0 || seen(run, t => t === T.CHEST),
+  { id: 'ausruestung', text: () => 'Open chests by walking into them · [I] backpack, equip gear', ready: run => run.p.bag.length > 0 || seen(run, t => t === T.CHEST),
     done: (run, _a, b) => run.p.gear.map(g => g?.name ?? '').join('|') !== b.gear || run.p.bag.length > b.bag },
-  { id: 'gabe', text: () => 'Stufenaufstieg: wähle eine Gabe mit [1]–[4]', ready: run => run.mode === 'perk',
+  { id: 'gabe', text: () => 'Level up: pick a boon with [1]–[4]', ready: run => run.mode === 'perk',
     done: (run, _a, b) => run.p.perks.length + run.p.relics.length > b.perks },
-  { id: 'baum', text: () => 'Fertigkeitspunkt: [K] öffnet den Baum, [ENTER] lernt', ready: run => run.p.pts > 0 || run.mode === 'tree',
+  { id: 'baum', text: () => 'Skill point: [K] opens the tree, [ENTER] learns', ready: run => run.p.pts > 0 || run.mode === 'tree',
     done: (run, _a, b) => run.p.tree.length > b.tree },
-  { id: 'treppe', text: () => 'Treppe gefunden: draufstellen und [E] drücken', ready: run => seen(run, t => t === T.STAIRS),
+  { id: 'treppe', text: () => 'Stairs found: step on them and press [E]', ready: run => seen(run, t => t === T.STAIRS),
     done: (run, _a, b) => run.floor > b.floor },
-  { id: 'ult', text: () => 'Ab Stufe 5: [U] ultimative Fähigkeit – danach lange Pause', ready: run => run.p.lvl >= 5 && !run.p.ultCd && foeInSight(run),
+  { id: 'ult', text: () => 'From level 5: [U] ultimate skill – then a long cooldown', ready: run => run.p.lvl >= 5 && !run.p.ultCd && foeInSight(run),
     done: (run, a, b) => a.t === 'ult' && run.p.ultCd > b.ultCd },
-  { id: 'boss', text: () => 'Ein Boss! Er ruft Verstärkung – Tränke und [U] bereithalten', ready: bossInSight,
+  { id: 'boss', text: () => 'A boss! It calls reinforcements – keep potions and [U] ready', ready: bossInSight,
     done: run => bossInSight(run) },
 ];
 export const STEP_COUNT = STEPS.length;
@@ -62,13 +62,13 @@ export function stepsDone(done: string[], run: Run, a: Action, b: Snap): string[
 // Karten beim ersten Kennenlernen
 export interface TutCard { id: string; title: string; lines: string[]; }
 export const CARDS: Record<string, TutCard> = {
-  gabe: { id: 'gabe', title: 'Gaben', lines: ['Bei jedem Stufenaufstieg wählst du eine Gabe.', 'Manche Gaben ergeben zusammen eine Synergie.', 'Jede dritte Stufe gibt stattdessen einen Fertigkeitspunkt.'] },
-  reliquie: { id: 'reliquie', title: 'Reliquien', lines: ['Ein gelöstes Rätsel belohnt dich mit einer Reliquie.', 'Reliquien sind stärker als Gaben und bleiben den ganzen Lauf.'] },
-  baum: { id: 'baum', title: 'Fertigkeitsbaum', lines: ['Jede Fähigkeit hat einen Zweig. Ein Punkt lernt einen Knoten.', 'Höchstens 6 Punkte je Lauf, danach gibt es Gaben.', 'Neue Knoten schaltest du im Lager mit Seelensplittern frei.'] },
-  haendler: { id: 'haendler', title: 'Händler', lines: ['Gold gegen Heiltränke, Bomben und Ausrüstung.', 'Der Schmied verbessert Waffe oder Rüstung.', '[1]–[9] kaufen, [LEERTASTE] geht weiter.'] },
-  raetsel: { id: 'raetsel', title: 'Rätselkammer', lines: ['Kisten schieben, Runen in der richtigen Reihenfolge,', 'über Eis rutschen oder eine Prüfung überstehen.', 'Der Lohn ist eine Reliquie.'] },
-  tod: { id: 'tod', title: 'Gefallen', lines: ['Der Lauf ist vorbei, aber nicht umsonst:', 'Deine Seelensplitter nimmst du ins Lager mit.', 'Dort machen Verbesserungen den nächsten Abstieg leichter.'] },
-  lager: { id: 'lager', title: 'Das Lager', lines: ['Seelensplitter kaufen dauerhafte Verbesserungen (rechts).', 'Im Fertigkeitsbaum schaltest du neue Knoten frei.', 'Wähle die Klasse mit den Pfeilen, [LEERTASTE] startet den Abstieg.'] },
+  gabe: { id: 'gabe', title: 'Boons', lines: ['Every level-up lets you pick a boon.', 'Some boons combine into a synergy.', 'Every third level gives a skill point instead.'] },
+  reliquie: { id: 'reliquie', title: 'Relics', lines: ['A solved puzzle rewards you with a relic.', 'Relics are stronger than boons and last the whole run.'] },
+  baum: { id: 'baum', title: 'Skill tree', lines: ['Every skill has a branch. One point learns one node.', 'At most 6 points per run, boons after that.', 'Unlock new nodes in camp with soul shards.'] },
+  haendler: { id: 'haendler', title: 'Trader', lines: ['Gold for healing potions, bombs and gear.', 'The smith improves your weapon or armour.', '[1]–[9] buy, [SPACE] moves on.'] },
+  raetsel: { id: 'raetsel', title: 'Puzzle chamber', lines: ['Push crates, touch runes in the right order,', 'slide across ice or survive a trial.', 'The reward is a relic.'] },
+  tod: { id: 'tod', title: 'Fallen', lines: ['The run is over, but not in vain:', 'You take your soul shards back to camp.', 'There, upgrades make the next descent easier.'] },
+  lager: { id: 'lager', title: 'The Camp', lines: ['Soul shards buy permanent upgrades (right).', 'In the skill tree you unlock new nodes.', 'Pick a class with the arrows, [SPACE] starts the descent.'] },
 };
 
 // Welche Karte steht im Lauf gerade an?

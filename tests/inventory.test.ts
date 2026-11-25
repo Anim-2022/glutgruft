@@ -64,7 +64,7 @@ describe('Ausrüstung', () => {
     expect(run.p.gear[1]).toBe(A);
     expect(run.p.bag).toEqual(bag);
     expect(stats(run)).toBe(before);
-    expect(run.invNote).toBe('Kein Platz im Rucksack.');
+    expect(run.invNote).toBe('No room in the backpack.');
   });
 
   it('verfluchtes Stück bleibt bis zur nächsten Ebene, dann lässt es sich tauschen', () => {
@@ -77,7 +77,7 @@ describe('Ausrüstung', () => {
     expect(run.p.bag).toEqual([B]);
     act(run, { t: 'unequip', slot: 0 });
     expect(run.p.gear[0]).toBe(C);
-    expect(run.invNote).toMatch(/Fluch/);
+    expect(run.invNote).toMatch(/curse/);
     run.floor++;
     act(run, { t: 'equip', i: 0 });
     expect(run.p.gear[0]).toBe(B);

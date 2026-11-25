@@ -27,8 +27,8 @@ describe('Balance-Regressionen', () => {
   it('Händler verkauft höchstens 3 Heiltränke und 2 Bomben, jeweils teurer', () => {
     const r = arena('krieger');
     r.shop = [
-      { kind: 'potion', name: 'Heiltrank', desc: '', price: 13, sold: false, left: 3 },
-      { kind: 'bomb', name: 'Bombe', desc: '', price: 11, sold: false, left: 2 },
+      { kind: 'potion', name: 'Healing Potion', desc: '', price: 13, sold: false, left: 3 },
+      { kind: 'bomb', name: 'Bomb', desc: '', price: 11, sold: false, left: 2 },
     ];
     r.p.gold = 1000; r.mode = 'shop';
     const pot0 = r.p.potions, bomb0 = r.p.bombs, prices: number[] = [];
