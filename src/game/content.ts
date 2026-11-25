@@ -186,7 +186,9 @@ export const NEW_SKILLS: Record<string, SkillDef & { branch: number }> = {
 export const TUNE = { treePtsMax: 6, kryoMana: 2, kryoRegen: 0.75, kCost: 0 };
 // Schalter für neue Systeme (Messungen: tests/balance.ts mit HAZARDS=off, MIMICS=off). Aus heißt:
 // keine Zufallszahl und keine Änderung am Lauf – das Ergebnis gleicht dann Bit für Bit dem Stand davor.
-export const FEATURES = { hunters: true, hunterForce: '', hazards: true, mimics: true, events: true, eventRate: 1, eventForce: '', eventForceBiome: false, destruction: true, huntPressure: true };
+export const FEATURES = { hunters: true, hunterForce: '', hazards: true, mimics: true, events: true, eventRate: 1, eventForce: '', eventForceBiome: false, destruction: true, huntPressure: true,
+  // objects placed at random keep a free tile around them (no touching, nothing at a doorway)
+  spacing: true };
 // Destructible world (FEATURES.destruction). Placement uses its own RNG seeded from seed + floor, so the main
 // stream (monsters, loot, events) is unchanged; with the switch off nothing is placed and no rule applies.
 // Per room: chance of a group and its size; per biome [crypt, cave, forge]. Pots: share of gold / potion / rat.

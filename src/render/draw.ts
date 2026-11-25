@@ -1,6 +1,7 @@
 import { VW, VH, TS, sprites, masks, tilesets, text, panel, bar, heroLook, figure, BIOMES as FLOOR_COLS } from './gfx';
 import { GLOW } from './sprites';
 import { W, H, T, wallLike, walkable } from '../game/dungeon';
+import { VS } from '../game/puzzles';
 import { threatOf, statusMarks } from './warn';
 import { onDeath, drawDecals, drawDying, resetDeaths, reducedFx } from './deaths';
 import { drawItemIcon, drawIcon, PERK_ICON } from './icons';
@@ -8,6 +9,7 @@ import { Light, applyLight, AMBIENTS } from './light';
 import { dropShadow, drawAO } from './shade';
 import { softEdged, pickDecal, bakeFloor } from './tiles';
 import { propsFor, drawProp, drawPropSlice, propSpan, recolor, torchSpots } from './props';
+import type { Zone } from './props';
 import { stepAmbient, drawAmbient, drawFog, resetAmbient, postFx } from './ambient';
 import { drawFlames, smoke, drawSmoke, resetFire, trackBurns, drawEmbers, fireAge, pruneFire } from './fire';
 
@@ -114,6 +116,12 @@ export function resetView() {
   resetDeaths(); resetAmbient(); resetFire(); resetHunterFx(); fuseTags.length = 0; slidePhase = null;
 }
 
+// Puzzle chamber with its walls and the entrance below: no decor, no floor marks
+function bareZone(run: Run): Zone | null {
+  const z = run.puzzle;
+  return z ? { x0: z.x - 1, y0: z.y - 1, x1: z.x + VS, y1: z.y + VS + 1 } : null;
+}
+
 function smooth(a: Actor, dt: number) {
   let p = pos.get(a.id);
   // ice slide: the hero follows the played-back path exactly (constant speed, no easing)
@@ -143,6 +151,37 @@ const OBJ_SHADOW: Record<number, [number, number]> = {
   [T.POT]: [14, 10], [T.SPORE]: [15, 12],
 };
 const FLY = new Set(['fledermaus', 'glutgeist', 'tod']);
+
+// Look variants of common objects: shapes, each with its mirrored version. Within a few tiles two objects
+// of the same kind get different shapes, so a row of pots or barrels never looks copy-pasted.
+const VARIANTS: Record<number, string[][]> = {
+  [T.POT]: [['pot', 'pot_m'], ['pot1', 'pot1_m'], ['pot2', 'pot2_m']],
+  [T.BARREL]: [['barrel'], ['barrel1'], ['barrel2']],
+  [T.SPORE]: [['spore', 'spore_m'], ['spore1', 'spore1_m']],
+};
+const VARIANT_R = 4;
+let varKey = '';
+const varOf = new Map<number, { t: number; name: string }>();
+function objectSprite(run: Run, i: number, t: number): string {
+  const key = `${run.seed}:${run.floor}`;
+  if (key !== varKey) {
+    varKey = key; varOf.clear();
+    const shapeAt = new Map<number, number>();
+    for (let j = 0; j < W * H; j++) {
+      const v = VARIANTS[run.tiles[j]];
+      if (!v) continue;
+      const x = j % W, y = (j / W) | 0, used = new Set<number>();
+      for (const [k, sh] of shapeAt) if (run.tiles[k] === run.tiles[j] && Math.max(Math.abs((k % W) - x), Math.abs(((k / W) | 0) - y)) <= VARIANT_R) used.add(sh);
+      const h = hash(x, y, run.seed + run.floor * 13);
+      let shape = h % v.length;
+      for (let n = 0; n < v.length && used.has(shape); n++) shape = (shape + 1) % v.length;
+      shapeAt.set(j, shape);
+      varOf.set(j, { t: run.tiles[j], name: v[shape][(h >>> 4) % v[shape].length] });
+    }
+  }
+  const v = VARIANTS[t], o = varOf.get(i);
+  return o && o.t === t ? o.name : v[hash(i % W, (i / W) | 0, 31) % v.length][0]; // objects created later (events) fall back to a hash
+}
 
 const TILE_SPR: Record<number, string> = {
   [T.STAIRS]: 'stairs', [T.CHEST]: 'chest', [T.CHEST_OPEN]: 'chest_open', [T.CURSED_OPEN]: 'cursed_open', [T.ALTAR]: 'altar', [T.ALTAR_USED]: 'altar_used',
@@ -298,10 +337,11 @@ export function drawRun(ctx: CanvasRenderingContext2D, run: Run, dt: number, tim
   view.ox = ox - sx; view.oy = oy - sy;
   ctx.fillStyle = '#08090f'; ctx.fillRect(0, 0, VW, VH);
   const bio = biomeOf(run.floor), ts = tilesets[bio], boss = run.floor % 5 === 0, fx = !reducedFx();
-  const props = propsFor(run.tiles, run.seed + run.floor);
-  // Bodenspur auf etwa jedem elften Feld, aber nie direkt neben einer anderen (keine Häufchen)
+  const zone = bareZone(run), props = propsFor(run.tiles, run.seed + run.floor, bio, zone);
+  // floor marks on about every eleventh tile, never right next to another one (no clusters), none in a puzzle chamber
   const dseed = run.seed + run.floor * 7, dcand = (x: number, y: number) => hash(x, y, dseed) % 11 === 0;
-  const decalAt = (x: number, y: number) => dcand(x, y) && !dcand(x - 1, y) && !dcand(x, y - 1) && !dcand(x - 1, y - 1) && !dcand(x + 1, y - 1);
+  const decalAt = (x: number, y: number) => dcand(x, y) && !dcand(x - 1, y) && !dcand(x, y - 1) && !dcand(x - 1, y - 1) && !dcand(x + 1, y - 1)
+    && !(zone && x >= zone.x0 && x <= zone.x1 && y >= zone.y0 && y <= zone.y1);
   buildLight(run);
   const lights: Light[] = [], floorTiles: number[] = [];
   for (let k = critHits.length - 1; k >= 0; k--) {
@@ -323,7 +363,8 @@ export function drawRun(ctx: CanvasRenderingContext2D, run: Run, dt: number, tim
       const l = open(-1, 0), r = open(1, 0), u = open(0, -1);
       // Wandspielart fest am Feld (Hash der Koordinaten, kein Zufall): meist die Grundwand
       // Wandspielart fest am Feld: meist schlichte Mauer in vier Tönungen, sonst Riss, Abplatzer oder Biomstück
-      const plain = hash(x, y, 101) % 100 < 74;
+      // wall decor always hangs on the plain wall; elsewhere mostly the plain wall, sometimes a crack, chip or biome piece
+      const wprop = t === T.WALL ? props[i] : null, plain = !!wprop || hash(x, y, 101) % 100 < 74;
       if (front) ctx.drawImage(plain ? ts.walls[hash(x, y, 111) % ts.walls.length] : ts.wallsX[hash(x, y, 121) % ts.wallsX.length], dx, dy);
       else {
         const c = [open(-1, -1), open(1, -1), open(-1, 1), open(1, 1)];
@@ -350,11 +391,7 @@ export function drawRun(ctx: CanvasRenderingContext2D, run: Run, dt: number, tim
         const tf = Math.floor(time * 7 + x) % 2;
         ctx.drawImage(boss ? torchOf(bio, tf) : sprites[`torch${tf}`], dx, dy);
         lights.push({ x, y: y + 0.6, r: (boss ? 5.5 : 5) * flick(i), col: boss ? BOSS_FLAME[bio][0] : '#ef7d57' });
-      } else if (front && plain && t === T.WALL && !torches.has(i - 1) && !torches.has(i + 1)) {
-        // Wanddekor (Ketten, Banner, Wurzeln …) nur auf der schlichten Grundwand
-        const pr = props[i];
-        if (pr) drawProp(ctx, bio, pr, x, y, dx, dy, time, lights);
-      }
+      } else if (front && wprop) drawProp(ctx, bio, wprop, x, y, dx, dy, time, lights); // chains, banners, roots … (placement keeps torches clear)
     } else {
       // floor from the per-level bake: pattern and brightness wave run across tile borders
       ctx.drawImage(floorOf(run, bio), x * TS, y * TS, TS, TS, dx, dy, TS, TS);
@@ -411,7 +448,7 @@ export function drawRun(ctx: CanvasRenderingContext2D, run: Run, dt: number, tim
     if (sh) dropShadow(ctx, dx + 8, dy + sh[0], sh[1]);
     // Lunte: Fass zittert im letzten Zug, Zähler der verbleibenden Züge darüber
     const fz = t === T.BARREL ? run.fuses.get(i) : undefined;
-    const sname = t === T.TRADER && Math.floor(time * 1.6 + x) % 2 ? 'trader_b' : t === T.STATUE && run.puzzle && x === run.puzzle.x + 6 ? 'statue_l' : s;
+    const sname = t === T.TRADER && Math.floor(time * 1.6 + x) % 2 ? 'trader_b' : t === T.STATUE && run.puzzle && x === run.puzzle.x + 6 ? 'statue_l' : VARIANTS[t] ? objectSprite(run, i, t) : s;
     // Mimik: sieht aus wie eine Truhe, aber alle paar Sekunden zuckt der Deckel und ein Zahn blitzt
     const twitch = t === T.MIMIC && (time * 0.22 + (i % 13) * 0.071) % 1 < 0.045;
     if (s) ctx.drawImage(sprites[sname], dx + (fz === 1 ? Math.round(Math.sin(time * 60)) : 0), dy - (twitch ? 1 : 0));

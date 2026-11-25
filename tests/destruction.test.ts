@@ -25,7 +25,7 @@ function mob(r: Run, x: number, y: number, kind = 'skelett'): Actor {
 const at = (x: number, y: number) => y * W + x;
 const fnv = (s: string) => { let h = 2166136261; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return (h >>> 0).toString(16); };
 
-afterEach(() => { FEATURES.destruction = true; FEATURES.huntPressure = true; });
+afterEach(() => { FEATURES.destruction = true; FEATURES.huntPressure = true; FEATURES.spacing = true; });
 
 describe('destructible world: objects', () => {
   it('a pot breaks on a blow; the hero stays put; contents are fixed per tile', () => {
@@ -206,7 +206,7 @@ describe('destructible world: generation', () => {
         }
       }
     }
-    expect(found).toBeGreaterThan(150); // most floors have at least one
+    expect(found).toBeGreaterThan(140); // most floors have at least one (about 3 in 4)
   });
 
   it('new objects appear per biome and the stairs stay reachable', () => {
@@ -238,7 +238,7 @@ describe('destructible world: generation', () => {
 
 describe('destructible world: switch', () => {
   it('switched off: bot runs match the version before, bit for bit', () => {
-    FEATURES.destruction = false; FEATURES.huntPressure = false; // both are newer than the fixture
+    FEATURES.destruction = false; FEATURES.huntPressure = false; FEATURES.spacing = false; // all newer than the fixture
     const out: Record<string, string> = {};
     for (const cls of ['krieger', 'magier', 'waldlaeufer'] as const) for (const seed of [3, 17, 101]) {
       const r = botRun(newRun(seed * 7919, cls, defaultMeta()), 1500);

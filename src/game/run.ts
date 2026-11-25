@@ -1,6 +1,6 @@
 import { RNG } from '../core/rng';
 import type { Meta } from '../core/save';
-import { W, H, T, Room, genDungeon, center, walkable, opaque, los, computeFov, distMap } from './dungeon';
+import { W, H, T, Room, genDungeon, center, walkable, wallLike, opaque, los, computeFov, distMap } from './dungeon';
 import { VS, CRATE_TEMPLATES, mirror, genIce, slide, iceStops, genLights, lightsPress, lightCell, LIGHTS_ALL, dartFires, DartLane } from './puzzles';
 import { CLASSES, ClassId, MOBS, PERKS, RELICS, Item, Offer, AFFIX, CONSUMABLES, UNIQUES, ULT, ULT_LEVEL, SKILL_UP, SYNERGIES, NEW_SKILLS, TUNE, treeNodes, treeNode, treePool, nodeText, MAGE_WHET, BOSS_BY_BIOME, BIOME_NAMES, FLOORS_PER_BIOME, LAST_FLOOR, biomeOf, spawnTable, FEATURES, HAZARD, EVENT, HUNTER, DIFF, DESTR } from './content';
 import { EVENTS, EVENT_BY_ID, NOTES } from './events';
@@ -746,9 +746,25 @@ export function puzzleGoal(run: Run): string | null {
 }
 
 // Setzt ein blockierendes Objekt nur, wenn danach noch alles erreichbar bleibt.
-function tryBlock(run: Run, x: number, y: number, tile: number): boolean {
+// Objects that stand on a tile (furniture, containers, obstacles). Placement keeps them apart.
+const OBJECTS = new Set<number>([T.POT, T.SPORE, T.BARREL, T.PILLAR, T.CHEST, T.CURSED, T.MIMIC, T.ALTAR, T.TRADER, T.FOUNTAIN, T.TABLET, T.LEVER, T.STAIRS, T.STATUE, T.CRATE]);
+// a doorway: walkable tile squeezed between two walls (the mouth of a corridor or a gap in a wall)
+const doorwayAt = (t: Uint8Array, i: number) => walkable(t[i]) && ((wallLike(t[i - 1]) && wallLike(t[i + 1])) || (wallLike(t[i - W]) && wallLike(t[i + W])));
+// Room to breathe: no other object and no doorway on the eight tiles around (x, y)
+export function roomy(t: Uint8Array, x: number, y: number): boolean {
+  for (let oy = -1; oy <= 1; oy++) for (let ox = -1; ox <= 1; ox++) {
+    if (!ox && !oy) continue;
+    const j = (y + oy) * W + x + ox;
+    if (OBJECTS.has(t[j]) || doorwayAt(t, j)) return false;
+  }
+  return true;
+}
+
+// spaced: the object also needs room to breathe (see roomy) – used for everything placed at random
+function tryBlock(run: Run, x: number, y: number, tile: number, spaced = false): boolean {
   const i = y * W + x;
   if (run.tiles[i] !== T.FLOOR || !isFree(run, x, y)) return false;
+  if (spaced && FEATURES.spacing && !roomy(run.tiles, x, y)) return false;
   // Nie in einen Durchgang: die begehbaren Nachbarn müssen ringsum eine einzige zusammenhängende Gruppe bilden
   const ring = [[-1, -1], [0, -1], [1, -1], [1, 0], [1, 1], [0, 1], [-1, 1], [-1, 0]].map(([ox, oy]) => walkable(run.tiles[(y + oy) * W + x + ox]));
   let groups = 0;
@@ -798,7 +814,9 @@ function placeIn(run: Run, r: Room, tile: number): boolean {
   const spots = rng.shuffle([[r.x, r.y], [r.x + r.w - 1, r.y], [r.x, r.y + r.h - 1], [r.x + r.w - 1, r.y + r.h - 1]]);
   for (let k = 0; k < 8; k++) spots.push([rng.int(r.x, r.x + r.w - 1), rng.int(r.y, r.y + r.h - 1)]);
   const [mx, my] = center(r);
-  return spots.some(([x, y]) => !(x === mx && y === my) && tryBlock(run, x, y, tile));
+  // first with room around it; only if no spot allows that, anywhere that does not block a path
+  const ok = (spaced: boolean) => spots.some(([x, y]) => !(x === mx && y === my) && tryBlock(run, x, y, tile, spaced));
+  return (FEATURES.spacing && ok(true)) || ok(false);
 }
 
 function nextFloor(run: Run) {
@@ -857,10 +875,13 @@ function nextFloor(run: Run) {
     }
     // Säulen in großen Räumen, Fässer verstreut
     if (r.w >= 6 && r.h >= 5 && rng.chance(0.5)) {
-      for (const [px, py] of [[r.x + 1, r.y + 1], [r.x + r.w - 2, r.y + 1], [r.x + 1, r.y + r.h - 2], [r.x + r.w - 2, r.y + r.h - 2]]) tryBlock(run, px, py, T.PILLAR);
+      for (const [px, py] of [[r.x + 1, r.y + 1], [r.x + r.w - 2, r.y + 1], [r.x + 1, r.y + r.h - 2], [r.x + r.w - 2, r.y + r.h - 2]]) tryBlock(run, px, py, T.PILLAR, true);
     }
     if (rng.chance(0.35)) {
-      for (let k = rng.int(1, 2); k > 0; k--) tryBlock(run, rng.int(r.x, r.x + r.w - 1), rng.int(r.y, r.y + r.h - 1), T.BARREL);
+      // a few tries each: barrels keep their distance from other objects and doorways
+      const at = () => tryBlock(run, rng.int(r.x, r.x + r.w - 1), rng.int(r.y, r.y + r.h - 1), T.BARREL, true);
+      if (FEATURES.spacing) { for (let k = rng.int(1, 2), tries = 0; k > 0 && tries < 3; tries++) if (at()) k--; }
+      else for (let k = rng.int(1, 2); k > 0; k--) at();
     }
   }
   // Brüchiger Boden: Abkürzung nach unten, nie an einem Boss vorbei
@@ -1976,14 +1997,14 @@ function placeWorld(run: Run, rooms: Room[], bossFloor: boolean) {
     }
   };
   rooms.forEach((r, ri) => {
-    if (rng.chance(DESTR.pot[bio])) for (let k = rng.int(...DESTR.potN), tries = 0; k > 0 && tries < 12; tries++) {
+    if (rng.chance(DESTR.pot[bio])) for (let k = rng.int(...DESTR.potN), tries = 0; k > 0 && tries < 20; tries++) {
       const [x, y] = edge(r);
-      if (ok(x, y) && tryBlock(run, x, y, T.POT)) k--;
+      if (ok(x, y) && tryBlock(run, x, y, T.POT, true)) k--;
     }
     if (ri === 0) return; // the start room stays calm
-    if (DESTR.spore[bio] && rng.chance(DESTR.spore[bio])) for (let k = rng.int(...DESTR.sporeN), tries = 0; k > 0 && tries < 12; tries++) {
+    if (DESTR.spore[bio] && rng.chance(DESTR.spore[bio])) for (let k = rng.int(...DESTR.sporeN), tries = 0; k > 0 && tries < 20; tries++) {
       const x = rng.int(r.x, r.x + r.w - 1), y = rng.int(r.y, r.y + r.h - 1);
-      if (ok(x, y) && tryBlock(run, x, y, T.SPORE)) k--;
+      if (ok(x, y) && tryBlock(run, x, y, T.SPORE, true)) k--;
     }
     if (DESTR.oil[bio]) {
       // oil gathers near barrels: more likely there, and it starts next to one

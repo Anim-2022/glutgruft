@@ -3,7 +3,7 @@
 //  - an der Wandfront (Ketten, Spinnweben, Banner, Wurzeln, Tropfsteine, Lüftungsgitter)
 //  - am Fuß einer Wand auf dem Boden (Kerzen, Knochen, Kristalle, Leuchtpilze, Barren, Kohle)
 //  - flach im Boden mitten im Raum (Grabplatte, Pfütze, Glutrost)
-import { W, H, T, wallLike, opaque, walkable } from '../game/dungeon';
+import { W, H, T, wallLike, walkable } from '../game/dungeon';
 import type { Light } from './light';
 
 const TS = 16;
@@ -300,70 +300,116 @@ const lavaCrack: VPaint = (g, f, _v, r) => {
 
 const warm = (r: number, a = 0.75) => (f: number) => ({ r: r + (f ? 0.15 : 0), col: '#ef7d57', a });
 
+// Catalogue per biome and kind. A "family" is one spec (one kind of thing: chains, banners, candles …);
+// its entries are the variants and their mirrored versions. The catalogue is plain data, so placement
+// can reason about families without baking any canvas.
+type Catalog = Record<PropKind, Spec[]>;
+let CAT: Catalog[] | null = null;
+function catalog(): Catalog[] {
+  if (CAT) return CAT;
+  CAT = [
+    { wall: [{ paint: chains, n: 3 }, { paint: cobweb, n: 2 }, { paint: banner, n: 3 }, { paint: skullShelf, n: 2, frames: 2 }, { paint: wallGrate, n: 2 }],
+      foot: [{ paint: candles, n: 4, frames: 2, line: true, light: f => ({ r: 1.7 + (f ? 0.15 : 0), col: '#ffcd75', a: 0.8 }), ly: 0.6 }, { paint: bones, n: 3, line: true },
+        { paint: urns, n: 2, line: true }, { paint: wax, n: 2, frames: 2, light: f => ({ r: 1.3 + (f ? 0.1 : 0), col: '#ffcd75', a: 0.7 }), ly: 0.6 }],
+      flat: [{ paint: slab, n: 3 }, { paint: runeCircle, n: 1, span: 3, mirror: false, light: () => ({ r: 2.6, col: '#3b5dc9', a: 0.22 }), ly: 0.5 }] },
+    { wall: [{ paint: roots, n: 3 }, { paint: drips, n: 3, frames: 2 }, { paint: glowmoss, n: 2, frames: 2, light: () => ({ r: 1.4, col: '#a7f070', a: 0.6 }), ly: 0.3 },
+        { paint: vines, n: 2, frames: 2, light: () => ({ r: 1.3, col: '#73eff7', a: 0.5 }), ly: 0.4 }],
+      foot: [{ paint: crystals, n: 3, line: true, light: (_f, v) => ({ r: 2.4, col: CRYSTAL[v % 3][3], a: 0.9 }), ly: 0.5 },
+        { paint: shrooms, n: 4, line: true, light: (_f, v) => ({ r: 1.8, col: v % 2 ? '#73eff7' : '#a7f070', a: 0.8 }), ly: 0.6 },
+        { paint: eggs, n: 2, frames: 2, line: true }],
+      flat: [{ paint: puddle, n: 4, frames: 2 }, { paint: stones, n: 3 }] },
+    { wall: [{ paint: hooks, n: 3 }, { paint: vent, n: 2, frames: 2, light: warm(1.4, 0.6), ly: 0.3 }, { paint: pipes, n: 2, frames: 2 }],
+      foot: [{ paint: ingots, n: 3, frames: 2, line: true, light: warm(1.6), ly: 0.7 }, { paint: coal, n: 3, frames: 2, line: true, light: warm(1.2, 0.6), ly: 0.7 },
+        { paint: anvil, n: 1, frames: 2, line: true }, { paint: bucket, n: 1, frames: 2, line: true, light: warm(1.1, 0.5), ly: 0.6 },
+        { paint: lavaCrack, n: 2, frames: 2, light: warm(1.5, 0.7), ly: 0.6 }],
+      flat: [{ paint: grate, n: 2, frames: 2, light: warm(1.7, 0.7), ly: 0.5 }] },
+  ];
+  return CAT;
+}
+// Entry list of a biome/kind: family (spec index) and footprint of every pick, in bake order
+interface Entry { fam: number; span: number }
+const ENTRIES = new Map<string, Entry[]>();
+export function entries(bi: number, kind: PropKind): Entry[] {
+  const key = `${bi}:${kind}`;
+  let e = ENTRIES.get(key);
+  if (!e) {
+    e = [];
+    catalog()[bi][kind].forEach((sp, fam) => { for (let k = sp.n * (sp.mirror === false ? 1 : 2); k > 0; k--) e!.push({ fam, span: sp.span ?? 1 }); });
+    ENTRIES.set(key, e);
+  }
+  return e;
+}
+export const propFamily = (bi: number, p: PropSpot) => `${p.kind}:${entries(bi, p.kind)[p.pick % entries(bi, p.kind).length].fam}`;
+
 interface BiomeProps { wall: Prop[]; foot: Prop[]; flat: Prop[]; }
 let SETS: BiomeProps[] | null = null;
 function sets(): BiomeProps[] {
   if (SETS) return SETS;
-  const B = bakeSpec;
-  SETS = [
-    { wall: [...B({ paint: chains, n: 3 }), ...B({ paint: cobweb, n: 2 }), ...B({ paint: banner, n: 3 }), ...B({ paint: skullShelf, n: 2, frames: 2 }), ...B({ paint: wallGrate, n: 2 })],
-      foot: [...B({ paint: candles, n: 4, frames: 2, line: true, light: f => ({ r: 1.7 + (f ? 0.15 : 0), col: '#ffcd75', a: 0.8 }), ly: 0.6 }), ...B({ paint: bones, n: 3, line: true }),
-        ...B({ paint: urns, n: 2, line: true }), ...B({ paint: wax, n: 2, frames: 2, light: f => ({ r: 1.3 + (f ? 0.1 : 0), col: '#ffcd75', a: 0.7 }), ly: 0.6 })],
-      flat: [...B({ paint: slab, n: 3 }), ...B({ paint: runeCircle, n: 1, span: 3, mirror: false, light: () => ({ r: 2.6, col: '#3b5dc9', a: 0.22 }), ly: 0.5 })] },
-    { wall: [...B({ paint: roots, n: 3 }), ...B({ paint: drips, n: 3, frames: 2 }), ...B({ paint: glowmoss, n: 2, frames: 2, light: () => ({ r: 1.4, col: '#a7f070', a: 0.6 }), ly: 0.3 }),
-        ...B({ paint: vines, n: 2, frames: 2, light: () => ({ r: 1.3, col: '#73eff7', a: 0.5 }), ly: 0.4 })],
-      foot: [...B({ paint: crystals, n: 3, line: true, light: (_f, v) => ({ r: 2.4, col: CRYSTAL[v % 3][3], a: 0.9 }), ly: 0.5 }),
-        ...B({ paint: shrooms, n: 4, line: true, light: (_f, v) => ({ r: 1.8, col: v % 2 ? '#73eff7' : '#a7f070', a: 0.8 }), ly: 0.6 }),
-        ...B({ paint: eggs, n: 2, frames: 2, line: true })],
-      flat: [...B({ paint: puddle, n: 4, frames: 2 }), ...B({ paint: stones, n: 3 })] },
-    { wall: [...B({ paint: hooks, n: 3 }), ...B({ paint: vent, n: 2, frames: 2, light: warm(1.4, 0.6), ly: 0.3 }), ...B({ paint: pipes, n: 2, frames: 2 })],
-      foot: [...B({ paint: ingots, n: 3, frames: 2, line: true, light: warm(1.6), ly: 0.7 }), ...B({ paint: coal, n: 3, frames: 2, line: true, light: warm(1.2, 0.6), ly: 0.7 }),
-        ...B({ paint: anvil, n: 1, frames: 2, line: true }), ...B({ paint: bucket, n: 1, frames: 2, line: true, light: warm(1.1, 0.5), ly: 0.6 }),
-        ...B({ paint: lavaCrack, n: 2, frames: 2, light: warm(1.5, 0.7), ly: 0.6 })],
-      flat: B({ paint: grate, n: 2, frames: 2, light: warm(1.7, 0.7), ly: 0.5 }) },
-  ];
+  const bake = (l: Spec[]) => l.flatMap(bakeSpec);
+  SETS = catalog().map(c => ({ wall: bake(c.wall), foot: bake(c.foot), flat: bake(c.flat) }));
   return SETS;
 }
 
-// ---- Platzierung (rein, testbar) ----
-// Erst Kandidaten nach festen Regeln, dann Abstand: von Kandidaten, die näher als SPACING Felder
-// beieinanderliegen, bleibt nur einer (der mit dem größten Hash) – keine Häufchen gleicher Dinge.
+// ---- Placement (pure, testable) ----
+// 1. Candidates by fixed rules: wall decor on straight wall fronts, foot decor at the foot of a straight
+//    wall, flat floor patterns only in open floor. Never inside or around a puzzle chamber, never next to
+//    an object (pot, barrel, chest …) or the stairs, never on a corridor or doorway.
+// 2. Spacing: of candidates closer than SPACING tiles only the one with the largest hash stays.
+// 3. Variety: every kept spot gets the variant whose family is least used nearby (no two candle groups
+//    or banners side by side); ties are broken by the spot's hash.
 export type PropKind = 'wall' | 'foot' | 'flat';
 export interface PropSpot { kind: PropKind; pick: number; }
-export const SPACING = 3;
+// area that stays bare (puzzle chamber incl. its walls), inclusive tile bounds
+export interface Zone { x0: number; y0: number; x1: number; y1: number }
+export const SPACING = 3, VARIETY_R = 9, TORCH_CLEAR = 1;
 const hp = (x: number, y: number, s: number) => (Math.imul(x, 73856093) ^ Math.imul(y, 19349663) ^ Math.imul(s, 83492791)) >>> 0;
+// tiles a foot or floor decor may stand beside: open ground (no object, no stairs, no puzzle tile)
+const OPEN = new Set<number>([T.FLOOR, T.GRASS, T.BURNT, T.RUBBLE, T.OIL, T.WATER, T.WEB]);
+// a doorway: walkable tile squeezed between two walls (horizontal or vertical passage)
+function doorway(tiles: Uint8Array, i: number): boolean {
+  const t = tiles[i];
+  if (!walkable(t)) return false;
+  return (wallLike(tiles[i - 1]) && wallLike(tiles[i + 1])) || (wallLike(tiles[i - W]) && wallLike(tiles[i + W]));
+}
 
-function candidate(tiles: Uint8Array, seed: number, x: number, y: number): (PropSpot & { h: number }) | null {
+function candidate(tiles: Uint8Array, seed: number, x: number, y: number, zone: Zone | null, torch: Set<number>): (PropSpot & { h: number }) | null {
   if (x < 2 || y < 2 || x >= W - 2 || y >= H - 2) return null;
+  if (zone && x >= zone.x0 && x <= zone.x1 && y >= zone.y0 && y <= zone.y1) return null;
   const i = y * W + x, t = tiles[i], h = hp(x, y, seed);
   const at = (dx: number, dy: number) => tiles[i + dy * W + dx];
   const wallAt = (dx: number, dy: number) => wallLike(at(dx, dy));
-  const free = (dx: number, dy: number) => !opaque(at(dx, dy)) && !wallLike(at(dx, dy));
+  const open = (dx: number, dy: number) => OPEN.has(at(dx, dy)) && !doorway(tiles, i + dy * W + dx);
   if (t === T.WALL) {
-    // Wandfront auf gerader Strecke: links und rechts ebenfalls Front, kein Durchgang, keine Ecke
-    const front = (dx: number) => at(dx, 0) === T.WALL && free(dx, 1);
-    return front(0) && front(-1) && front(1) && h % 5 === 0 ? { kind: 'wall', pick: h >>> 5, h } : null;
+    // straight wall front: left and right also front, no passage, no corner; not crowding a torch
+    const front = (dx: number) => at(dx, 0) === T.WALL && OPEN.has(at(dx, 1));
+    if (!(front(0) && front(-1) && front(1)) || h % 5) return null;
+    for (let d = -TORCH_CLEAR; d <= TORCH_CLEAR; d++) if (torch.has(i + d)) return null;
+    return { kind: 'wall', pick: 0, h };
   }
-  if (t !== T.FLOOR) return null;
-  // am Fuß einer geraden Wand in einem Raum, der mindestens drei Felder tief ist
-  if (wallAt(-1, -1) && wallAt(0, -1) && wallAt(1, -1) && free(-1, 0) && free(1, 0) && free(0, 1) && free(-1, 1) && free(1, 1) && free(0, 2))
-    return h % 6 === 0 ? { kind: 'foot', pick: h >>> 5, h } : null;
-  // flach im Boden nur in großen Räumen: 5×5 ringsum frei
-  for (let dy = -2; dy <= 2; dy++) for (let dx = -2; dx <= 2; dx++) if (!free(dx, dy)) return null;
-  return h % 17 === 0 ? { kind: 'flat', pick: h >>> 5, h } : null;
+  if (t !== T.FLOOR || doorway(tiles, i)) return null;
+  // at the foot of a straight wall in a room at least three tiles deep, with open ground around
+  if (wallAt(-1, -1) && wallAt(0, -1) && wallAt(1, -1)) {
+    if (!(open(-1, 0) && open(1, 0) && open(0, 1) && open(-1, 1) && open(1, 1) && open(0, 2))) return null;
+    return h % 6 === 0 ? { kind: 'foot', pick: 0, h } : null;
+  }
+  // flat in the floor only in big rooms: 5×5 of open ground around (also fits the 3×3 rune circle)
+  for (let dy = -2; dy <= 2; dy++) for (let dx = -2; dx <= 2; dx++) if (!open(dx, dy)) return null;
+  return h % 17 === 0 ? { kind: 'flat', pick: 0, h } : null;
 }
 
-// Dekor der ganzen Ebene; zwischengespeichert, neu berechnet, sobald sich die Karte ändert
-let cache: { seed: number; tiles: Uint8Array; map: (PropSpot | null)[] } | null = null;
-export function propsFor(tiles: Uint8Array, seed: number): (PropSpot | null)[] {
-  if (cache && cache.seed === seed && cache.tiles.length === tiles.length) {
+// Decor of a whole floor; cached, recomputed as soon as the map (or the bare zone) changes
+let cache: { key: string; tiles: Uint8Array; map: (PropSpot | null)[] } | null = null;
+export function propsFor(tiles: Uint8Array, seed: number, bi = 0, zone: Zone | null = null): (PropSpot | null)[] {
+  const key = `${seed}:${bi}:${zone ? [zone.x0, zone.y0, zone.x1, zone.y1].join(',') : '-'}`;
+  if (cache && cache.key === key && cache.tiles.length === tiles.length) {
     let same = true;
     for (let i = 0; i < tiles.length; i++) if (cache.tiles[i] !== tiles[i]) { same = false; break; }
     if (same) return cache.map;
   }
+  const torch = new Set(torchSpots(tiles, seed));
   const cand: ((PropSpot & { h: number }) | null)[] = new Array(W * H).fill(null);
-  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) cand[y * W + x] = candidate(tiles, seed, x, y);
-  const map: (PropSpot | null)[] = new Array(W * H).fill(null);
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) cand[y * W + x] = candidate(tiles, seed, x, y, zone, torch);
+  const kept: { i: number; c: PropSpot & { h: number } }[] = [];
   for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
     const c = cand[y * W + x];
     if (!c) continue;
@@ -374,14 +420,39 @@ export function propsFor(tiles: Uint8Array, seed: number): (PropSpot | null)[] {
       const o = cand[ny * W + nx];
       if (o && (o.h > c.h || (o.h === c.h && ny * W + nx < y * W + x))) { best = false; break; }
     }
-    if (best) map[y * W + x] = { kind: c.kind, pick: c.pick };
+    if (best) kept.push({ i: y * W + x, c });
   }
-  cache = { seed, tiles: tiles.slice(), map };
+  // variety: assign variants in a fixed order (largest hash first), each avoiding the families around it
+  kept.sort((a, b) => b.c.h - a.c.h || a.i - b.i);
+  const map: (PropSpot | null)[] = new Array(W * H).fill(null);
+  const placed: { x: number; y: number; kind: PropKind; fam: number; pick: number }[] = [];
+  for (const { i, c } of kept) {
+    const x = i % W, y = (i / W) | 0, list = entries(bi, c.kind);
+    let bestPick = -1, bestScore = Infinity;
+    for (let k = 0; k < list.length; k++) {
+      const pick = (k + (c.h >>> 7)) % list.length, e = list[pick];
+      // the 3×3 rune circle only where the whole pattern lies on open floor
+      if (e.span > 1 && c.kind !== 'flat') continue;
+      let score = 0;
+      for (const o of placed) {
+        const d = Math.max(Math.abs(o.x - x), Math.abs(o.y - y));
+        if (d > VARIETY_R * 2 || o.kind !== c.kind) continue;
+        if (o.fam === e.fam) score += d <= VARIETY_R ? 100 : 10;
+        if (o.pick === pick) score += 1000;
+      }
+      if (score < bestScore) { bestScore = score; bestPick = pick; }
+      if (!score) break;
+    }
+    const pick = bestPick < 0 ? (c.h >>> 7) % list.length : bestPick;
+    map[i] = { kind: c.kind, pick };
+    placed.push({ x, y, kind: c.kind, fam: list[pick].fam, pick });
+  }
+  cache = { key, tiles: tiles.slice(), map };
   return map;
 }
-export const propAt = (tiles: Uint8Array, seed: number, x: number, y: number) => propsFor(tiles, seed)[y * W + x];
+export const propAt = (tiles: Uint8Array, seed: number, x: number, y: number, bi = 0, zone: Zone | null = null) => propsFor(tiles, seed, bi, zone)[y * W + x];
 
-// Fackeln: Kandidaten auf Wandfronten, von nahe beieinanderliegenden bleibt nur einer (mind. TORCH_GAP + 1 Felder)
+// Torches: candidates on wall fronts, of close ones only one stays (at least TORCH_GAP + 1 tiles apart)
 export const TORCH_GAP = 4;
 export function torchSpots(tiles: Uint8Array, seed: number): number[] {
   const cand = (x: number, y: number) => {
