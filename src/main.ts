@@ -4,8 +4,10 @@ import { VW, VH, bake, sprites, tilesets, text, panel, wrap, figure } from './re
 import { getLang, setLang } from './core/i18n';
 import { drawRun, drawCard, setTutStep, drawTree, treeMove, treeFocus, treeCursor, treeHit, resetView, setMouse, toggleMap, setTutorial, tileAt, getOverlay, setOverlay, invMove, invAction, invDrop, invClick, lootIndex, lootDone } from './render/draw';
 import { sfx, soundOn, toggleSound, wakeAudio } from './core/audio';
-import { reducedFx, setReducedFx } from './render/deaths';
+import { fxLevel, setFxLevel, shakeEnabled, toggleShake } from './render/fxopts';
 import { loadMeta, saveMeta } from './core/save';
+import { InputQueue } from './core/input';
+import { busy, setPlayback, plannedTimes } from './render/timeline';
 import { W } from './game/dungeon';
 import { newRun, act, serialize, deserialize, availableNodes, Run, Action } from './game/run';
 import { snap, stepsDone, currentStep, runCard, resetMoves, STEPS, STEP_COUNT, CARDS, TutCard } from './game/tutorial';
@@ -116,6 +118,7 @@ function endRun() {
 let card: TutCard | null = null;
 const tutDone = (id: string) => { if (!meta.tut.includes(id)) { meta.tut.push(id); saveMeta(meta); } };
 
+let steps = 0;
 function onKey(k: string): boolean {
   wakeAudio();
   if (card) {
@@ -216,8 +219,9 @@ function onKey(k: string): boolean {
   else if (k >= '7' && k <= '9') a = { t: 'use', id: USE_ORDER[+k - 7] };
   else if (k === '0') a = { t: 'use', id: USE_ORDER[3] };
   if (!a) return false;
-  const before: string = run.mode, solved = !!run.puzzle?.solved, items = run.p.potions + run.p.bombs, b = snap(run);
+  const before: string = run.mode, solved = !!run.puzzle?.solved, items = run.p.potions + run.p.bombs, b = snap(run), px = run.p.x, py = run.p.y;
   act(run, a);
+  if (a.t === 'move' && (run.p.x !== px || run.p.y !== py) && ++steps % 2) sfx('step');
   if (!meta.tutOff) for (const id of stepsDone(meta.tut, run, a, b)) tutDone(id);
   const mode: string = run.mode;
   // Baum: Auswahl auf den ersten lernbaren Knoten setzen
@@ -276,10 +280,29 @@ cv.addEventListener('click', e => {
   act(run, { t: 'target', x, y });
 });
 
+// Turn keys go through the input buffer (core/input.ts): no press is lost, held keys step at a fixed rate
+const inputQ = new InputQueue();
+const TURN_KEYS = new Set([' ', '.', 'f', 'q', 'b', 'e', 'enter', 'u', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9']);
+const playing = () => scene === 'run' && !!run && run.mode === 'play' && getOverlay() === 'none' && !card;
+let qFloor = -1;
 addEventListener('keydown', e => {
   if (e.ctrlKey || e.metaKey || e.altKey) return;
-  if (onKey(e.key.toLowerCase())) e.preventDefault();
+  const k = e.key.toLowerCase();
+  if (playing() && (MOVES[k] || TURN_KEYS.has(k))) {
+    const r = run!, gap = r.mobs.some(m => r.vis[m.y * W + m.x]) ? 110 : 90;
+    if (inputQ.press(k, e.repeat, performance.now(), busy(), gap) === 'run') onKey(k);
+    e.preventDefault();
+    return;
+  }
+  if (onKey(k)) e.preventDefault();
 });
+// Once per frame: clear the buffer when not playing; otherwise run the next key as soon as playback is done
+function pumpInput(now: number) {
+  if (!playing() || run!.floor !== qFloor) { inputQ.clear(); qFloor = run?.floor ?? -1; setPlayback(1); return; }
+  setPlayback(inputQ.speed());
+  const k = inputQ.next(now, busy());
+  if (k) onKey(k);
+}
 
 // ---------- Szenen ----------
 
@@ -300,7 +323,7 @@ function backdrop(time: number, dt: number) {
 }
 
 // ---------- Titelbild ----------
-const TITLE_ITEMS = 7;
+const TITLE_ITEMS = 8;
 let tRow = 0;
 
 function titleAction() {
@@ -309,7 +332,8 @@ function titleAction() {
   else if (tRow === 2) toggleSound();
   else if (tRow === 3) { meta.tutOff = !meta.tutOff; saveMeta(meta); }
   else if (tRow === 4) { meta.tut = []; meta.tutOff = false; saveMeta(meta); flash('Lehrgang beginnt von vorn.'); }
-  else if (tRow === 5) setReducedFx(!reducedFx()); // niedrig: kein Nachglühen, keine Teilchen, kein Nebel, keine Schlagschatten, kein Wackeln
+  else if (tRow === 5) setFxLevel(fxLevel() + 1); // minimum: no bloom, particles, fog, shake or hitstop
+  else if (tRow === 6) toggleShake();
   else if (document.fullscreenElement) void document.exitFullscreen();
   else document.documentElement.requestFullscreen().catch(() => { /* nicht erlaubt */ });
 }
@@ -330,7 +354,8 @@ function titleItems() {
     { label: soundOn() ? 'TON: AN' : 'TON: AUS', icon: soundOn() ? 'sound' : 'mute' },
     { label: meta.tutOff ? 'LEHRGANG: AUS' : 'LEHRGANG: AN', icon: 'book' },
     { label: 'LEHRGANG NEU', icon: 'restart' },
-    { label: reducedFx() ? 'GRAFIK: NIEDRIG' : 'GRAFIK: HOCH', icon: 'screen' },
+    { label: ['EFFEKTE: MINIMUM', 'EFFEKTE: NORMAL', 'EFFEKTE: STARK'][fxLevel()], icon: 'screen' },
+    { label: shakeEnabled() ? 'WACKELN: AN' : 'WACKELN: AUS', icon: 'shake' },
     { label: document.fullscreenElement ? 'VOLLBILD: AN' : 'VOLLBILD: AUS', icon: 'full' },
   ];
 }
@@ -533,7 +558,7 @@ function frame(now: number) {
   if (scene === 'title') drawTitle(time, dt);
   else if (scene === 'lager') drawLager(time, dt);
   else if (scene === 'baum') drawLagerTree(time, dt);
-  else if (run) drawRun(ctx, run, dt, time);
+  else if (run) { drawRun(ctx, run, dt, time); pumpInput(now); }
   // Lehrgang: Schritt im Lauf, Karten beim ersten Kennenlernen
   if (!meta.tutOff && !card) {
     if (scene === 'run' && run) card = runCard(meta.tut, run);
@@ -549,7 +574,7 @@ function frame(now: number) {
 requestAnimationFrame(frame);
 
 // Für automatisierte Tests
-(window as unknown as { __g: unknown }).__g = { get run() { return run; }, get scene() { return scene; }, meta, sprites,
+(window as unknown as { __g: unknown }).__g = { get run() { return run; }, get scene() { return scene; }, meta, sprites, plannedTimes, busy,
   start(seed: number, cls: 'krieger' | 'magier' | 'waldlaeufer') { resetView(); run = newRun(seed, cls, meta); scene = 'run'; return run; },
   act(a: Action) { if (run) act(run, a); },
   // Abstieg bis Ebene n (für Bildschirmfotos): Treppe unter den Helden legen und hinabsteigen

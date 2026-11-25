@@ -246,7 +246,7 @@ const EN: Record<string, string> = {
   'Synergie: ': 'Synergy: ', 'Synergien: ': 'Synergies: ', ' weggeworfen.': ' thrown away.', ' · [ENTF] wegwerfen': ' · [DEL] discard',
   'Platz': 'Slot', 'Seltenheit': 'Rarity', 'Verbesserung': 'Upgrade', 'Rollen und Tränke benutzen': 'use scrolls and potions',
   'Journal: alle Meldungen nachlesen': 'Journal: read all messages', 'Noch nichts geschehen.': 'Nothing has happened yet.', '[J] oder [ESC] schließen': '[J] or [ESC] close',
-  'SPIEL STARTEN': 'START GAME', 'SPRACHE: DEUTSCH': 'LANGUAGE: ENGLISH', 'TON: AN': 'SOUND: ON', 'TON: AUS': 'SOUND: OFF', 'VOLLBILD': 'FULLSCREEN', 'GRAFIK: HOCH': 'GRAPHICS: HIGH', 'GRAFIK: NIEDRIG': 'GRAPHICS: LOW',
+  'SPIEL STARTEN': 'START GAME', 'SPRACHE: DEUTSCH': 'LANGUAGE: ENGLISH', 'TON: AN': 'SOUND: ON', 'TON: AUS': 'SOUND: OFF', 'VOLLBILD': 'FULLSCREEN', 'EFFEKTE: MINIMUM': 'EFFECTS: MINIMUM', 'EFFEKTE: NORMAL': 'EFFECTS: NORMAL', 'EFFEKTE: STARK': 'EFFECTS: STRONG', 'WACKELN: AN': 'SCREEN SHAKE: ON', 'WACKELN: AUS': 'SCREEN SHAKE: OFF',
   'Pfeile wählen · ENTER bestätigen': 'Arrows select · ENTER confirm',
   'Pfeile wählen · ENTER bestätigen · Maus: klicken': 'Arrows select · ENTER confirm · Mouse: click',
   'LEHRGANG NEU': 'RESTART TUTORIAL',

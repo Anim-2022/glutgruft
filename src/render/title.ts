@@ -355,6 +355,7 @@ const ICON: Record<string, string[]> = {
   book: ['xxx.xxx', 'x.x.x.x', 'xxx.xxx', 'x.x.x.x', 'xxx.xxx', 'xxxxxxx', '...x...'],
   restart: ['.xxxx..', 'x....x.', 'x...xxx', 'x....x.', 'x......', 'x....x.', '.xxxx..'],
   screen: ['xxxxxxx', 'x.....x', 'x.....x', 'x.....x', 'xxxxxxx', '...x...', '.xxxxx.'],
+  shake: ['x.....x', '.x.x.x.', '..xxx..', '.xxxxx.', '..xxx..', '.x.x.x.', 'x.....x'],
   full: ['xx...xx', 'x.....x', '.......', '.......', '.......', 'x.....x', 'xx...xx'],
 };
 function icon(ctx: CanvasRenderingContext2D, name: string, x: number, y: number, col: string) {

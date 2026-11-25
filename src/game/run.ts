@@ -56,7 +56,9 @@ export const VAULT_NAMES: Record<PuzzleKind, string> = {
 };
 
 export type Fx =
-  | { k: 'num'; x: number; y: number; s: string; col: string }
+  | { k: 'num'; x: number; y: number; s: string; col: string; dot?: boolean }
+  // beat: from here on the next enemy (id) or the world (id -1) acts; only used to sequence rendering
+  | { k: 'beat'; id: number }
   | { k: 'shake'; n: number }
   | { k: 'lunge'; id: number; dx: number; dy: number }
   | { k: 'flash'; id: number }
@@ -1710,6 +1712,8 @@ function stun(run: Run, a: Actor, turns: number) {
 
 // true, solange die eigene Aktion des Spielers ausgeführt wird (für Kryomant)
 let playerActing = false;
+// true while poison/burn tick: damage numbers are drawn small (rendering only)
+let dotTick = false;
 
 function damage(run: Run, dst: Actor, amt: number, col = '#f4f4f4', crit = false) {
   const p = run.p;
@@ -1727,7 +1731,7 @@ function damage(run: Run, dst: Actor, amt: number, col = '#f4f4f4', crit = false
   if (dst !== p && playerActing && p.cls === 'magier' && hasNode(p, 'n1_5') && (dst.st.stun || dst.boss)) gain(p, TUNE.kryoMana);
   dst.hp -= amt;
   run.fx.push({ k: 'flash', id: dst.id });
-  run.fx.push({ k: 'num', x: dst.x, y: dst.y, s: crit ? `${amt}!` : `${amt}`, col: crit ? '#ffcd75' : col });
+  run.fx.push({ k: 'num', x: dst.x, y: dst.y, s: crit ? `${amt}!` : `${amt}`, col: crit ? '#ffcd75' : col, ...(dotTick ? { dot: true } : {}) });
   if (dst !== run.p && dst.hp <= 0) kill(run, dst);
   else if (dst.kind === 'medusa' && playerActing) medusaHurt(run, dst);
   // Schutzrune: einmal je Ebene ein Blinzeln, wenn das Leben knapp wird
@@ -2656,6 +2660,10 @@ function fleeAct(run: Run, m: Actor, dist: Int16Array, wisp: boolean) {
 }
 
 function tickDots(run: Run, a: Actor) {
+  dotTick = true;
+  try { tickDots0(run, a); } finally { dotTick = false; }
+}
+function tickDots0(run: Run, a: Actor) {
   if (a.st.gift) { a.st.gift--; damage(run, a, 1, '#38b764'); }
   if (a.hp > 0 && a.st.brand) {
     a.st.brand--;
@@ -2669,6 +2677,7 @@ function endTurn(run: Run) {
   const p = run.p;
   if (run.mode === 'win') return;
   run.turn++;
+  run.fx.push({ k: 'beat', id: -1 });
   tickWorld(run);
   if (run.fire.has(p.y * W + p.x)) p.st.brand = Math.max(p.st.brand ?? 0, 2);
   for (const m of run.mobs) if (run.fire.has(m.y * W + m.x)) m.st.brand = Math.max(m.st.brand ?? 0, burnT(p, 2));
@@ -2691,7 +2700,10 @@ function endTurn(run: Run) {
     if (m.st.immun) m.st.immun--;
     if (m.st.sproede) m.st.sproede--;
     if (has(p, 'zeitsand') && run.rng.chance(0.12)) continue;
+    // beat only if the enemy visibly does something (step or effect) – otherwise no wait in rendering
+    const n0 = run.fx.length, x0 = m.x, y0 = m.y;
     mobAct(run, m, dist);
+    if ((run.fx.length > n0 || m.x !== x0 || m.y !== y0) && (run.vis[m.y * W + m.x] || run.vis[y0 * W + x0])) run.fx.splice(n0, 0, { k: 'beat', id: m.id });
     if (p.hp <= 0) break;
   }
   if (p.st.stark) p.st.stark--;

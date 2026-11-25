@@ -263,7 +263,7 @@ function cols(h: string): number[] {
 
 const cache = new Map<string, HTMLCanvasElement>();
 
-function glyphs(s: string, col: string, size: number): HTMLCanvasElement {
+export function glyphs(s: string, col: string, size: number): HTMLCanvasElement {
   const key = `${size}|${col}|${s}`;
   let c = cache.get(key);
   if (c) return c;
