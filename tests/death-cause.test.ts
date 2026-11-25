@@ -3,7 +3,8 @@ import { defaultMeta } from '../src/core/save';
 import { newRun, act, explode, serialize, Run, Actor, Fx, DeathCause, DEATH_CAUSES } from '../src/game/run';
 import { W, H, T, computeFov } from '../src/game/dungeon';
 import { MOBS } from '../src/game/content';
-import { buildCorpse, corpseLook, corpseVariant, materialOf, lyingPose, Grid } from '../src/render/corpses';
+import { buildCorpse, corpseLook, corpseVariant, materialOf, lyingPose, cutGrid, VARIANTS, Grid } from '../src/render/corpses';
+import { corpseRoom, fitSpan } from '../src/render/deaths';
 import { PAL } from '../src/render/sprites';
 
 // An empty hall 20×9 without enemies, hero on the left
@@ -114,11 +115,43 @@ describe('corpse variants (render helpers)', () => {
     for (const k of ['skelett', 'golem', 'glutgeist']) for (const c of DEATH_CAUSES) expect(corpseLook(k, c)).not.toContain('blood');
   });
 
-  it('variant is stable per tile and spread over 0..3', () => {
+  it('variant is stable per tile and spread over all eight', () => {
     expect(corpseVariant('ratte', 10, 7)).toBe(corpseVariant('ratte', 10, 7));
     const seen = new Set<number>();
-    for (let x = 0; x < 20; x++) seen.add(corpseVariant('skelett', x, 3));
-    expect([...seen].sort()).toEqual([0, 1, 2, 3]);
+    for (let x = 0; x < 60; x++) seen.add(corpseVariant('skelett', x, 3));
+    expect([...seen].sort()).toEqual([0, 1, 2, 3, 4, 5, 6, 7]);
+  });
+
+  it('the eight variants of one corpse look different', () => {
+    for (const cause of DEATH_CAUSES) {
+      const looks = new Set<string>();
+      for (let v = 0; v < VARIANTS; v++) looks.add(JSON.stringify(buildCorpse(figure(), 'ratte', cause, v)));
+      expect(looks.size).toBe(VARIANTS);
+    }
+  });
+
+  it('a corpse stays small: about one tile, a boss about a tile and a half', () => {
+    const tall = (w: number, h: number): Grid => Array.from({ length: h }, (_, y) => Array.from({ length: w }, (_, x) => (x === 0 || y === 0 || x === w - 1 || y === h - 1 ? '#1a1c2c' : '#94b0c2')));
+    for (const [src, max] of [[tall(10, 16), 18], [tall(30, 32), 30]] as [Grid, number][]) for (const cause of DEATH_CAUSES) for (let v = 0; v < VARIANTS; v++) {
+      const { g } = cutGrid(buildCorpse(src, 'ratte', cause, v));
+      expect(g[0].length).toBeLessThanOrEqual(max);
+      expect(g.length).toBeLessThanOrEqual(max);
+    }
+  });
+
+  it('corpses lie on the floor: shifted off walls, along narrow corridors', () => {
+    const r = newRun(5, 'krieger', defaultMeta());
+    r.tiles.fill(T.WALL);
+    // a corridor one tile wide running north-south at x = 10, a room east of x = 20
+    for (let y = 2; y < 12; y++) r.tiles[y * W + 10] = T.FLOOR;
+    for (let y = 2; y < 12; y++) for (let x = 20; x < 30; x++) r.tiles[y * W + x] = T.FLOOR;
+    const room = corpseRoom(r, 10, 5);
+    expect([room.x0, room.x1]).toEqual([160, 176]); // the corridor's own tile only
+    const big = corpseRoom(r, 20, 2); // north-west corner of the room
+    expect([big.x0, big.y0, big.x1, big.y1]).toEqual([320, 32, 352, 64]);
+    expect(fitSpan(150, 20, 160, 176)).toBe(158); // too wide: centred, the rest is clipped
+    expect(fitSpan(300, 12, 320, 352)).toBe(320);  // pushed away from the wall
+    expect(fitSpan(330, 12, 320, 352)).toBe(330);  // fits: unchanged
   });
 
   it('lying pose turns tall figures on their side', () => {

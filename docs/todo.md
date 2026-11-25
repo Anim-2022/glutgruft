@@ -85,6 +85,26 @@
 - Fix: drop the full-screen white; flash only the hit enemy (white silhouette for 1-2 frames,
   short star/spark burst and light at its tile). Keep shake and numbers as they are.
 
+## 11. Sound: redo the sound design (second pass)
+
+- Where: `src/core/audio.ts` (all sounds are synthesised there), volume setting in `src/main.ts`.
+- Problem (playtest after stage 4): sounds feel muffled and boxy, "like sitting inside a barrel".
+  Likely causes: the master lowpass at 5.2 kHz plus a lowpass on every tone and noise burst,
+  low noise cutoffs (500-1600 Hz) and heavy compression make everything dull and hollow.
+- Fix ideas:
+  - Raise or remove the master lowpass; keep per-sound filters only where a sound is harsh.
+  - Give hits more transient: a short bright click/noise layer (2-5 ms) on top of the body tone.
+  - Use band-pass noise for impacts (wood, stone, metal) instead of plain lowpass noise.
+  - Short room reverb (small convolution or feedback delay) instead of dry, boxy sounds.
+  - Lighter compressor; compare against reference sounds at equal loudness.
+  - Possibly use a few small recorded/CC0 samples for key sounds (hit, kill, explosion).
+
+## 12. Corpses: size and walls (playtest after stage 7)
+
+- Corpses were bigger than a tile and spilled over walls (bosses most). Fixed: corpses are
+  scaled to fit, shifted away from walls, clipped to floor, lie along narrow corridors, and have
+  eight variants per enemy and cause.
+
 ---
 
 # Stages

@@ -33,12 +33,19 @@ export function corpseLook(kind: string, cause: DeathCause | undefined): string 
   return cause && LOOK[cause] ? LOOK[cause][materialOf(kind)] : 'default';
 }
 
-// Which of the four variants a corpse on this tile uses (stable per position and kind)
+// Which of the eight variants a corpse on this tile uses (stable per position and kind).
+// Bit 0: mirrored, bit 1 and the seed: how the cause's marks fall, bit 2: the other pose
+// (tall figures on their other side, small animals flat on the belly instead of on the back).
+export const VARIANTS = 8;
 export function corpseVariant(kind: string, x: number, y: number): number {
   let h = Math.imul(x, 73856093) ^ Math.imul(y, 19349663);
   for (let i = 0; i < kind.length; i++) h = Math.imul(h ^ kind.charCodeAt(i), 16777619);
-  return ((h ^ (h >>> 13)) >>> 0) % 4;
+  return ((h ^ (h >>> 13)) >>> 0) % VARIANTS;
 }
+
+// Largest lying body in pixels (before the cause adds blood, shards …): a normal enemy stays within
+// its own tile, a boss within about a tile and a half – corpses never sprawl over the room.
+export const BODY_MAX = { w: 13, h: 9 }, BOSS_BODY_MAX = { w: 24, h: 16 };
 
 // --- colours (all from PAL) ---
 const C = PAL;
@@ -95,15 +102,21 @@ export function lyingPose(src: Grid): Grid {
 }
 
 // --- the corpse builder ---
-export interface CorpseOpts { reduced?: boolean; lit?: boolean }
+// vert: the corpse lies along a narrow north–south corridor (the whole picture turned a quarter)
+export interface CorpseOpts { reduced?: boolean; lit?: boolean; vert?: boolean }
 // Returns the corpse grid; the body's bottom sits 2 px above the grid's bottom edge, centred horizontally.
 export function buildCorpse(src: Grid, kind: string, cause: DeathCause, v: number, o: CorpseOpts = {}): Grid {
   const mat = materialOf(kind), rnd = seeded(strHash(`${kind}|${cause}|${v}`));
   const ri = (a: number, b: number) => a + Math.floor(rnd() * (b - a + 1));
+  const t0 = trim(src), wide = W_(t0) > t0.length * 1.15, boss = Math.max(W_(t0), t0.length) > 18;
   let body = lyingPose(src);
+  if (v & 4) body = wide ? flatten(body, 0.75, 1) : flipV(body); // the other pose
   if (v & 1) body = mirror(body);
+  // fit the body into its box (nearest neighbour keeps the hard pixels)
+  const box = boss ? BOSS_BODY_MAX : BODY_MAX, f = Math.min(1, box.w / W_(body), box.h / body.length);
+  if (f < 1) body = scale(body, f, f);
   const bw = W_(body), bh = body.length;
-  const big = Math.max(bw, bh) > 18;
+  const big = boss;
   const gw = Math.max(24, bw + 10), gh = Math.max(18, bh + 9);
   const out = blank(gw, gh);
   const bx = (gw - bw) >> 1, by = gh - 2 - bh; // top-left of the body in the output
@@ -167,7 +180,7 @@ export function buildCorpse(src: Grid, kind: string, cause: DeathCause, v: numbe
         let s = spots[Math.floor(rnd() * spots.length)], tries = 0;
         while (used.some(u => Math.abs(u - s[0]) < 3) && tries++ < 8) s = spots[Math.floor(rnd() * spots.length)];
         used.push(s[0]);
-        const ex = bx + s[0], ey = by + s[1], dx = s[0] < bw / 2 ? -1 : 1, len = big ? 6 : 5;
+        const ex = bx + s[0], ey = by + s[1], dx = s[0] < bw / 2 ? -1 : 1, len = big ? 5 : 4;
         put(out, ex, ey, bleed ? (o.reduced ? C.k : C.R) : C.k); // the wound
         for (let j = 1; j < len; j++) put(out, ex + dx * j, ey - j, j === 1 ? C.N : C.n);
         // fletching
@@ -198,7 +211,7 @@ export function buildCorpse(src: Grid, kind: string, cause: DeathCause, v: numbe
     case 'frost': {
       // pale blue, frozen solid, with ice shards sticking out
       const g = recolor(body, c => (isOut(c) ? C.B : ramp(c, [C.b, C.c, C.s, C.S], [0.22, 0.45, 0.7])));
-      for (let k = 0; k < 6; k++) spot(bx + ri(-2, bw + 1), floorY + 1, k % 2 ? C.S : C.s); // frost on the floor
+      for (let k = 0; k < 6; k++) spot(bx + ri(-1, bw), floorY + 1, k % 2 ? C.S : C.s); // frost on the floor
       stamp(g, bx, by);
       // glints
       cells(body, (c, x, y) => { if (!isOut(c) && (x * 7 + y * 3 + v) % 11 === 0) put(out, bx + x, by + y, C.w); });
@@ -216,7 +229,7 @@ export function buildCorpse(src: Grid, kind: string, cause: DeathCause, v: numbe
         }
       }
       // a loose shard on the floor
-      const sx = bx + (v & 2 ? bw + 1 : -3), sy = floorY;
+      const sx = bx + (v & 2 ? bw : -2), sy = floorY;
       put(out, sx, sy, C.s); put(out, sx + 1, sy, C.w); put(out, sx, sy + 1, C.c);
       break;
     }
@@ -241,7 +254,7 @@ export function buildCorpse(src: Grid, kind: string, cause: DeathCause, v: numbe
     }
     case 'blast': {
       // torn into chunks that lie scattered around a scorch mark
-      scorch(ccx, floorY - 1, (bw >> 1) + 3, Math.max(2, (bh >> 1) + 1));
+      scorch(ccx, floorY - 1, (bw >> 1) + 2, Math.max(2, (bh >> 1) + 1));
       const cs = big ? 6 : 4, cxm = bw / 2, cym = bh / 2;
       const pieces: { g: Grid; dx: number; dy: number }[] = [];
       for (let y0 = 0; y0 < bh; y0 += cs) for (let x0 = 0; x0 < bw; x0 += cs) {
@@ -250,7 +263,7 @@ export function buildCorpse(src: Grid, kind: string, cause: DeathCause, v: numbe
         for (let y = y0; y < Math.min(bh, y0 + cs); y++) for (let x = x0; x < Math.min(bw, x0 + cs); x++) if (body[y][x]) { g[y][x] = body[y][x]; n++; }
         if (n < 3) continue;
         const ax = x0 + cs / 2 - cxm, ay = y0 + cs / 2 - cym;
-        pieces.push({ g, dx: Math.sign(ax || (rnd() - 0.5)) * ri(2, 4), dy: Math.sign(ay) * ri(1, 2) + (ay > 0 ? 0 : -ri(0, 1)) });
+        pieces.push({ g, dx: Math.sign(ax || (rnd() - 0.5)) * ri(1, big ? 3 : 2), dy: Math.sign(ay) * ri(0, 1) + (ay > 0 ? 0 : -ri(0, 1)) });
       }
       const drop = mat === 'flesh' || mat === 'slime' ? 1 : 0;
       pieces.forEach((pc, i) => {
@@ -259,8 +272,8 @@ export function buildCorpse(src: Grid, kind: string, cause: DeathCause, v: numbe
         if (mat === 'spirit') g = fade(g);
         stamp(g, bx + pc.dx, by + pc.dy);
       });
-      if (bleed) scatterChips(big ? 10 : 7, ccx, floorY - 1, (bw >> 1) + 4, (bh >> 1) + 1, bleed);
-      scatterChips(big ? 6 : 4, ccx, floorY - 1, (bw >> 1) + 5, (bh >> 1) + 1);
+      if (bleed) scatterChips(big ? 10 : 7, ccx, floorY - 1, (bw >> 1) + 2, (bh >> 1) + 1, bleed);
+      scatterChips(big ? 6 : 4, ccx, floorY - 1, (bw >> 1) + 2, (bh >> 1) + 1);
       break;
     }
     case 'poison': {
@@ -283,12 +296,12 @@ export function buildCorpse(src: Grid, kind: string, cause: DeathCause, v: numbe
     }
     case 'crush': {
       // flattened flat on the floor, squeezed out at the sides
-      let g = flatten(body, Math.max(0.5, 4 / bh), 1.25);
+      let g = flatten(body, Math.max(0.5, 4 / bh), 1.1);
       if (mat === 'spirit') g = fade(g);
       const gw2 = W_(g), gh2 = g.length, gx = (gw - gw2) >> 1, gy = gh - 2 - gh2;
       const splat = bleed ?? chips;
       for (let k = 0; k < (big ? 12 : 8); k++) {
-        const side = k & 1 ? -1 : 1, x = side > 0 ? gx + gw2 + ri(0, 2) : gx - 1 - ri(0, 2);
+        const side = k & 1 ? -1 : 1, x = side > 0 ? gx + gw2 + ri(0, 1) : gx - 1 - ri(0, 1);
         spot(x, gy + ri(0, gh2), pick(splat));
       }
       for (let k = 0; k < 4; k++) spot(gx + ri(0, gw2), gy + gh2, pick(splat));
@@ -297,7 +310,7 @@ export function buildCorpse(src: Grid, kind: string, cause: DeathCause, v: numbe
       break;
     }
   }
-  return out;
+  return o.vert ? rotate(out) : out;
 }
 
 // Nearest-neighbour rescale (keeps the hard pixel edges)
@@ -352,16 +365,26 @@ export function gridToCanvas(g: Grid): HTMLCanvasElement {
   return c;
 }
 
-const cache = new Map<string, HTMLCanvasElement | null>();
+// A corpse picture cut to its painted pixels; (x, y) is where that cut sits in the full corpse grid of
+// size gw × gh (body bottom 2 px above the grid's bottom, centred) – the renderer anchors by the grid.
+export interface CorpseImg { img: HTMLCanvasElement; x: number; y: number; gw: number; gh: number }
+export function cutGrid(g: Grid): { g: Grid; x: number; y: number } {
+  let x0 = W_(g), x1 = -1, y0 = g.length, y1 = -1;
+  g.forEach((row, y) => row.forEach((c, x) => { if (c) { x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y); } }));
+  if (x1 < 0) return { g: [[null]], x: 0, y: 0 };
+  return { g: g.slice(y0, y1 + 1).map(r => r.slice(x0, x1 + 1)), x: x0, y: y0 };
+}
+const cache = new Map<string, CorpseImg | null>();
 // Cached corpse image for (sprite, kind, cause, variant); null if the sprite is missing
-export function corpseCanvas(img: HTMLCanvasElement | undefined, kind: string, cause: DeathCause, v: number, reduced: boolean, lit: boolean): HTMLCanvasElement | null {
-  const key = `${kind}|${cause}|${v}|${reduced ? 1 : 0}|${lit && cause === 'fire' ? 1 : 0}`;
+export function corpseCanvas(img: HTMLCanvasElement | undefined, kind: string, cause: DeathCause, v: number, reduced: boolean, lit: boolean, vert = false): CorpseImg | null {
+  const key = `${kind}|${cause}|${v}|${reduced ? 1 : 0}|${lit && cause === 'fire' ? 1 : 0}|${vert ? 1 : 0}`;
   let c = cache.get(key);
   if (c !== undefined) return c;
   c = null;
   if (img && img.width) {
     const src = gridFromImage(img.getContext('2d')!.getImageData(0, 0, img.width, img.height).data, img.width, img.height);
-    c = gridToCanvas(buildCorpse(src, kind, cause, v, { reduced, lit }));
+    const full = buildCorpse(src, kind, cause, v, { reduced, lit, vert }), cut = cutGrid(full);
+    c = { img: gridToCanvas(cut.g), x: cut.x, y: cut.y, gw: W_(full), gh: full.length };
   }
   cache.set(key, c);
   return c;
